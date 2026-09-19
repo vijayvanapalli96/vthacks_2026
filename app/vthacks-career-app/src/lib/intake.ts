@@ -55,7 +55,23 @@ export type IntakeKind = 'resume_pdf' | 'linkedin_url' | 'linkedin_export_pdf' |
  * This is what makes "ask at most once" true: a skip writes a row, so the step
  * never comes back.
  */
-export async function nextIntakeStep(userId: string): Promise<string | null> {
+export type IntakeGate = {
+  /** Where to send them to COLLECT something, or null when collecting is done. */
+  nextStep: string | null;
+  /** True when something has been collected but not yet read. */
+  needsAnalysis: boolean;
+};
+
+/**
+ * Collecting and reading are separate questions, so they are separate answers.
+ *
+ * The reading step deliberately has NO url of its own. It used to live at
+ * /applicant/intake/processing, which put an implementation detail in the address
+ * bar of the page the user lands on after signing up. The dashboard IS the landing
+ * page; when analysis is outstanding it renders the progress log in place, and
+ * `needsAnalysis` is what tells it to.
+ */
+export async function intakeGate(userId: string): Promise<IntakeGate> {
   const result = await sql(
     `SELECT
        max(CASE WHEN kind = 'resume_pdf'   THEN 1 ELSE 0 END) AS has_resume,
@@ -68,21 +84,19 @@ export async function nextIntakeStep(userId: string): Promise<string | null> {
   const row = result.rows[0] ?? [];
   const truthy = (value: unknown) => String(value ?? '0') === '1';
 
-  if (!truthy(row[0])) return '/applicant/intake/resume';
-  if (!truthy(row[1])) return '/applicant/intake/linkedin';
+  if (!truthy(row[0])) return { nextStep: '/applicant/intake/resume', needsAnalysis: false };
+  if (!truthy(row[1])) return { nextStep: '/applicant/intake/linkedin', needsAnalysis: false };
 
-  // Collecting is done, but something still has to be read. Analysis is a separate
-  // step precisely so the two upload pages stay fast: the model call is the slow
-  // part, and it should happen once, over everything at once, with the user looking
-  // at a progress view instead of a frozen submit button.
-  if (truthy(row[2])) return '/applicant/intake/processing';
-
-  // Gap rows are the OUTPUT of analysis, so none existing means analysis has never
-  // run for this user. That is the case where both steps were skipped: there are no
-  // 'received' rows to read, but the voice agent still needs its question queue, so
-  // the processing step has to run to build it.
-  if (Number(row[3] ?? 0) === 0) return '/applicant/intake/processing';
-  return null;
+  // Something is staged and unread. Analysis is separate from collecting precisely
+  // so the two upload pages stay fast: the model call is the slow part, and it should
+  // happen once, over everything at once, with the user watching progress rather than
+  // a frozen submit button.
+  //
+  // Gap rows are the OUTPUT of analysis, so none existing also means analysis has
+  // never run — that is the both-steps-skipped case, where there is nothing to read
+  // but the voice agent still needs its question queue built.
+  const needsAnalysis = truthy(row[2]) || Number(row[3] ?? 0) === 0;
+  return { nextStep: null, needsAnalysis };
 }
 
 /** Sources that have been collected but not yet read. */

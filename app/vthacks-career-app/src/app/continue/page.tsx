@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
-import { nextIntakeStep } from '@/lib/intake';
+import { intakeGate } from '@/lib/intake';
 import { DEFAULT_ROLE, dashboardPath } from '@/lib/session';
 import { setUserRole, type Role } from '@/lib/users';
 
@@ -29,7 +29,9 @@ function asRole(value: string | string[] | undefined): Role | undefined {
  */
 async function destinationFor(role: Role, userId: string): Promise<string> {
   if (role !== 'applicant') return dashboardPath[role];
-  return (await nextIntakeStep(userId)) ?? dashboardPath.applicant;
+  // Only the COLLECT steps have their own url. If analysis is outstanding the
+  // dashboard shows it in place, so this hop still lands there.
+  return (await intakeGate(userId)).nextStep ?? dashboardPath.applicant;
 }
 
 export default async function ContinuePage({

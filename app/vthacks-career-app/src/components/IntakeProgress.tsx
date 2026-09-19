@@ -16,7 +16,8 @@
  * ACCESSIBILITY. The list is aria-live="polite" so a screen reader hears each step
  * as it settles; the per-line spinner is decorative and the state is carried in text.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type Line = {
   id: string;
@@ -28,7 +29,7 @@ type Line = {
 
 type Outcome =
   | { kind: 'running' }
-  | { kind: 'complete'; factsAppended: number; openGaps: number; next: string; ms: number }
+  | { kind: 'complete'; factsAppended: number; openGaps: number; ms: number }
   | { kind: 'error'; message: string };
 
 const MARK: Record<Line['state'], string> = {
@@ -43,17 +44,25 @@ function seconds(ms: number): string {
 }
 
 export function IntakeProgress() {
+  const router = useRouter();
   const [lines, setLines] = useState<Line[]>([]);
   const [outcome, setOutcome] = useState<Outcome>({ kind: 'running' });
   // React 19 runs effects twice in development. Without this the analysis would be
   // kicked off twice, and while the content-hash check makes that harmless for the
   // documents, it would double the log and waste a model call.
   const started = useRef(false);
-  const doneAction = useRef<HTMLAnchorElement | null>(null);
+  const doneAction = useRef<HTMLButtonElement | null>(null);
 
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+  /**
+   * One run of the analysis, from kick-off to the last event.
+   *
+   * Extracted from the effect so "Try again" can call it directly. router.refresh()
+   * alone would not do it: this component stays mounted across a refresh, so the
+   * `started` guard would still be set and nothing would re-run.
+   */
+  const run = useCallback(async () => {
+    setLines([]);
+    setOutcome({ kind: 'running' });
 
     /**
      * Deliberately NO AbortController and NO cleanup.
@@ -72,70 +81,73 @@ export function IntakeProgress() {
      * And a setState on an unmounted component is a silent no-op in React 19, so a
      * liveness guard would only buy back the bug.
      */
-    (async () => {
-      try {
-        const res = await fetch('/api/intake/analyze', { method: 'POST' });
-        if (!res.ok || !res.body) {
-          setOutcome({ kind: 'error', message: `The analysis could not start (${res.status}).` });
-          return;
-        }
+    try {
+      const res = await fetch('/api/intake/analyze', { method: 'POST' });
+      if (!res.ok || !res.body) {
+        setOutcome({ kind: 'error', message: `The analysis could not start (${res.status}).` });
+        return;
+      }
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-        // Standard SSE framing: events are separated by a blank line, and a single
-        // read can contain a partial event, so the tail stays in the buffer.
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+      // Standard SSE framing: events are separated by a blank line, and a single
+      // read can contain a partial event, so the tail stays in the buffer.
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-          const chunks = buffer.split('\n\n');
-          buffer = chunks.pop() ?? '';
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop() ?? '';
 
-          for (const chunk of chunks) {
-            const payload = chunk
-              .split('\n')
-              .filter((line) => line.startsWith('data:'))
-              .map((line) => line.slice(5).trim())
-              .join('');
-            if (!payload) continue;
+        for (const chunk of chunks) {
+          const payload = chunk
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trim())
+            .join('');
+          if (!payload) continue;
 
-            let event: Record<string, unknown>;
-            try {
-              event = JSON.parse(payload);
-            } catch {
-              continue;
-            }
+          let event: Record<string, unknown>;
+          try {
+            event = JSON.parse(payload);
+          } catch {
+            continue;
+          }
 
-            if (event.type === 'log') {
-              const line = event as unknown as Line;
-              setLines((previous) => {
-                const index = previous.findIndex((entry) => entry.id === line.id);
-                if (index === -1) return [...previous, line];
-                const next = [...previous];
-                next[index] = line;
-                return next;
-              });
-            } else if (event.type === 'complete') {
-              setOutcome({
-                kind: 'complete',
-                factsAppended: Number(event.factsAppended ?? 0),
-                openGaps: Number(event.openGaps ?? 0),
-                next: String(event.next ?? '/applicant'),
-                ms: Number(event.ms ?? 0),
-              });
-            } else if (event.type === 'error') {
-              setOutcome({ kind: 'error', message: String(event.message ?? 'Something failed.') });
-            }
+          if (event.type === 'log') {
+            const line = event as unknown as Line;
+            setLines((previous) => {
+              const index = previous.findIndex((entry) => entry.id === line.id);
+              if (index === -1) return [...previous, line];
+              const next = [...previous];
+              next[index] = line;
+              return next;
+            });
+          } else if (event.type === 'complete') {
+            setOutcome({
+              kind: 'complete',
+              factsAppended: Number(event.factsAppended ?? 0),
+              openGaps: Number(event.openGaps ?? 0),
+              ms: Number(event.ms ?? 0),
+            });
+          } else if (event.type === 'error') {
+            setOutcome({ kind: 'error', message: String(event.message ?? 'Something failed.') });
           }
         }
-      } catch (error) {
-        setOutcome({ kind: 'error', message: (error as Error).message });
       }
-    })();
+    } catch (error) {
+      setOutcome({ kind: 'error', message: (error as Error).message });
+    }
   }, []);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void run();
+  }, [run]);
 
   /**
    * Move focus to the continue action once the run finishes.
@@ -184,6 +196,13 @@ export function IntakeProgress() {
         ) : null}
       </ol>
 
+      {/* Completion reveals the dashboard in place instead of navigating: this IS the
+          dashboard already. router.refresh() re-runs the server component, which now
+          sees no outstanding analysis and renders the real workspace.
+
+          Not automatic on purpose. This log is the most informative thing the product
+          shows about itself, and replacing it the instant it finishes means nobody
+          ever reads it. */}
       {outcome.kind === 'complete' ? (
         <div className="progress-done">
           <p role="status">
@@ -191,9 +210,9 @@ export function IntakeProgress() {
             {outcome.openGaps} question{outcome.openGaps === 1 ? '' : 's'} left for the voice agent
             to ask.
           </p>
-          <a className="primary" href={outcome.next} ref={doneAction}>
-            Go to my workspace
-          </a>
+          <button className="primary" type="button" onClick={() => router.refresh()} ref={doneAction}>
+            Show my workspace
+          </button>
           <a className="ghost" href="/applicant/profile">
             See my profile
           </a>
@@ -206,14 +225,14 @@ export function IntakeProgress() {
             <strong>That did not finish.</strong> {outcome.message}
           </p>
           <p className="muted">
-            Your uploads are safe — they are already stored. Reloading this page retries the
-            reading step, and anything already read is not read twice.
+            Your uploads are safe — they are already stored. Retrying re-reads only what is left,
+            so nothing is recorded twice.
           </p>
-          <a className="primary" href="/applicant/intake/processing">
+          <button className="primary" type="button" onClick={() => void run()}>
             Try again
-          </a>
-          <a className="ghost" href="/applicant">
-            Skip for now
+          </button>
+          <a className="ghost" href="/applicant/profile">
+            See my profile
           </a>
         </div>
       ) : null}

@@ -319,3 +319,58 @@
   outline: 2px solid var(--green);
   outline-offset: 2px;
 }
+
+/* ---------------------------------------------------------------- setup band */
+/* The first-run state of the dashboard. Replaces the hero while the analysis runs,
+   so onboarding finishes at /applicant instead of at a url the user should never
+   have had to look at. */
+
+.setup-band {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 40px 0 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.setup-band h1 {
+  margin: 0;
+  font-size: clamp(26px, 3.4vw, 36px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.setup-band .muted {
+  margin: 0 0 14px;
+  max-width: 62ch;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #59635b;
+}
+
+/* Buttons in the outcome row are <button> now, not <a>: completion reveals the
+   dashboard in place rather than navigating, so there is nowhere to link to. */
+.progress-done button,
+.progress-error button {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.progress-done button.primary,
+.progress-error button.primary {
+  background: var(--green);
+  color: white;
+}
+
+.progress-done button:focus-visible,
+.progress-error button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}

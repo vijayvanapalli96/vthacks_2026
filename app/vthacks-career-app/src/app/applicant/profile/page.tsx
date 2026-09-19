@@ -261,7 +261,7 @@ export default async function ProfilePage() {
                               {row?.model ? ` · ${row.model}` : ''}
                             </span>
                             {row?.storagePath && <code>{row.storagePath}</code>}
-                            {pending && <Link href="/applicant/intake/processing">Read it now</Link>}
+                            {pending && <Link href="/applicant">Read it now</Link>}
                           </>
                         ) : (
                           <Link href={href}>

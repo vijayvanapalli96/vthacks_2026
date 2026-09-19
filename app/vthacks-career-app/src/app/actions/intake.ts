@@ -22,7 +22,7 @@ import { requireRole } from '@/lib/session';
 /**
  * Both actions only ever STAGE and advance. Nothing here calls a model, so neither
  * page can leave the user watching a disabled button — the reading happens once,
- * afterwards, on /applicant/intake/processing where there is something to look at.
+ * afterwards, on the dashboard itself, where the progress log is rendered in place.
  *
  * The only state worth rendering is therefore a validation failure the user has to
  * act on. Success is a redirect.
@@ -59,7 +59,7 @@ export async function uploadResumeAction(
 ): Promise<IntakeState> {
   const user = await requireRole('applicant');
 
-  // The row must land BEFORE the redirect. nextIntakeStep() reads these rows to
+  // The row must land BEFORE the redirect. intakeState() reads these rows to
   // decide where to send people, so skipping without writing one would loop the user
   // back to this page forever.
   if (formData.get('intent') === 'skip') {
@@ -86,7 +86,7 @@ export async function linkedInAction(_prev: IntakeState, formData: FormData): Pr
     const result = await skipIntake(user.id, 'linkedin_url');
     if (!result.ok) return { status: 'error', message: result.error };
     revalidatePath('/applicant/profile');
-    redirect('/applicant/intake/processing');
+    redirect('/applicant');
   }
 
   const parsed = linkedInUrl.safeParse(String(formData.get('linkedinUrl') ?? ''));
@@ -99,5 +99,5 @@ export async function linkedInAction(_prev: IntakeState, formData: FormData): Pr
 
   revalidatePath('/applicant/profile');
   // Collection is finished. Everything staged gets read together on the next page.
-  redirect('/applicant/intake/processing');
+  redirect('/applicant');
 }
