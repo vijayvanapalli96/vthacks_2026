@@ -1,16 +1,23 @@
 # Job discovery pipeline — plan for review
 
-**Status: PROPOSED. Nothing built. Awaiting Tarang's review before an agent starts.**
+**Status: BUILT and applied — `scripts/scan/`, PR #12.** This document is the approved
+plan plus the decisions taken since; where the prose below still argues for something
+the decisions table contradicts, the table wins. Nothing is scheduled yet: every run
+so far was fired by hand, and no Vultr VM exists.
 
-Goal: every 5 minutes, find job postings that are **open now** and **in the US**, and
+Goal: on a schedule, find job postings that are **open now** and **in the US**, and
 store each posting exactly once in `workspace.vthacks_2026.job_snapshots`.
+
+**Shipped cadence is hourly, not every 5 minutes** — see the decisions table. The
+5-minute framing below is the original brief and is kept because the rate-limit
+analysis in §2a is still what governs any attempt to speed it back up.
 
 ## Decisions taken (2026-09-19)
 
 | Question | Answer |
 |---|---|
 | Where it runs | **Vultr cron** for the Node scanner + a separate **Databricks Job** for embeddings. Plus `npm run scan:us` locally so the demo never depends on the VM. |
-| Cadence | **Rotating slice** — tick every 5 min, scan the ~10 least-recently-scanned boards. |
+| Cadence | **Hourly, all 74 boards** (`0 * * * *`, `--all`). Revised down from every 5 minutes on 2026-09-19 for cost: the warehouse is 2X-Small serverless with `auto_stop_mins: 10`, so a 5-minute tick never lets it idle — ~$2.80/hour around the clock, ~$2,000/month, for ~3 minutes of real work per hour. Hourly is ~$390/month AND fresher per board, since all 74 fetch in ~30s and no longer have to be rationed into slices of 10. The rotating slice remains for manual runs and for raising the cadence during a demo. |
 | Filter scope | **US + fresh only** — no title narrowing. |
 | Freshness | **3 days** (career-ops default). Postings with no date are still excluded from "fresh". |
 | Storage | **Store every posting fetched.** US and freshness are *columns*, not a discard. |

@@ -65,12 +65,19 @@ import {
 //                                           trips, not by fetching)
 //   10-board tick, steady state ..........  15-18s
 //
-// Kept at 10: steady state is what the 5-minute cron actually sees, and the only
-// ticks that exceed 90s are the ones capturing a big board (Anduril alone is
-// ~2,400 postings) for the FIRST time. An overrun is safe rather than harmful,
-// because the next tick exits on the lock instead of running alongside. If ticks
-// start routinely overrunning, lower this rather than lengthening the cron.
-// 74 boards at 10 per tick = every board revisited about every 40 minutes.
+// THE CRON DOES NOT USE THIS. It runs hourly with `--all`, because cadence turned
+// out to be a cost decision: the warehouse is 2X-Small serverless with
+// auto_stop_mins=10, so a 5-minute tick never lets it idle and you pay ~$2.80/hour
+// around the clock (~$2,000/month) for ~3 minutes of real work per hour. Hourly is
+// ~$390/month, and since all 74 boards fetch in ~30s there is no reason to ration
+// them at that cadence — every board goes current every hour instead of every ~40
+// minutes. See README "Why hourly and not every 5 minutes".
+//
+// The slice remains for manual runs and for raising the cadence during a demo, where
+// rate limits matter again: at 5-minute ticks a full 74-board sweep does not reliably
+// fit, Ashby especially (10s server-side latency floor, rate-limits anonymous hits).
+// Overrun is safe rather than harmful — the next tick exits on the lock — but if
+// ticks routinely overrun, lower this rather than lengthening the cron.
 const SLICE_SIZE = 10;
 
 // "Open right now" is a claim about the source, not a fact (plan §6.1). 3 days

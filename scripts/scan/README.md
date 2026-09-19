@@ -147,19 +147,47 @@ SELECT is_us, location_confidence, count(*) FROM workspace.vthacks_2026.job_snap
 
 ## Deploying the cron
 
-`*/5 * * * *` on the Vultr box. **Untested — there is no VM provisioned yet**, so
-treat this as the recipe, not a verified deployment:
+**Hourly, all boards.** **Untested — there is no VM provisioned yet**, so treat this
+as the recipe, not a verified deployment:
 
 ```cron
-*/5 * * * * cd /opt/hirewire/scripts/scan && /usr/bin/node scan-us-jobs.mjs >> /var/log/hirewire-scan.log 2>&1
+0 * * * * cd /opt/hirewire/scripts/scan && /usr/bin/node scan-us-jobs.mjs --all >> /var/log/hirewire-scan.log 2>&1
 ```
 
 On a server, set `DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` (OAuth M2M):
 the CLI-token path needs an interactive `databricks auth login` and will not
 survive unattended. Node 18+ is required (global `fetch`).
 
-Overlap is safe by construction — a second tick exits on the lock — but if ticks
-routinely overrun 5 minutes, lower `SLICE_SIZE` rather than lengthening the cron.
+Overlap is safe by construction — a second tick exits on the lock.
+
+### Why hourly and not every 5 minutes
+
+**Cadence is a cost decision, and the cost is Databricks, not the VM.** The warehouse
+is 2X-Small serverless with `auto_stop_mins: 10`. A tick every 5 minutes is shorter
+than that idle timeout, so the warehouse **never stops** — you pay for a 24/7
+warehouse to do about three minutes of real work per hour.
+
+```
+2X-Small serverless        4 DBU/hour
+Serverless SQL (PRO), AWS  ~$0.70/DBU list  ->  ~$2.80/hour awake
+
+every 5 min   warehouse never idles      ~24 h/day   ~$67/day   ~$2,000/month
+hourly        ~90s tick + 10 min idle    ~4.6 h/day  ~$13/day   ~$390/month
+```
+
+Confirm the DBU rate in your own account; it varies by cloud, region and tier. If the
+workspace is on finite credits the real risk is not a bill, it is **exhausting the
+credits before the demo**.
+
+Hourly also fixes freshness. A 5-minute cron used a rotating `SLICE_SIZE` of 10 to
+stay under rate limits, which meant each board was revisited only every ~40 minutes.
+All 74 boards fetch in ~30s, so an hourly tick just scans **all** of them with `--all`
+and every board is current every hour. The slice exists for manual runs and for
+raising the cadence during a demo.
+
+Cheaper still, if it ever matters: stop hitting Databricks every tick. Accumulate
+locally and flush every 20-30 minutes so `auto_stop` actually fires. Uniqueness is
+unaffected — only freshness latency changes.
 
 ## Measured timings (2026-09-19, from real runs)
 
