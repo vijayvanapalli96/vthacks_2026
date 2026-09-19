@@ -3,6 +3,8 @@
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { StageArt } from './StageArt';
+
 type Stage = {
   n: string;
   title: string;
@@ -211,12 +213,8 @@ function Card({ stage }: { stage: Stage }) {
 
       <div className="stage__card">
         <p className="stage__n">{stage.n}</p>
+        <StageArt id={stage.n} />
         <p className="stage__lede">{stage.lede}</p>
-        <ul className="stage__points">
-          {stage.points.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
         <dl className="stage__stack">
           {stage.stack.map(([who, what]) => (
             <div key={who}>
