@@ -1,0 +1,4 @@
+employer.hirewire.biz {
+	tls /certs/server.crt.pem /certs/server.key
+	reverse_proxy employer:8787
+}

@@ -11,8 +11,9 @@ This directory implements the locally runnable portion of Vijay's P0 lane in
 - a refusal result with a spoken reason and zero released fields;
 - an append-only, hash-chained development audit log.
 
-The included certificate and trust evidence are fixtures. They make the demo and
-tests deterministic; they are not a substitute for ANS verification or ACME.
+The local demo uses deterministic fixtures. Production verification in the
+frontend reads the public ANS registry and transparency log and requires the live
+agent card to match the registered name and endpoint.
 
 ## Run
 
@@ -60,13 +61,12 @@ A refusal always returns `fields_released: []` and does not call the employer.
 
 ## Real infrastructure handoff
 
-1. Register the team domain and create applicant/employer ANS identities.
-2. Complete DNS/ACME verification and replace fixture certificate evidence with
-   output from the official ANS verifier or SDK.
-3. Deploy `employer/Dockerfile` to a public HTTPS host (Vultr is the prize-track
-   target) and set `EMPLOYER_ANS_NAME` and `EMPLOYER_ENDPOINT_URL`.
-4. Replace `MemoryAuditLog`/`HashChainAuditLog` with the MongoDB audit adapter.
-5. Persist the five-dimension result to Tarang's `agent_verifications` table.
+1. Applicant and employer identities are ACTIVE in ANS; certificates are stored
+   only in the gitignored local `certs/` directory.
+2. Deploy `employer/Dockerfile` to Vultr using `../infra/vultr/` and create the
+   `employer.hirewire.biz` A record.
+3. Replace `MemoryAuditLog`/`HashChainAuditLog` with the MongoDB audit adapter.
+4. Persist the five-dimension result to Tarang's `agent_verifications` table.
 
 Secrets belong in environment variables or the deployment secret store. Never
 commit downloaded certificates, private keys, API keys, or connection strings.
