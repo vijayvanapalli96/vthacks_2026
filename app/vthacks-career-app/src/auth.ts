@@ -18,6 +18,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 
+import { isGoogleConfigured } from '@/lib/providers';
 import { createUser, findUserByEmail, verifyPassword } from '@/lib/users';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -27,8 +28,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
   pages: { signIn: '/signin' },
   providers: [
-    // Reads AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET from the environment.
-    Google,
+    // Registered only when AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET are both present.
+    // Including it unconfigured makes any Google sign-in attempt throw hard enough
+    // to take the dev server down with it.
+    ...(isGoogleConfigured() ? [Google] : []),
     Credentials({
       credentials: {
         email: { label: 'Email', type: 'email' },

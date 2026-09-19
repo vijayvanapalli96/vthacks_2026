@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { GoogleSignInForm } from '@/components/GoogleSignInForm';
 import { SignUpForm } from '@/components/SignUpForm';
+import { isGoogleConfigured } from '@/lib/providers';
 import type { Role } from '@/lib/users';
 
 export const metadata = { title: 'Create account · HireWire' };
@@ -39,8 +40,12 @@ export default async function SignUpPage({
 
         <SignUpForm role={chosen} />
 
-        <p className="divider">or</p>
-        <GoogleSignInForm label="Sign up with Google" />
+        {isGoogleConfigured() ? (
+          <>
+            <p className="divider">or</p>
+            <GoogleSignInForm label="Sign up with Google" />
+          </>
+        ) : null}
 
         <p className="muted">
           Already have an account? <Link href="/signin">Sign in</Link>.

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { auth, signIn, signOut } from '@/auth';
+import { isGoogleConfigured } from '@/lib/providers';
 import { createUser, EMAIL_TAKEN, findUserByEmail, setUserRole } from '@/lib/users';
 
 export type AuthFormState = {
@@ -127,6 +128,10 @@ export async function signUpAction(
 }
 
 export async function googleSignInAction(): Promise<void> {
+  // Belt and braces: the UI hides the button when Google isn't configured, but a
+  // stale page or a hand-rolled POST could still land here, and calling signIn()
+  // for an unregistered provider throws hard.
+  if (!isGoogleConfigured()) redirect('/signin?error=google-unavailable');
   await signIn('google', { redirectTo: '/continue' });
 }
 
