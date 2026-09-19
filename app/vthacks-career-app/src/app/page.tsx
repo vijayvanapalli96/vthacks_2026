@@ -31,11 +31,9 @@ export default function Home() {
 
       <section className="split">
         <Reveal className="split__brand">
-          <h1>HireWire</h1>
-          <p className="eyebrow">VERIFIED AGENT-TO-AGENT HIRING</p>
+          <h1>Why HireWire?</h1>
 
           <div className="split__why">
-            <h2>Why HireWire?</h2>
             <p>
               Applying to forty jobs costs a sighted student twelve hours of clicking. On a screen
               reader it is closer to impossible. And a share of the postings that reach either of

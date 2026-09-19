@@ -917,7 +917,8 @@ footer strong { font-weight: 400; }
 }
 
 .split__brand h1 {
-  font-size: clamp(58px, 8.5vw, 104px);
+  font-size: clamp(52px, 7.4vw, 92px);
+  max-width: 9ch;
   font-weight: 700;
   font-style: italic;
   -webkit-text-stroke: 0.7px var(--ink);
@@ -926,13 +927,7 @@ footer strong { font-weight: 400; }
   margin: 0 0 14px;
 }
 
-.split__why { margin-top: 38px; padding-top: 30px; border-top: 1px solid var(--line); }
-
-.split__why h2 {
-  font-size: 27px;
-  font-style: italic;
-  margin: 0 0 16px;
-}
+.split__why { margin-top: 34px; padding-top: 30px; border-top: 1px solid var(--line); }
 
 .split__why p {
   color: var(--muted);
@@ -981,5 +976,5 @@ footer strong { font-weight: 400; }
 
 @media (max-width: 900px) {
   .split { grid-template-columns: 1fr; gap: 44px; min-height: 0; align-items: start; }
-  .split__brand h1 { font-size: clamp(46px, 13vw, 72px); -webkit-text-stroke: 0.4px var(--ink); }
+  .split__brand h1 { font-size: clamp(42px, 12vw, 68px); max-width: none; -webkit-text-stroke: 0.4px var(--ink); }
 }
