@@ -1,6 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
+import { AgentGreeter } from '@/components/AgentGreeter';
 import { FeatureMarquee } from '@/components/FeatureMarquee';
 import { Reveal } from '@/components/Reveal';
 
@@ -36,6 +37,8 @@ export default function Home() {
         <p className="opening__tag">
           A voice-first job application agent. Neither side moves until both prove who they are.
         </p>
+        <AgentGreeter />
+
         <FeatureMarquee />
 
         <p className="opening__scroll" aria-hidden="true">

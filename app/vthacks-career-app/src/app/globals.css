@@ -1050,7 +1050,7 @@ footer strong { font-weight: 400; }
 
 .marquee {
   width: 100vw;
-  margin: 152px 0 0;
+  margin: 56px 0 0;
   margin-left: calc(50% - 50vw);
   overflow: hidden;
   border-top: 1px solid var(--line);
@@ -1144,3 +1144,52 @@ main, [id] { scroll-margin-top: 100px; }
 /* the opening screen subtracts the nav height — keep them in step */
 .opening { min-height: calc(100svh - 84px); }
 .auth-shell { min-height: calc(100svh - 84px); }
+
+/* --- Agent face --------------------------------------------------------- */
+
+.greeter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  margin-top: 46px;
+}
+
+.face { overflow: visible; }
+.face__head, .face__brow path, .face__mouth {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke 0.4s ease;
+}
+.face__head { stroke-width: 1.6; }
+.face__eye { fill: var(--ink); transition: fill 0.4s ease; }
+
+/* Transform boxes so rotate/scale pivot on the feature, not the SVG corner. */
+.face__eye, .face__brow { transform-box: fill-box; transform-origin: center; }
+
+.face--happy .face__head,
+.face--happy .face__brow path,
+.face--happy .face__mouth { stroke: var(--success); }
+.face--happy .face__eye { fill: var(--success); }
+
+.face--refusing .face__head,
+.face--refusing .face__brow path,
+.face--refusing .face__mouth { stroke: var(--failure); }
+.face--refusing .face__eye { fill: var(--failure); }
+
+.greeter__caption {
+  font-size: 17px;
+  color: var(--muted);
+  margin: 0;
+  min-height: 1.6em;
+  text-align: center;
+  max-width: 44ch;
+  line-height: 1.5;
+  transition: color 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .greeter { gap: 14px; }
+}

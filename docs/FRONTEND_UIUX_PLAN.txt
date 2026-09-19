@@ -99,6 +99,13 @@ USE
   Lenis      3kb   smooth scroll feel, one line, already installed
   Motion     30kb  THE workhorse. React components, AnimatePresence, layout
                    animations, gestures. 35M weekly downloads. Start here.
+  anime.js   ~7kb  v4 IS INSTALLED (4.5.0). Used for the agent face: SVG
+                   draw-on, blink timer, elastic expression changes.
+                   *** v4 IS NOT v3. Named exports only: ***
+                     import { animate, stagger, svg, utils, createTimer }
+                     animate(el, {...})        NOT anime({targets: el})
+                     svg.createDrawable(path)  NOT anime.setDashoffset
+                     utils.stagger(140)        NOT anime.stagger(140)
   CSS        0kb   transitions + keyframes for anything simple. Cheapest wins.
 
 MAYBE (only if A-D are done)
@@ -262,6 +269,12 @@ Status as of the applicant-page styling pass.
 | [x] | A13 Feature marquee         | 12 key features tick across    | MED    | 20m  |
 |     |     (pure CSS, seamless)    | full-bleed under the tagline   |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A14 Sticky nav              | bar pinned on every page       | MED    | 10m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A15 Agent face (anime.js v4)| cute reactive face under the   | HIGH   | 55m  |
+|     |     6 moods, draw-on, blink | wordmark, cycling a real       |        |      |
+|     |                             | application script             |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
 |     | PHASE S — VOICE ORB (signature object)                                        |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [x] | S1 Orb, 5 visual states     | ink ring + 64 radial ticks on  | CRIT   | 50m  |
@@ -309,7 +322,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 22 of 35  ·   1 cut  ·  spent ~7h25m  ·  remaining P0 ~1h05m, all ~2h15m
+  DONE 24 of 37  ·   1 cut  ·  spent ~8h40m  ·  remaining P0 ~1h05m, all ~2h15m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4
