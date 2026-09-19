@@ -1,43 +1,41 @@
-import Image from 'next/image';
+/* eslint-disable @next/next/no-img-element */
 
 /**
- * Three overlapping polaroids per stage. Images live in /public/collage and are
- * named <stage>-1|2|3.jpg — see public/collage/README.md for the prompts.
+ * Per-stage photo collages. Each stage gets its OWN composition — a stack, a
+ * grid, a cascade, a mirrored pair — so the rail does not read as nine copies
+ * of the same card.
  *
- * Until a file exists the frame still renders, so the layout is correct before
- * the art arrives and dropping a file in is the only step needed.
+ * Images live in /public/collage, named <stage>-<n>.jpg. Counts vary by layout;
+ * public/collage/README.md lists exactly which files each stage needs. Frames
+ * render before the files exist, so the layout is right in advance.
  */
 
-const TILT = [-5, 3, -2];
-const CAPTION: Record<string, [string, string, string]> = {
-  '01': ['resume in', 'facts out', 'nothing guessed'],
-  '02': ['it listens', 'it answers', 'two voices'],
-  '03': ['three boards', 'one table', 'stored once'],
-  '04': ['ranked', 'explained', '92% fit'],
-  '05': ['tailored', 'fact-checked', 'ready to send'],
-  '06': ['who are you?', 'prove it', 'then apply'],
-  '07': ['both ways', 'verified', 'no bots'],
-  '08': ['every verdict', 'logged', 'attack blocked'],
-  '09': ['every event', 'over time', 'apply sooner'],
+type Layout = 'stack' | 'pair' | 'grid' | 'overlap' | 'cascade' | 'hero' | 'mirror' | 'scatter' | 'tall';
+
+const LAYOUT: Record<string, { layout: Layout; count: number; captions: string[] }> = {
+  '01': { layout: 'stack', count: 3, captions: ['resume in', 'read', 'facts out'] },
+  '02': { layout: 'pair', count: 2, captions: ['it listens', 'it answers'] },
+  '03': { layout: 'grid', count: 4, captions: ['greenhouse', 'lever', 'ashby', 'one table'] },
+  '04': { layout: 'overlap', count: 2, captions: ['you', 'the role'] },
+  '05': { layout: 'cascade', count: 3, captions: ['resume', 'letter', 'email'] },
+  '06': { layout: 'hero', count: 2, captions: ['prove it', 'then apply'] },
+  '07': { layout: 'mirror', count: 2, captions: ['their agent', 'ours'] },
+  '08': { layout: 'scatter', count: 3, captions: ['forged', 'replayed', 'blocked'] },
+  '09': { layout: 'tall', count: 3, captions: ['every event', 'day 1', 'day 30'] },
 };
 
 export function StageCollage({ id, title }: { id: string; title: string }) {
-  const captions = CAPTION[id] ?? ['', '', ''];
+  const cfg = LAYOUT[id];
+  if (!cfg) return null;
 
   return (
-    <div className="collage" aria-hidden="true">
-      {[1, 2, 3].map((n, i) => (
-        <figure key={n} className="polaroid" style={{ '--tilt': `${TILT[i]}deg` } as React.CSSProperties}>
+    <div className={`collage collage--${cfg.layout}`} aria-hidden="true">
+      {Array.from({ length: cfg.count }, (_, i) => (
+        <figure key={i} className="polaroid">
           <span className="polaroid__img">
-            <Image
-              src={`/collage/${id}-${n}.jpg`}
-              alt=""
-              width={320}
-              height={320}
-              unoptimized
-            />
+            <img src={`/collage/${id}-${i + 1}.jpg`} alt="" loading="lazy" />
           </span>
-          <figcaption>{captions[i]}</figcaption>
+          <figcaption>{cfg.captions[i]}</figcaption>
         </figure>
       ))}
       <span className="sr-only">{title}</span>
