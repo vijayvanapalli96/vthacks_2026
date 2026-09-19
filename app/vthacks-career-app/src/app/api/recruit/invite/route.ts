@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '../../../../auth';
+import { signEnvelope } from '../../../../lib/ans/envelope';
 import { EMPLOYER_ANS_NAME, verifyProductionAgent } from '../../../../lib/ans/production';
 import { recordAgentVerificationSafely } from '../../../../lib/ans/store';
 
@@ -35,14 +36,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'refused', verification, persisted }, { status: 403 });
   }
 
+  let jws: string;
+  try {
+    jws = signEnvelope({
+      signer: 'EMPLOYER',
+      issuer: EMPLOYER_ANS_NAME,
+      audience: verification.evidence.agentCard.name,
+      payload: { job_id: body.job_id, message: body.message.trim().slice(0, 2000) },
+    });
+  } catch (error) {
+    console.error('Could not sign the invitation envelope', error);
+    return NextResponse.json({ status: 'not_sent', error: 'This agent cannot sign messages with its ANS identity right now.' }, { status: 500 });
+  }
   const response = await fetch(verification.evidence.agentCard.endpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      employer_ans_name: EMPLOYER_ANS_NAME,
-      job_id: body.job_id,
-      message: body.message.trim().slice(0, 2000),
-    }),
+    body: JSON.stringify({ jws }),
     signal: AbortSignal.timeout(8000),
   });
   const payload = await response.json().catch(() => ({}));
