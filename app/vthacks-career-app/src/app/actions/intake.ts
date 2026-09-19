@@ -16,7 +16,12 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { skipIntake, stageDocument, stageLinkedInUrl, validateUpload } from '@/lib/intake';
+import {
+  skipIntake,
+  stageDocumentDeferred,
+  stageLinkedInUrlDeferred,
+  validateUpload,
+} from '@/lib/intake';
 import { requireRole } from '@/lib/session';
 
 /**
@@ -73,7 +78,9 @@ export async function uploadResumeAction(
   const invalid = validateUpload(file);
   if (invalid || !file) return { status: 'error', message: invalid ?? 'Choose a PDF to upload.' };
 
-  const result = await stageDocument({ userId: user.id, kind: 'resume_pdf', file });
+  // Returns as soon as the bytes are durable; the catalogue writes finish in the
+  // background so Next is not held on a cold warehouse.
+  const result = await stageDocumentDeferred({ userId: user.id, kind: 'resume_pdf', file });
   if (!result.ok) return { status: 'error', message: result.error };
 
   redirect('/applicant/intake/linkedin');
@@ -94,7 +101,9 @@ export async function linkedInAction(_prev: IntakeState, formData: FormData): Pr
     return { status: 'error', message: parsed.error.issues[0]?.message ?? 'That URL is not valid.' };
   }
 
-  const result = await stageLinkedInUrl(user.id, parsed.data);
+  // One round-trip, not two: the insert is awaited because the dashboard gate reads
+  // it, the cleanup finishes in the background.
+  const result = await stageLinkedInUrlDeferred(user.id, parsed.data);
   if (!result.ok) return { status: 'error', message: result.error };
 
   revalidatePath('/applicant/profile');
