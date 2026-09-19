@@ -753,3 +753,27 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
   .job > strong, .job > svg { grid-row: 1 / 3; }
   footer { align-items: flex-start; flex-wrap: wrap; }
 }
+
+/* --- Inverted band: force paper on every descendant --------------------- */
+/* The token swap on .rail/.why already does this by inheritance, but state it
+   outright so nothing can inherit navy-on-navy. Muted text keeps its alpha so
+   the hierarchy survives. */
+
+.rail, .rail *, .why, .why * { color: #eef4ed; }
+
+.rail .stage__n,
+.rail .stage__points li,
+.rail .stage__stack dd,
+.why__a p {
+  color: color-mix(in srgb, #eef4ed 68%, transparent);
+}
+
+/* Stack labels are the brightest thing in the block — a track judge scans for
+   these. Paper, not the success tint, which reads blue against navy. */
+.rail .stage__stack dt { color: #eef4ed; }
+
+.rail .stage { border-color: color-mix(in srgb, #eef4ed 16%, transparent); }
+.rail .stage:hover { border-color: #eef4ed; }
+.rail .stage__stack { border-top-color: color-mix(in srgb, #eef4ed 28%, transparent); }
+.rail .stage__points li::before { background: color-mix(in srgb, #eef4ed 40%, transparent); }
+.rail__title { border-bottom-color: color-mix(in srgb, #eef4ed 18%, transparent); }
