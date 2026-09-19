@@ -64,7 +64,7 @@ a role on the account.
 | F1.2 | `Role = applicant \| employer` on the account, chosen at signup; carried in the JWT and the session | **P0** | Nidhi | 30 m |
 | F1.3 | Two route groups — `/applicant/*` and `/employer/*` — guarded at the layout by `requireRole()`. Wrong role redirects to your own dashboard, not an error page. | **P0** | Nidhi | 30 m |
 | F1.4 | `/choose-role` — Google gives us no role, so new Google accounts land here before anything else | **P0** | Nidhi | 20 m |
-| F1.5 | User store behind a stable interface (`findUserByEmail`, `createUser`, `setUserRole`, `verifyPassword`). Dev: JSON file. **Swap to `workspace.vthacks_2026.users` is a one-file change** — the Databricks Apps filesystem is ephemeral, so this must happen before the real demo. | **P0** | Nidhi → Tarang | 45 m |
+| F1.5 | User store behind a stable interface (`findUserByEmail`, `createUser`, `setUserRole`, `verifyPassword`). Dev: JSON file. **Must move to TigerData (Postgres) before the demo — not Delta.** The Apps filesystem is ephemeral, so accounts vanish on every redeploy. One-file change either way. | **P0** | Nidhi → Tarang | 45 m |
 | F1.6 | Public landing with the two pathways stated plainly ("I'm looking for a role" / "I'm hiring") | **P0** | Nidhi | 30 m |
 | F1.7 | Sign-in screen copy that states what the agent will and will not do with PII | P1 | Nidhi | 30 m |
 
@@ -76,6 +76,22 @@ service Vijay curls. Pull it out of Nidhi's P1 list (see `TASK_DIVISION.md`); th
 **What we give up:** the free "we used Databricks for auth" line in Q&A. Worth it
 — "both sides of the handshake are authenticated principals" is a much better
 answer for the track we are actually trying to win.
+
+**Where `users` lives — corrected.** An earlier version of F1.5 said swap the dev
+JSON store for `workspace.vthacks_2026.users`. That is wrong, and it would have
+been a bad thing to discover on stage:
+
+- Every single login would wait on the SQL warehouse, which is **STOPPED between
+  uses and cold-starts in 20–30 s**. The first sign-in of the demo hangs for half
+  a minute while a judge watches.
+- Delta has **no enforced unique constraint**, so "this email is already
+  registered" becomes a race that cannot be closed at the storage layer.
+- Delta is an analytics store. Auth is OLTP: tiny, latency-sensitive point reads.
+
+**`users` belongs in TigerData (Postgres)**, which is already in the stack for
+`application_events` — real OLTP, real unique constraints, millisecond reads, and
+a sponsor dependency whose integration cost we are paying anyway. Delta keeps the
+analytics; Postgres keeps the accounts.
 
 ---
 
