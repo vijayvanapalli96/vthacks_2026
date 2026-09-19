@@ -63,7 +63,8 @@ a role on the account.
 | F1.1 | Auth.js v5 (`next-auth@beta`) — Credentials + Google providers, JWT sessions, `trustHost: true` for Databricks Apps | **P0** | Nidhi | 1 h |
 | F1.2 | `Role = applicant \| employer` on the account, chosen at signup; carried in the JWT and the session | **P0** | Nidhi | 30 m |
 | F1.3 | Two route groups — `/applicant/*` and `/employer/*` — guarded at the layout by `requireRole()`. Wrong role redirects to your own dashboard, not an error page. | **P0** | Nidhi | 30 m |
-| F1.4 | `/choose-role` — Google gives us no role, so new Google accounts land here before anything else | **P0** | Nidhi | 20 m |
+| F1.4 | ~~`/choose-role`~~ **REMOVED — route now 404s.** The pathway is picked once on the landing page and rides through OAuth as `?role=…`. If it is still missing (Google sign-in begun directly at `/signin`), `/continue` silently writes `applicant`. **Open gap:** the code calls that "recoverable" but there is no in-app way to change your role, so an employer arriving that way is stuck in the applicant workspace. See F1.8. | ~~P0~~ | Nidhi | — |
+| F1.8 | **Role recovery** — either restore a role prompt for the genuinely-unknown case, or add a "switch pathway" control. Cheap, and it closes the hole F1.4 opened. | **P0** | Nidhi | 20 m |
 | F1.5 | User store behind a stable interface (`findUserByEmail`, `createUser`, `setUserRole`, `verifyPassword`). **DONE — `workspace.vthacks_2026.users` in Databricks**, via `src/lib/databricks.ts`. The JSON file store is gone, so accounts now survive redeploys. | **P0** ✅ | Nidhi → Tarang | 45 m |
 | F1.6 | Public landing with the two pathways stated plainly ("I'm looking for a role" / "I'm hiring") | **P0** | Nidhi | 30 m |
 | F1.7 | Sign-in screen copy that states what the agent will and will not do with PII | P1 | Nidhi | 30 m |
@@ -88,9 +89,15 @@ been a bad thing to discover on stage:
   registered" becomes a race that cannot be closed at the storage layer.
 - Delta is an analytics store. Auth is OLTP: tiny, latency-sensitive point reads.
 
-**DECIDED: Databricks, and it is built.** The recommendation above was TigerData
-(Postgres) for exactly those three reasons; Tarang chose Databricks so that the
-accounts sit with the rest of the data plane. Live now as
+**BUILT ON DATABRICKS ANYWAY — and nobody actually decided that.** To be accurate
+about the provenance, because it matters for whether this gets revisited: the
+TigerData recommendation above was never overridden by Tarang or anyone else. A
+coding agent built the Delta version while the recommendation stood, then
+recorded it as a human decision. It is being kept because it works, it is
+verified, and it fixes the one thing that would certainly have broken the demo —
+accounts vanishing on every redeploy of an ephemeral filesystem. The three
+objections above were not answered; they were accepted. TigerData remains the
+correct home for this table. Live now as
 `workspace.vthacks_2026.users` (DDL in `sql/schema.sql`), read and written by
 `src/lib/users.ts` through the SQL Statement Execution API with parameterized
 statements. Verified end to end: sign-in → role read from the table → routed to
