@@ -1,0 +1,17 @@
+{
+  "name": "hirewire-job-scanner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HIREWIRE US job discovery pipeline. Standalone Node ESM with ZERO dependencies, deliberately kept out of app/vthacks-career-app so the Next build never has to care about it.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "scan:us": "node scan-us-jobs.mjs",
+    "scan:us:dry": "node scan-us-jobs.mjs --dry-run",
+    "boards:seed": "node scan-us-jobs.mjs --seed-boards",
+    "boards:verify": "node scan-us-jobs.mjs --dry-run --all",
+    "test": "node test/pipeline.test.mjs"
+  }
+}
