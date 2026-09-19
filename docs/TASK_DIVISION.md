@@ -29,12 +29,15 @@ What broke the budget was keeping all three datastores (Databricks + TigerData +
 MongoDB) with three people instead of four. That was a deliberate call for track
 coverage. The price is paid in §3's P1 lists, which are genuinely optional.
 
-**Two environment traps, both cheap and both demo-fatal if missed:**
-- Build on the **TEAM** workspace, schema `workspace.vthacks_2026`, and put `-p TEAM`
-  on every CLI call. The personal Free Edition workspace is a throwaway.
-- `app/vthacks-career-app/databricks.yml` still points at that throwaway
-  (`dbc-0bfd7b56-c2eb`). Repoint it before the first deploy or the app will read
-  empty tables in the wrong account.
+**Environment, now verified — no trap here, so don't go hunting one:**
+- Build on the **TEAM** workspace, schema `workspace.vthacks_2026`, and put
+  `-p TEAM` on every CLI call.
+- The host is `https://dbc-0bfd7b56-c2eb.cloud.databricks.com` (workspace id
+  `7474648702108753`), and `app/vthacks-career-app/databricks.yml` already points
+  there. **Leave it alone.** Checked on 2026-09-19: that workspace holds
+  `workspace.vthacks_2026` with all six team objects, and warehouse
+  `441b670a0ff475e0` resolves there. Earlier revisions of this file called it a
+  throwaway and told you to repoint the bundle — that was wrong.
 
 ---
 
@@ -137,7 +140,7 @@ and two of the four rubric axes are presentation and completeness.
 | # | Task | ID | Est | Done by |
 |---|---|---|---|---|
 | 1 | shadcn/ui init + `eslint-plugin-jsx-a11y` **in hour one** so it catches a11y violations as you type | F0.5 | 45 m | T-14 |
-| 2 | Login via Databricks Apps forwarded identity (`X-Forwarded-Email`) + `users` upsert + dev fallback. **We do not build auth.** | F1.1–F1.3 | 45 m | T-13.5 |
+| 2 | **Dual-pathway auth** — Auth.js v5, email/password + Google, `role` on the account, guarded `/applicant/*` and `/employer/*` layouts, `/choose-role` for Google users, public two-pathway landing. *(Template is being built on `feat/auth-template`; your job is wiring it to the real user store and the profile flow.)* | F1.1–F1.6 | 3 h | T-12 |
 | 3 | Resume upload → UC Volume, **and the skip path on every step** | F2.1, F2.2 | 1 h | T-12.5 |
 | 4 | Gemini multimodal: resume PDF in directly → profile JSON under a published schema | F3.1 | 1.5 h | T-11 |
 | 5 | Completeness scorer → ordered list of missing fields (this list is the input to #7) | F3.4 | 30 m | T-10.5 |
@@ -162,6 +165,11 @@ palette mirroring voice → `F10.9` dark mode + `prefers-reduced-motion` (ten li
 each) → `F11.6` Lighthouse + axe evidence slide → `F2.4` LinkedIn export.
 
 **Descope switches:**
+- **The employer pathway stays a stub.** Auth, the role split, and a static
+  employer dashboard — that is the whole investment. The employer *story* is
+  Vijay's agent, not a second product surface. Adding real employer features is
+  the single easiest way to lose this lane, and dual-pathway auth already cost
+  this lane ~2¼ h it did not have.
 - Voice loop not working by **T-8** → ship the command palette (`F10.7`) as the
   primary interface and ElevenLabs as TTS-only for the refusal line. The spoken
   refusal is non-negotiable; full duplex conversation is.

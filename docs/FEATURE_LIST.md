@@ -49,18 +49,70 @@ mobile · multi-user collaboration · resume WYSIWYG editor · Presage.
 
 ---
 
-## Epic 1 — Identity & access ("signup / login — maybe Databricks")
+## Epic 1 — Identity & access — **two pathways: applicant and employer**
 
-We do **not** build auth. Databricks Apps already puts an SSO'd user in front of
-the app, so we read the identity it hands us. ~20 minutes, and it is a truthful
-"we used Databricks for auth" answer in Q&A.
+**Superseded decision.** This epic originally said "we do not build auth — read
+the Databricks Apps SSO identity." That is wrong for this product: SSO cannot
+tell an applicant from an employer, and employer users are *external* to our
+Databricks workspace entirely. Agent-to-agent needs both sides to be real,
+signed-in principals, so we build auth: Auth.js v5, email/password + Google, with
+a role on the account.
 
 | ID | Feature | Tier | Owner | Est |
 |---|---|---|---|---|
-| F1.1 | Derive `user_id` from Databricks Apps forwarded identity headers (`X-Forwarded-Email` / `X-Forwarded-Preferred-Username`) | **P0** | Nidhi | 20 m |
-| F1.2 | Upsert `users` row on first authenticated request | **P0** | Nidhi | 15 m |
-| F1.3 | Dev fallback identity so `npm run dev` works without Databricks in front | **P0** | Nidhi | 10 m |
-| F1.4 | Sign-in landing screen that explains what the agent will and will not do with PII | P1 | Nidhi | 30 m |
+| F1.1 | Auth.js v5 (`next-auth@beta`) — Credentials + Google providers, JWT sessions, `trustHost: true` for Databricks Apps | **P0** | Nidhi | 1 h |
+| F1.2 | `Role = applicant \| employer` on the account, chosen at signup; carried in the JWT and the session | **P0** | Nidhi | 30 m |
+| F1.3 | Two route groups — `/applicant/*` and `/employer/*` — guarded at the layout by `requireRole()`. Wrong role redirects to your own dashboard, not an error page. | **P0** | Nidhi | 30 m |
+| F1.4 | ~~`/choose-role`~~ **REMOVED — route now 404s.** The pathway is picked once on the landing page and rides through OAuth as `?role=…`. If it is still missing (Google sign-in begun directly at `/signin`), `/continue` silently writes `applicant`. **Open gap:** the code calls that "recoverable" but there is no in-app way to change your role, so an employer arriving that way is stuck in the applicant workspace. See F1.8. | ~~P0~~ | Nidhi | — |
+| F1.8 | **Role recovery** — either restore a role prompt for the genuinely-unknown case, or add a "switch pathway" control. Cheap, and it closes the hole F1.4 opened. | **P0** | Nidhi | 20 m |
+| F1.5 | User store behind a stable interface (`findUserByEmail`, `createUser`, `setUserRole`, `verifyPassword`). **DONE — `workspace.vthacks_2026.users` in Databricks**, via `src/lib/databricks.ts`. The JSON file store is gone, so accounts now survive redeploys. | **P0** ✅ | Nidhi → Tarang | 45 m |
+| F1.6 | Public landing with the two pathways stated plainly ("I'm looking for a role" / "I'm hiring") | **P0** | Nidhi | 30 m |
+| F1.7 | Sign-in screen copy that states what the agent will and will not do with PII | P1 | Nidhi | 30 m |
+
+**Cost of this change:** ~+3 h on Nidhi's lane versus the 20-minute SSO plan, and
+the employer dashboard becomes a real surface we have to design rather than a
+service Vijay curls. Pull it out of Nidhi's P1 list (see `TASK_DIVISION.md`); the
+`cmdk` palette and the designed empty states are the first casualties.
+
+**What we give up:** the free "we used Databricks for auth" line in Q&A. Worth it
+— "both sides of the handshake are authenticated principals" is a much better
+answer for the track we are actually trying to win.
+
+**Where `users` lives — corrected.** An earlier version of F1.5 said swap the dev
+JSON store for `workspace.vthacks_2026.users`. That is wrong, and it would have
+been a bad thing to discover on stage:
+
+- Every single login would wait on the SQL warehouse, which is **STOPPED between
+  uses and cold-starts in 20–30 s**. The first sign-in of the demo hangs for half
+  a minute while a judge watches.
+- Delta has **no enforced unique constraint**, so "this email is already
+  registered" becomes a race that cannot be closed at the storage layer.
+- Delta is an analytics store. Auth is OLTP: tiny, latency-sensitive point reads.
+
+**BUILT ON DATABRICKS ANYWAY — and nobody actually decided that.** To be accurate
+about the provenance, because it matters for whether this gets revisited: the
+TigerData recommendation above was never overridden by Tarang or anyone else. A
+coding agent built the Delta version while the recommendation stood, then
+recorded it as a human decision. It is being kept because it works, it is
+verified, and it fixes the one thing that would certainly have broken the demo —
+accounts vanishing on every redeploy of an ephemeral filesystem. The three
+objections above were not answered; they were accepted. TigerData remains the
+correct home for this table. Live now as
+`workspace.vthacks_2026.users` (DDL in `sql/schema.sql`), read and written by
+`src/lib/users.ts` through the SQL Statement Execution API with parameterized
+statements. Verified end to end: sign-in → role read from the table → routed to
+the right dashboard.
+
+The two caveats stand and are worked around rather than solved:
+- **Cold start is real.** Warm the warehouse before demoing — any query.
+- **Uniqueness is unenforced**, so `createUser` checks then inserts. Closes the
+  ordinary case, not a true race. Documented in `sql/schema.sql`.
+
+Auth against this workspace also has no PAT available (`databricks tokens create`
+→ *"User does not have permission to use tokens"*), so `src/lib/databricks.ts`
+resolves credentials three ways: `DATABRICKS_TOKEN` → `DATABRICKS_CLIENT_ID/_SECRET`
+(injected by Databricks Apps in production) → the CLI's own OAuth token (local dev
+only).
 
 ---
 

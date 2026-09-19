@@ -72,6 +72,12 @@ High-value lifts — check here before writing anything from scratch:
   function-calling tool routing. Keep that split clean — it's how judges from both
   companies each hear a reason their tech was chosen.
 - **Voice** ElevenLabs Agents, two personas (calm assistant / interviewer).
+- **Auth** Auth.js v5 (`next-auth@beta`), email/password + Google, JWT sessions.
+  Every account carries `role: 'applicant' | 'employer'`, and the app has two
+  guarded pathways under `/applicant/*` and `/employer/*`. We do **not** use
+  Databricks Apps SSO for this: it cannot distinguish the two roles, and employer
+  users are external to the workspace. Guards live in the route-group layouts via
+  `requireRole()` — there is deliberately no middleware.
 - **Identity** GoDaddy ANS — `ans://v1.0.0.applicant.<domain>` and
   `ans://v1.0.0.employer.<domain>`.
 
@@ -85,7 +91,7 @@ build there. **Every CLI call needs `-p TEAM`.**
 
 | | |
 |---|---|
-| Workspace host | `<TEAM_WORKSPACE_HOST>` — see `.env.local`, not committed |
+| Workspace host | `https://dbc-0bfd7b56-c2eb.cloud.databricks.com` (workspace id `7474648702108753`) |
 | CLI profile | `TEAM` (`DEFAULT` = throwaway, ignore) |
 | SQL warehouse | `441b670a0ff475e0` ("Serverless Starter", 2X-Small, serverless) |
 | Catalog / schema | **`workspace.vthacks_2026`** — already exists, tables built, rows empty |
@@ -94,9 +100,15 @@ build there. **Every CLI call needs `-p TEAM`.**
 | LLM | `databricks-llama-4-maverick` (verified on TEAM), `databricks-gpt-oss-120b`, others |
 | Group | `vthacks-team` |
 
-⚠️ `app/vthacks-career-app/databricks.yml` still targets the **throwaway** host
-(`dbc-0bfd7b56-c2eb`). Repoint it to the team workspace before deploying, or the
-app will read empty tables in the wrong account.
+**Settled by inspection — `databricks.yml` is correct, do not "fix" it.** Logged in
+on 2026-09-19 as `tarangnair98@gmail.com` and confirmed against that host:
+`workspace.vthacks_2026` is present with all six team objects (`job_snapshots`,
+`match_evaluations`, `application_events`, `voice_events`,
+`email_classifications`, `latest_application_state`), and warehouse
+`441b670a0ff475e0` resolves there as "Serverless Starter Warehouse", 2X-Small.
+So `dbc-0bfd7b56-c2eb` **is** the team workspace. Two earlier revisions of this
+file called it a throwaway and told you to repoint the bundle; both were wrong,
+inferred from the strategy doc's layout rather than checked.
 
 Secrets live in `.env.local` (gitignored) and, in production, in the Databricks
 App `resources` block. Never commit a key, a cert, or a real DNS token.
@@ -115,7 +127,7 @@ databricks api post /api/2.0/sql/statements --json @q.json -p TEAM  # SQL: ALWAY
 databricks warehouses get 441b670a0ff475e0 -p TEAM                  # is it awake?
 databricks current-user me -p TEAM                                  # am I on the right workspace?
 databricks bundle deploy                                            # deploy the app
-databricks auth login --host <TEAM_WORKSPACE_HOST> --profile TEAM    # re-auth
+databricks auth login --host https://dbc-0bfd7b56-c2eb.cloud.databricks.com --profile TEAM
 ```
 
 ### Gotchas that have already bitten us
@@ -162,8 +174,8 @@ These are correctness, not style. Breaking one breaks the pitch.
 ## Out of scope — decided, not up for rediscussion at 4 AM
 
 Playwright / ATS form automation (replaced by A2A) · Solana (no honest fit) ·
-custom auth (Databricks Apps SSO gives us identity for free) · payments · mobile ·
-multi-user · resume WYSIWYG · Presage.
+payments · mobile · resume WYSIWYG · Presage · Gmail ingestion (the
+`email_classifications` table exists; we are not filling it in 15 hours).
 
 ## Working agreements
 
@@ -174,5 +186,19 @@ multi-user · resume WYSIWYG · Presage.
 - The descope switches in `TASK_DIVISION.md` are **pre-authorized**. Hit a red
   checkpoint, flip the switch, tell the team in one sentence, keep moving.
 - Nothing is added to P0 after T-12. Nothing is typed after T-3.
-- Commit small and often on `main`. With 15 hours and three people, a clean
-  branching strategy costs more than it saves.
+- **Never commit directly to `main`.** Every change goes on a branch and lands
+  through a PR — `feat/<thing>`, `fix/<thing>`, `docs/<thing>`. Keep branches
+  small and short-lived so review is seconds, not minutes; with 15 hours the
+  point of the PR is a second pair of eyes, not ceremony.
+- Rebase onto `main` before pushing (`git pull --rebase`); teammates are pushing
+  constantly and a merge bubble per branch will make the history unreadable.
+- Run `npm run typecheck && npm run lint && npm run build` before you open a PR.
+  A red branch costs a teammate more time than it saved you.
+- **One checkout per worker — human or agent.** If two of you (or two coding
+  agents) edit the same working tree, a `git add -A` sweeps up the other's
+  half-finished files and neither of you can tell which are yours. Give each
+  concurrent worker its own tree:
+  `git worktree add ../vthacks-<lane> -b feat/<thing> origin/main`, then merge
+  through a PR like any other branch. Run `git worktree list` before you assume
+  you are alone in here — and never switch branches in a tree someone else is
+  working in, because it changes files under them.
