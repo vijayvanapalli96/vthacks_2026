@@ -667,3 +667,111 @@ html.lenis, html.lenis body { height: auto; }
 /* Give the page room to actually scroll, so the easing is perceptible and the
    scroll-triggered reveals have somewhere to trigger. */
 main { padding-bottom: 96px; }
+
+/* --- Voice orb + console ------------------------------------------------ */
+/* The signature object. An ink ring with 64 radial ticks — a Roman seal, which
+   sits with Forum rather than against it. SVG is exempt from the global
+   radius: 0 because it draws paths, not CSS boxes. */
+
+.console {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 40px;
+  align-items: center;
+  padding: 40px 0 44px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.console h2 { margin: 7px 0 10px; font-size: 26px; }
+.console p { color: var(--muted); max-width: 46ch; line-height: 1.6; margin: 0 0 20px; }
+
+.console__states { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+
+.console__states button {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  padding: 7px 15px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.console__states button:hover { color: var(--ink); border-color: var(--ink); }
+.console__states button.is-active { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+
+.console__error { margin-top: 12px; font-size: 14px; }
+
+.orb { position: relative; display: grid; place-items: center; flex-shrink: 0; }
+.orb svg { overflow: visible; display: block; }
+
+.orb__ring {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.25;
+  transition: stroke 0.35s ease, opacity 0.35s ease;
+}
+
+.orb__inner {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 0.5;
+  opacity: 0.18;
+}
+
+.orb__ticks line {
+  stroke: var(--ink);
+  stroke-width: 1.25;
+  opacity: 0.5;
+  transition: stroke 0.35s ease, opacity 0.35s ease;
+}
+
+.orb__label {
+  position: absolute;
+  font-size: 12.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* State colour is reinforcement — the label and the announcement carry the
+   meaning, so a colour-blind user loses nothing. */
+.orb--listening .orb__ticks line { opacity: 0.9; }
+.orb--thinking .orb__ticks line { opacity: 0.4; }
+
+.orb--speaking .orb__ring,
+.orb--speaking .orb__ticks line { stroke: var(--success); }
+.orb--speaking .orb__label { color: var(--success); }
+
+.orb--refusing .orb__ring,
+.orb--refusing .orb__ticks line { stroke: var(--failure); }
+.orb--refusing .orb__label { color: var(--failure); }
+.orb--refusing .orb__ring { stroke-width: 2.25; }
+.orb--refusing { animation: orb-halt 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) 1; }
+
+@keyframes orb-halt {
+  0%, 100% { transform: translateX(0); }
+  18% { transform: translateX(-7px); }
+  38% { transform: translateX(6px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb--refusing { animation: none; }
+}
+
+@media (max-width: 860px) {
+  .console { grid-template-columns: 1fr; justify-items: start; }
+}

@@ -209,8 +209,8 @@ Status as of the applicant-page styling pass.
 | [x] | F5 Reveal component         | sections fade+rise in sequence | HIGH   | 20m  |
 |     |    (motion, stagger)        | on load                        |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
-| [ ] | F6 shadcn/ui init           | consistent button/card/dialog  | MED    | 20m  |
-|     |                             | primitives, ARIA for free      |        |      |
+| [-] | F6 shadcn/ui init           | CUT — needs Tailwind, whose    | MED    |  --  |
+|     |                             | preflight would reset our CSS  |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
 |     | PHASE A — APPLICANT PAGE (the pilot)                                          |
 +-----+-----------------------------+--------------------------------+--------+------+
@@ -241,13 +241,14 @@ Status as of the applicant-page styling pass.
 +-----+-----------------------------+--------------------------------+--------+------+
 |     | PHASE S — VOICE ORB (signature object)                                        |
 +-----+-----------------------------+--------------------------------+--------+------+
-| [ ] | S1 Orb, 5 visual states     | a living object centre-screen  | CRIT   | 45m  |
+| [x] | S1 Orb, 5 visual states     | ink ring + 64 radial ticks on  | CRIT   | 50m  |
+|     |                             | the applicant page             |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
-| [ ] | S2 Wire to real mic         | orb deforms to YOUR voice      | CRIT   | 30m  |
+| [x] | S2 Wire to real mic         | orb deforms to YOUR voice      | CRIT   | 25m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [ ] | S3 Wire to TTS output       | orb moves as the agent speaks  | HIGH   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
-| [ ] | S4 aria-live per state      | nothing visible; blind users   | CRIT   | 15m  |
+| [x] | S4 aria-live per state      | nothing visible; blind users   | CRIT   | 10m  |
 |     |                             | can finally perceive the orb   |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
 |     | PHASE H — HERO COMPONENTS                                                     |
@@ -283,7 +284,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 12 of 31  ·   spent ~3h05m  ·   remaining P0 ~3h50m, everything ~5h45m
+  DONE 15 of 31  ·   1 cut  ·  spent ~4h30m  ·  remaining P0 ~2h15m, all ~3h50m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4

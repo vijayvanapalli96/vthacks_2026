@@ -1,6 +1,7 @@
 import { ArrowRight, BriefcaseBusiness, FileCheck2, Mic, ShieldCheck } from 'lucide-react';
 
 import { Reveal } from '@/components/Reveal';
+import { VoiceConsole } from '@/components/VoiceConsole';
 import { SignOutForm } from '@/components/SignOutForm';
 
 const jobs = [
@@ -46,9 +47,13 @@ export default function ApplicantDashboard() {
         </button>
       </Reveal>
 
+      <Reveal index={1}>
+        <VoiceConsole />
+      </Reveal>
+
       <section className="metrics">
         {metrics.map(([label, value], i) => (
-          <Reveal as="article" key={label} index={i + 1}>
+          <Reveal as="article" key={label} index={i + 2}>
             <span>{label}</span>
             <strong>{value}</strong>
           </Reveal>
