@@ -127,12 +127,18 @@ export async function signUpAction(
   return {};
 }
 
-export async function googleSignInAction(): Promise<void> {
+export async function googleSignInAction(formData: FormData): Promise<void> {
   // Belt and braces: the UI hides the button when Google isn't configured, but a
   // stale page or a hand-rolled POST could still land here, and calling signIn()
   // for an unregistered provider throws hard.
   if (!isGoogleConfigured()) redirect('/signin?error=google-unavailable');
-  await signIn('google', { redirectTo: '/continue' });
+
+  // Carry the pathway the landing page already collected through the OAuth round
+  // trip, so we don't ask a second time on the way back.
+  const role = roleSchema.safeParse(text(formData, 'role'));
+  const redirectTo = role.success ? `/continue?role=${role.data}` : '/continue';
+
+  await signIn('google', { redirectTo });
 }
 
 export async function setRoleAction(formData: FormData): Promise<void> {

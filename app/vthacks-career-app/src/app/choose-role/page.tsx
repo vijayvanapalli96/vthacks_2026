@@ -1,34 +1,32 @@
-import { BriefcaseBusiness, UserRoundSearch } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
 import { setRoleAction } from '@/app/actions/auth';
 import { dashboardPath, requireUser } from '@/lib/session';
 
-export const metadata = { title: 'Choose your pathway · HireWire' };
+export const metadata = { title: 'Pick a workspace · HireWire' };
 
+/**
+ * PLACEHOLDER. Only reachable by signing in with Google straight from /signin,
+ * where no pathway was ever collected — every route through the landing page
+ * carries the role through OAuth and lands on a dashboard directly.
+ *
+ * It exists so a role-less account isn't a dead end. Replace it (or delete it,
+ * once Google sign-in always originates from a pathway).
+ */
 export default async function ChooseRolePage() {
   const user = await requireUser();
-
-  // Already decided — don't make them answer twice.
   if (user.role) redirect(dashboardPath[user.role]);
 
   return (
     <main className="auth-shell">
       <section className="auth-card panel">
-        <h1>Which describes you?</h1>
-        <p className="muted">
-          Google doesn&rsquo;t tell us whether you&rsquo;re applying or hiring, so we have to ask.
-          This decides which workspace you land in.
-        </p>
-
+        <h1>Pick a workspace</h1>
         <form action={setRoleAction} className="role-actions">
           <button className="primary" type="submit" name="role" value="applicant">
-            <UserRoundSearch size={18} aria-hidden="true" />
-            I&rsquo;m looking for a role
+            Applicant dashboard
           </button>
           <button className="primary" type="submit" name="role" value="employer">
-            <BriefcaseBusiness size={18} aria-hidden="true" />
-            I&rsquo;m hiring
+            Employer dashboard
           </button>
         </form>
       </section>

@@ -43,7 +43,7 @@ export default async function SignUpPage({
         {isGoogleConfigured() ? (
           <>
             <p className="divider">or</p>
-            <GoogleSignInForm label="Sign up with Google" />
+            <GoogleSignInForm label="Sign up with Google" role={chosen} />
           </>
         ) : null}
 

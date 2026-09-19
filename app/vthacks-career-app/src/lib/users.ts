@@ -1,24 +1,27 @@
 /**
- * users.ts — the user store behind email/password + Google sign-in.
+ * users.ts — accounts, backed by `workspace.vthacks_2026.users` in Databricks.
  *
- * !! DEV STORE !!
- * This writes JSON to the local filesystem. The Databricks Apps filesystem is
- * EPHEMERAL: every redeploy wipes it, and instances do not share it. That is
- * fine for the template and for local work. It is NOT where users live for the
- * demo.
+ * DDL lives in sql/001_users.sql. Sessions are stateless JWTs, so there is no
+ * sessions table.
  *
- * Tarang swaps this for `workspace.vthacks_2026.users`. Keep the four exported
- * functions below signature-stable and that swap stays a one-file change —
- * nothing else in the app imports the JSON file or knows that it exists.
+ * Two properties of this backend you have to design around, both real:
  *
- * Known limitation, deliberate: read-modify-write is not atomic, so two
- * simultaneous signups can race. At our scale (a demo, a handful of accounts)
- * this is not worth a lockfile. The Databricks-backed version won't have it.
+ *  1. COLD START. The Serverless Starter warehouse stops when idle and takes
+ *     20-30s to wake. The first sign-in after a quiet period genuinely blocks for
+ *     that long. Before demoing, fire any query to warm it.
+ *
+ *  2. NO ENFORCED UNIQUENESS. Unity Catalog PRIMARY KEY/UNIQUE constraints are
+ *     informational; Delta will happily store two rows with the same email.
+ *     createUser() checks first, which closes the ordinary case but is not
+ *     race-proof, and findUserByEmail() takes the newest row if duplicates ever
+ *     appear. Postgres (TigerData, already in the stack) would enforce this
+ *     properly — noted for after the hackathon.
  */
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+
 import bcrypt from 'bcryptjs';
+
+import { sql, type SqlParam } from '@/lib/databricks';
 
 export type Role = 'applicant' | 'employer';
 
@@ -43,49 +46,46 @@ export type CreateUserInput = {
 /** Thrown by createUser when the email is already registered. */
 export const EMAIL_TAKEN = 'EMAIL_TAKEN';
 
+const TABLE = 'workspace.vthacks_2026.users';
 const BCRYPT_ROUNDS = 10;
-
-// The directory is a static literal on purpose. If any part of the path above
-// the filename is dynamic, Next's static analysis gives up and traces the ENTIRE
-// project into the server bundle. So AUTH_USER_STORE is a FILENAME inside .data/,
-// not a path.
-const STORE_DIR = '.data';
-
-function storePath(): string {
-  return join(process.cwd(), STORE_DIR, process.env.AUTH_USER_STORE ?? 'users.json');
-}
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-async function readAll(): Promise<StoredUser[]> {
-  try {
-    const raw = await readFile(storePath(), 'utf8');
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as StoredUser[]) : [];
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw error;
-  }
+function asRole(value: string | null): Role | undefined {
+  return value === 'applicant' || value === 'employer' ? value : undefined;
 }
 
-async function writeAll(users: StoredUser[]): Promise<void> {
-  const path = storePath();
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(users, null, 2)}\n`, 'utf8');
+function toUser(row: (string | null)[]): StoredUser {
+  const [id, email, name, passwordHash, role, provider, createdAt] = row;
+  return {
+    id: id ?? '',
+    email: email ?? '',
+    name: name ?? undefined,
+    passwordHash: passwordHash ?? undefined,
+    role: asRole(role),
+    provider: provider === 'google' ? 'google' : 'credentials',
+    createdAt: createdAt ?? '',
+  };
 }
+
+const SELECT_COLUMNS = 'user_id, email, name, password_hash, role, provider, created_at';
 
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
-  const wanted = normalizeEmail(email);
-  const users = await readAll();
-  return users.find((user) => user.email === wanted) ?? null;
+  const { rows } = await sql(
+    `SELECT ${SELECT_COLUMNS} FROM ${TABLE} WHERE email = :email ORDER BY created_at DESC LIMIT 1`,
+    [{ name: 'email', value: normalizeEmail(email) }],
+  );
+  return rows.length ? toUser(rows[0]) : null;
 }
 
 export async function createUser(input: CreateUserInput): Promise<StoredUser> {
   const email = normalizeEmail(input.email);
-  const users = await readAll();
-  if (users.some((user) => user.email === email)) throw new Error(EMAIL_TAKEN);
+
+  // Best-effort guard: Delta cannot enforce this for us. See the header note.
+  const existing = await findUserByEmail(email);
+  if (existing) throw new Error(EMAIL_TAKEN);
 
   const user: StoredUser = {
     id: randomUUID(),
@@ -97,20 +97,31 @@ export async function createUser(input: CreateUserInput): Promise<StoredUser> {
     createdAt: new Date().toISOString(),
   };
 
-  users.push(user);
-  await writeAll(users);
+  const parameters: SqlParam[] = [
+    { name: 'user_id', value: user.id },
+    { name: 'email', value: user.email },
+    { name: 'name', value: user.name ?? null },
+    { name: 'password_hash', value: user.passwordHash ?? null },
+    { name: 'role', value: user.role ?? null },
+    { name: 'provider', value: user.provider },
+  ];
+
+  await sql(
+    `INSERT INTO ${TABLE} (user_id, email, name, password_hash, role, provider, created_at)
+     VALUES (:user_id, :email, :name, :password_hash, :role, :provider, current_timestamp())`,
+    parameters,
+  );
+
   return user;
 }
 
 export async function setUserRole(email: string, role: Role): Promise<StoredUser | null> {
-  const wanted = normalizeEmail(email);
-  const users = await readAll();
-  const user = users.find((candidate) => candidate.email === wanted);
-  if (!user) return null;
-
-  user.role = role;
-  await writeAll(users);
-  return user;
+  const normalized = normalizeEmail(email);
+  await sql(`UPDATE ${TABLE} SET role = :role WHERE email = :email`, [
+    { name: 'role', value: role },
+    { name: 'email', value: normalized },
+  ]);
+  return findUserByEmail(normalized);
 }
 
 export async function verifyPassword(user: StoredUser, password: string): Promise<boolean> {
