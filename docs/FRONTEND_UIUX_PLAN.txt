@@ -279,7 +279,9 @@ Status as of the applicant-page styling pass.
 | [ ] | H2 Refusal stamp            | card flips to failure red, a   | CRIT   | 25m  |
 |     |                             | REFUSED seal stamps down       |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
-| [ ] | H3 Homepage screen 1        | the front door judges see      | CRIT   | 30m  |
+| [x] | H3 Homepage: split layout   | HireWire + "Why HireWire?" on  | CRIT   | 35m  |
+|     |    brand left, paths right  | the left; student and          |        |      |
+|     |                             | recruiter perspectives right   |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [ ] | H4 Three scroll beats       | story told in one scroll       | MED    | 35m  |
 +-----+-----------------------------+--------------------------------+--------+------+
@@ -304,7 +306,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 19 of 34  ·   1 cut  ·  spent ~5h55m  ·  remaining P0 ~1h35m, all ~3h10m
+  DONE 20 of 34  ·   1 cut  ·  spent ~6h30m  ·  remaining P0 ~1h05m, all ~2h35m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4
@@ -315,11 +317,14 @@ Status as of the applicant-page styling pass.
 DO NOT build a 6-section marketing site. Judges see the landing for ~10 seconds
 and the demo starts inside the app. Budget accordingly.
 
-  Screen 1 (no scroll needed)
-    [ ] the voice orb, centred, breathing
-    [ ] one line: what it does, for whom
-    [ ] one button: "Talk to it" — and it actually starts listening
-    [ ] tiny line: "or press / to type" (proves voice isn't a gimmick)
+  Screen 1 — SPLIT, full height, no scroll needed  [BUILT]
+    [x] LEFT, centred: "HireWire" at up to 104px italic, the eyebrow, then
+        "Why HireWire?" with the two-paragraph answer under a hairline
+    [x] RIGHT: two perspectives, separated by hairlines, no cards —
+        FOR STUDENTS  "Apply with your voice."
+        FOR RECRUITERS "Meet people, not bots."
+        each with a body and an underlined CTA that widens its gap on hover
+    [ ] the voice orb still needs a home here (currently only on /applicant)
 
   One scroll, three beats (this is where Lenis earns its place)
     [ ] beat 1: it finds jobs against your skills AND coursework

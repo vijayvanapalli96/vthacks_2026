@@ -1,7 +1,24 @@
-import { ArrowRight, BriefcaseBusiness, ShieldCheck, UserRoundSearch } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { Reveal } from '@/components/Reveal';
+
+const paths = [
+  {
+    eyebrow: 'FOR STUDENTS',
+    title: 'Apply with your voice.',
+    body: 'Your agent reads your resume and your coursework, finds the roles that actually fit, and writes the materials for each one. Then it checks the employer is real — and refuses out loud if they cannot prove it. Start to finish without touching a mouse.',
+    cta: 'Start as an applicant',
+    href: '/signup?role=applicant',
+  },
+  {
+    eyebrow: 'FOR RECRUITERS',
+    title: 'Meet people, not bots.',
+    body: 'Publish a role once and let your agent answer for it. Every application arrives from an agent with a domain-anchored, certificate-backed identity, so the fake-applicant flood stops at the door and your day goes back to reading real candidates.',
+    cta: 'Start as an employer',
+    href: '/signup?role=employer',
+  },
+];
 
 export default function Home() {
   return (
@@ -12,49 +29,40 @@ export default function Home() {
         <Link href="/signup">Create account</Link>
       </nav>
 
-      <Reveal as="section" className="hero">
-        <p className="eyebrow">VERIFIED AGENT-TO-AGENT HIRING</p>
-        <h1>
-          Both sides
-          <br />
-          prove who they are.
-        </h1>
-        <p>
-          An applicant&rsquo;s agent finds roles, tailors the materials, and checks that an employer
-          is real before releasing anything. An employer&rsquo;s agent checks that the applicant is a
-          real, domain-anchored person. Nobody&rsquo;s documents move until both sides verify.
-        </p>
-      </Reveal>
+      <section className="split">
+        <Reveal className="split__brand">
+          <h1>HireWire</h1>
+          <p className="eyebrow">VERIFIED AGENT-TO-AGENT HIRING</p>
 
-      <section className="pathways">
-        <Reveal as="article" className="pathway" index={1}>
-          <UserRoundSearch aria-hidden="true" />
-          <h2>I&rsquo;m looking for a role</h2>
-          <p>
-            Upload a resume or skip it and talk instead. Your agent matches you against real
-            postings, drafts your materials, and refuses out loud if an employer can&rsquo;t prove
-            who it is.
-          </p>
-          <Link className="primary" href="/signup?role=applicant">
-            Get started as an applicant <ArrowRight size={18} aria-hidden="true" />
-          </Link>
+          <div className="split__why">
+            <h2>Why HireWire?</h2>
+            <p>
+              Applying to forty jobs costs a sighted student twelve hours of clicking. On a screen
+              reader it is closer to impossible. And a share of the postings that reach either of
+              you are not real at all.
+            </p>
+            <p>
+              Both sides of a hire should have to prove who they are before anything private
+              changes hands. Here, both sides do.
+            </p>
+          </div>
         </Reveal>
 
-        <Reveal as="article" className="pathway" index={2}>
-          <BriefcaseBusiness aria-hidden="true" />
-          <h2>I&rsquo;m hiring</h2>
-          <p>
-            Publish roles your agent can answer for. Every inbound application arrives from an agent
-            with a verifiable identity, so the fake-applicant flood stops at the door.
-          </p>
-          <Link className="primary" href="/signup?role=employer">
-            Get started as an employer <ArrowRight size={18} aria-hidden="true" />
-          </Link>
-        </Reveal>
+        <div className="split__paths">
+          {paths.map((p, i) => (
+            <Reveal as="article" className="path" key={p.eyebrow} index={i + 1}>
+              <p className="eyebrow">{p.eyebrow}</p>
+              <h2>{p.title}</h2>
+              <p className="path__body">{p.body}</p>
+              <Link className="path__cta" href={p.href}>
+                {p.cta} <ArrowRight size={17} aria-hidden="true" />
+              </Link>
+            </Reveal>
+          ))}
+        </div>
       </section>
 
       <Reveal as="footer" onScroll>
-        <ShieldCheck aria-hidden="true" />
         <strong>Human approval is always required.</strong>
         <span>The system recommends; you control every external action.</span>
       </Reveal>
