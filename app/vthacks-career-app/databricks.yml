@@ -1,0 +1,42 @@
+bundle:
+  name: vthacks-career-app
+
+variables:
+  sql_warehouse_id:
+    description: SQL Warehouse ID
+
+resources:
+  apps:
+    app:
+      name: "vthacks-career-app"
+      description: "Accessible job application intelligence dashboard"
+      source_code_path: ./
+
+      config:
+        command: ['npm', 'run', 'start']
+        env:
+          - name: DATABRICKS_WAREHOUSE_ID
+            valueFrom: sql-warehouse
+
+      # Start the app automatically on deploy.
+      lifecycle:
+        started: true
+      # Uncomment to enable on behalf of user API scopes. Available scopes: sql, dashboards.genie, files.files, serving.serving-endpoints
+      # user_api_scopes:
+      #   - sql
+
+      # The resources which this app has access to.
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.sql_warehouse_id}
+            permission: CAN_USE
+
+targets:
+  default:
+    default: true
+    workspace:
+      host: https://dbc-0bfd7b56-c2eb.cloud.databricks.com
+
+    variables:
+      sql_warehouse_id: 441b670a0ff475e0
