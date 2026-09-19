@@ -121,30 +121,57 @@ LENIS CONFIG — gate it, don't just drop it in
   cursors. On this project that's not a footnote, it's the thesis.
 
 
-5. THE VIBE — lock these once, apply everywhere
+5. THE VIBE — LOCKED. Do not re-litigate.
 --------------------------------------------------------------------------------
-[ ] DARK, high contrast, one accent. Near-black bg, warm off-white text.
-    Rationale: low-vision users need contrast; dark reads as serious tooling
-    rather than a consumer app; and it matches GoDaddy's own deck aesthetic
-    (teal on near-black) which quietly flatters the ANS judges.
+MINIMALIST. Two base colours, two signal colours, one display face. That's all.
 
-[ ] COLOUR ROLES — semantic, not decorative
-      bg        near-black          #0A0F0F-ish
-      text      warm off-white
-      accent    teal/cyan           verified, active, trusted
-      danger    red                 refused, blocked, unverified
-      muted     grey                pending, idle
-    Two signal colours only. Verified vs refused IS the product.
+PALETTE (contrast-checked, real numbers)
+  --paper    #eef4ed   SURFACE. The background, everywhere.
+  --ink      #0b2545   TEXT. Body, headings, borders, icons.
+  --success  #3b6064   resume parsed, job sent, employer verified, task done
+  --failure  #8c2f39   parse failed, application rejected, verification refused
 
-[ ] TYPE — one family. Inter or Geist. Sizes: 14/16/20/32/56. Nothing else.
-[ ] SPACING — 8px grid. No exceptions.
-[ ] CONTRAST — 4.5:1 body, 3:1 large. Check every accent on every bg.
-[ ] RADIUS — pick one (8px or 12px) and never vary it.
-[ ] FOCUS RING — visible, 2px, accent colour, on EVERYTHING. Non-negotiable.
+  Measured against #eef4ed:
+    ink      13.77:1   AAA
+    success   6.18:1   AA
+    failure   7.28:1   AAA
+  All pass. This palette is accessible AS GIVEN — on a light surface.
 
-Lock these in a tokens file on the homepage. Every later page imports it and
-adds nothing new.
+*** WHY LIGHT AND NOT DARK ***
+  Both signal colours are dark, so on a #0b2545 background they collapse:
+    success on navy  2.23:1  FAIL
+    failure on navy  1.89:1  FAIL
+  Unusable, and on an accessibility app that's the one thing judges punish.
+  So: PAPER IS THE SURFACE, INK IS THE TEXT. It also suits Forum better —
+  a Roman-inscription serif wants paper, not a terminal.
 
+  IF you ever need a navy section (a hero band, a footer), use these tints:
+    success on navy  #7a9494  (4.76:1)
+    failure on navy  #b8888a  (5.08:1)
+  Don't use the base accents on navy. Ever.
+
+TYPE — Forum, and a caveat that will bite you
+  Display / headings / the wordmark ... Forum (Google Fonts)
+  *** FORUM SHIPS ONLY WEIGHT 400. THERE IS NO BOLD. ***
+  So hierarchy comes from SIZE, LETTER-SPACING and COLOUR, never font-weight.
+    - big headings: Forum, generous letter-spacing, full ink
+    - de-emphasis: same size, ink at 60% opacity — not a lighter weight
+  Body / UI / numbers / code ....... one neutral sans (Inter or system stack).
+    Forum at 14px in a table is unreadable. Use it for display only.
+  Scale: 14 / 16 / 20 / 32 / 56. Nothing else.
+
+THE REST
+  [ ] SPACING   8px grid, no exceptions
+  [ ] RADIUS    pick one (8px) and never vary it
+  [ ] BORDERS   1px ink at 12% opacity — minimalism means lines, not shadows
+  [ ] SHADOWS   basically none. If you need depth, use a border.
+  [ ] FOCUS     2px ink ring, visible on everything, never removed
+  [ ] MOTION    colour transitions between ink/success/failure carry meaning;
+                success and failure must ALSO differ by icon + text, never by
+                colour alone (colour-blind users)
+
+Lock all of this in one tokens file. Every later page imports it and adds
+nothing new. If a page needs a fifth colour, the answer is no.
 
 6. HOMEPAGE — the one we're designing first
 --------------------------------------------------------------------------------
@@ -194,6 +221,6 @@ DESCOPE ORDER if you fall behind: H, G, F, E, D. Never cut A, B, or C.
 [ ] full demo runs without touching the mouse
 [ ] no lorem ipsum, no "John Doe", no "Acme Corp" anywhere
 [ ] every animation fires from a real backend event, not a timer
-[ ] one accent colour, one font, one radius — grep for strays
-[ ] dark mode is the only mode (don't build light mode, no time, say so)
+[ ] two base + two signal colours only, Forum for display only, one radius — grep for strays
+[ ] paper surface everywhere — no dark mode, no second theme (say so if asked)
 ================================================================================
