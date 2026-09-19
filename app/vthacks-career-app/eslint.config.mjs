@@ -13,7 +13,7 @@ const config = [
   ...coreWebVitals,
   ...typescript,
   {
-    ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts'],
+    ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', 'public/**'],
   },
   {
     rules: {

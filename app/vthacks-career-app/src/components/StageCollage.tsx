@@ -12,8 +12,24 @@
 
 type Layout = 'stack' | 'pair' | 'grid' | 'overlap' | 'cascade' | 'hero' | 'mirror' | 'scatter' | 'tall';
 
-const LAYOUT: Record<string, { layout: Layout; count: number; captions: string[] }> = {
-  '01': { layout: 'stack', count: 3, captions: ['resume in', 'read', 'facts out'] },
+type Cfg = {
+  layout: Layout;
+  count: number;
+  captions: string[];
+  /** Override the default `<stage>-<n>.jpg` for a frame — index is 1-based. */
+  srcs?: Record<number, string>;
+  /** Frames that hold a wide asset rather than a square photo. */
+  wide?: number[];
+};
+
+const LAYOUT: Record<string, Cfg> = {
+  '01': {
+    layout: 'stack',
+    count: 3,
+    captions: ['the stack', 'read', 'facts out'],
+    srcs: { 1: '/collage/01-1.png' },
+    wide: [1],
+  },
   '02': { layout: 'pair', count: 2, captions: ['it listens', 'it answers'] },
   '03': { layout: 'grid', count: 4, captions: ['greenhouse', 'lever', 'ashby', 'one table'] },
   '04': { layout: 'overlap', count: 2, captions: ['you', 'the role'] },
@@ -31,9 +47,12 @@ export function StageCollage({ id, title }: { id: string; title: string }) {
   return (
     <div className={`collage collage--${cfg.layout}`} aria-hidden="true">
       {Array.from({ length: cfg.count }, (_, i) => (
-        <figure key={i} className="polaroid">
+        <figure
+          key={i}
+          className={`polaroid${cfg.wide?.includes(i + 1) ? ' polaroid--wide' : ''}`}
+        >
           <span className="polaroid__img">
-            <img src={`/collage/${id}-${i + 1}.jpg`} alt="" loading="lazy" />
+            <img src={cfg.srcs?.[i + 1] ?? `/collage/${id}-${i + 1}.jpg`} alt="" loading="lazy" />
           </span>
           <figcaption>{cfg.captions[i]}</figcaption>
         </figure>
