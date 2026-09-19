@@ -17,7 +17,7 @@
 import { pdfToText, PdfParseError } from './pdf';
 import { extractWithDatabricks, DATABRICKS_MODEL } from './databricks';
 import { extractWithGemini, hasGemini } from './gemini';
-import { hasDatabricks } from '@/lib/databricks-sql';
+import { hasDatabricks } from '@/lib/databricks';
 import { detectGaps, type ExtractProvider, type ExtractionResult, type ProfileGap } from './types';
 
 export type ExtractOutcome = ExtractionResult & {

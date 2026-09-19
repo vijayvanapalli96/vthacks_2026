@@ -1,0 +1,171 @@
+/* Intake pages. Shares the tokens in globals.css — no new colours, no new fonts. */
+
+.intake-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 0 64px;
+}
+
+.intake-steps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  color: #68746c;
+}
+
+.intake-steps span[aria-current='step'] {
+  color: var(--green);
+}
+
+.intake-steps .done {
+  color: #267453;
+}
+
+.intake-form {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 26px;
+  display: grid;
+  gap: 20px;
+}
+
+.intake-form .field {
+  display: grid;
+  gap: 7px;
+}
+
+.intake-form label {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.intake-form input[type='file'],
+.intake-form input[type='url'] {
+  font: inherit;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+}
+
+.intake-form input[aria-invalid='true'] {
+  border-color: #a4261d;
+}
+
+.intake-form small {
+  color: #667269;
+  font-size: 12px;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.intake-form .actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.intake-form .primary {
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--green);
+  color: white;
+  font-weight: 750;
+}
+
+.intake-form .ghost {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  color: #3d4a42;
+  font-weight: 700;
+}
+
+.intake-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Reserve no space when empty so the live region does not push layout around. */
+.intake-form .status:empty {
+  display: none;
+}
+
+.intake-form .status {
+  margin: 0;
+  font-size: 12px;
+  color: #267453;
+  font-weight: 700;
+}
+
+.outcome {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.outcome-error {
+  background: #fdeeec;
+  border: 1px solid #f0c4be;
+  /* 4.6:1 on this background. */
+  color: #8c1f17;
+  font-weight: 700;
+}
+
+.outcome-ok {
+  background: #e8f5ed;
+  border: 1px solid #cae5d5;
+  color: #1d4635;
+  display: grid;
+  gap: 10px;
+}
+
+.outcome-headline {
+  margin: 0;
+  font-weight: 800;
+}
+
+.outcome-facts {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+}
+
+.outcome-warnings summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.outcome-warnings ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #3d4a42;
+}
+
+.outcome-next {
+  margin: 0;
+  font-weight: 750;
+}
+
+.outcome-next a {
+  color: var(--green);
+}
+
+/* Focus must stay obvious: the whole demo is run on the keyboard. */
+.intake-form :focus-visible,
+.outcome a:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}

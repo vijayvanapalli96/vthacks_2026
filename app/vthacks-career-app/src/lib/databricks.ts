@@ -22,8 +22,16 @@ const execFileAsync = promisify(execFile);
 export type SqlParam = {
   name: string;
   value: string | null;
-  type?: 'STRING' | 'TIMESTAMP' | 'INT' | 'BOOLEAN';
+  type?: 'STRING' | 'TIMESTAMP' | 'INT' | 'BOOLEAN' | 'DOUBLE' | 'BIGINT';
 };
+
+/** Thrown for anything Databricks-shaped, so callers can tell it from a parse bug. */
+export class DatabricksError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DatabricksError';
+  }
+}
 
 export type SqlResult = {
   columns: string[];
@@ -38,8 +46,24 @@ let cached: { token: string; expiresAt: number } | null = null;
 
 function host(): string {
   const value = process.env.DATABRICKS_HOST;
-  if (!value) throw new Error('DATABRICKS_HOST is not set');
+  if (!value) throw new DatabricksError('DATABRICKS_HOST is not set');
   return value.replace(/\/+$/, '');
+}
+
+/** The workspace origin, for callers that need a non-SQL endpoint (the Files API). */
+export function databricksHost(): string {
+  return host();
+}
+
+/**
+ * Is there any chance a Databricks call will work?
+ *
+ * Host and warehouse are required. A credential is NOT checked here because the
+ * CLI-token path (local dev) leaves no environment variable to look at — the only
+ * way to know it works is to try.
+ */
+export function hasDatabricks(): boolean {
+  return Boolean(process.env.DATABRICKS_HOST && process.env.DATABRICKS_WAREHOUSE_ID);
 }
 
 function warehouseId(): string {
@@ -80,7 +104,7 @@ async function tokenFromClientCredentials(
   };
 }
 
-async function bearerToken(): Promise<string> {
+export async function bearerToken(): Promise<string> {
   if (process.env.DATABRICKS_TOKEN) return process.env.DATABRICKS_TOKEN;
 
   // 60s of slack so a long query never runs off the end of its own token.
@@ -155,9 +179,14 @@ export async function sql(statement: string, parameters: SqlParam[] = []): Promi
 
   const state = response.status?.state;
   if (state !== 'SUCCEEDED') {
-    throw new Error(
+    throw new DatabricksError(
       `Databricks statement ${state ?? 'unknown'}: ${response.status?.error?.message ?? 'no error message'}`,
     );
   }
   return shape(response);
+}
+
+/** First cell of the first row, or undefined. Saves the rows[0]?.[0] dance. */
+export function firstCell(result: SqlResult): string | undefined {
+  return result.rows[0]?.[0] ?? undefined;
 }

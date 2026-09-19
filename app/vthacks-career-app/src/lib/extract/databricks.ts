@@ -9,9 +9,9 @@
  *   SELECT ai_query('databricks-llama-4-maverick', :prompt)
  *
  * The resume text rides in as a named parameter. It is untrusted input going to a
- * SQL engine; it never touches the statement string. See databricks-sql.ts.
+ * SQL engine; it never touches the statement string. See lib/databricks.ts.
  */
-import { executeStatement, getDatabricksConfig, DatabricksSqlError } from '@/lib/databricks-sql';
+import { DatabricksError, firstCell, hasDatabricks, sql } from '@/lib/databricks';
 import { OUTPUT_SPEC, extractedProfileSchema, type ExtractionResult } from './types';
 import { parseJsonObject } from './json';
 
@@ -47,33 +47,27 @@ function buildPrompt(resumeText: string): string {
  * costs a few seconds against losing the upload entirely.
  */
 export async function extractWithDatabricks(resumeText: string): Promise<ExtractionResult> {
-  const config = getDatabricksConfig();
-  if (!config) {
-    throw new DatabricksSqlError(
-      'Databricks is not configured. Set DATABRICKS_HOST, DATABRICKS_TOKEN and DATABRICKS_WAREHOUSE_ID.',
+  if (!hasDatabricks()) {
+    throw new DatabricksError(
+      'Databricks is not configured. Set DATABRICKS_HOST and DATABRICKS_WAREHOUSE_ID.',
     );
   }
 
   const warnings: string[] = [];
   const prompt = buildPrompt(resumeText);
   const statement = `SELECT ai_query('${DATABRICKS_MODEL}', :prompt) AS out`;
+  const params = [{ name: 'prompt', value: prompt, type: 'STRING' as const }];
 
-  let rows: string[][];
+  let raw: string | undefined;
   try {
-    const result = await executeStatement(statement, [{ name: 'prompt', value: prompt, type: 'STRING' }], config);
-    rows = result.rows;
-    if (result.wasColdStart) {
-      warnings.push('The SQL warehouse was asleep and had to cold-start. Warm it before the demo.');
-    }
+    raw = firstCell(await sql(statement, params));
   } catch (first) {
     warnings.push(`First ai_query attempt failed (${(first as Error).message}). Retried once.`);
-    const result = await executeStatement(statement, [{ name: 'prompt', value: prompt, type: 'STRING' }], config);
-    rows = result.rows;
+    raw = firstCell(await sql(statement, params));
   }
 
-  const raw = rows[0]?.[0];
   if (!raw) {
-    throw new DatabricksSqlError('ai_query returned no rows.');
+    throw new DatabricksError('ai_query returned no rows.');
   }
 
   const profile = extractedProfileSchema.parse(parseJsonObject(raw));

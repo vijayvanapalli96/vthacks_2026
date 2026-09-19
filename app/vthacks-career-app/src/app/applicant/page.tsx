@@ -1,6 +1,9 @@
 import { ArrowRight, BriefcaseBusiness, FileCheck2, Mic, ShieldCheck } from 'lucide-react';
+import { redirect } from 'next/navigation';
 
 import { SignOutForm } from '@/components/SignOutForm';
+import { nextIntakeStep } from '@/lib/intake';
+import { requireRole } from '@/lib/session';
 
 const jobs = [
   ['Data & AI Engineer', 'Northstar Labs', '92%'],
@@ -8,7 +11,20 @@ const jobs = [
   ['Machine Learning Engineer', 'Canopy Systems', '78%'],
 ];
 
-export default function ApplicantDashboard() {
+/**
+ * The intake gate lives HERE, in the dashboard page, not in the applicant layout.
+ *
+ * The intake pages are themselves under /applicant, so a layout-level redirect
+ * would fire on the very pages it sends you to — an infinite loop. A server layout
+ * also has no reliable view of the current path, so it cannot exempt them. Gating
+ * the dashboard instead gives the same behaviour (typing /applicant with unfinished
+ * intake routes you to the next step) with no loop possible.
+ */
+export default async function ApplicantDashboard() {
+  const user = await requireRole('applicant');
+  const step = await nextIntakeStep(user.id);
+  if (step) redirect(step);
+
   return (
     <main>
       <nav>

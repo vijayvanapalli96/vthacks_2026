@@ -1,30 +1,41 @@
 /**
- * profile-memory.ts — the memory that grows over time.
+ * profile-memory.ts — the profile that grows over time.
  *
- * HARD RULE: append-only. Never UPDATE, never DELETE. Current state is derived
- * (latest row per (userId, key) by observedAt), never stored. That is what makes
- * this a memory rather than a form: we can always show where a fact came from and
- * when we learned it, and a later contradiction is a new fact rather than a
- * destroyed one.
+ * APPEND-ONLY. Never UPDATE, never DELETE. Every observation is a new row with its
+ * own provenance and confidence, so a later contradiction sits next to the earlier
+ * claim instead of erasing it. That history is the difference between a memory and
+ * a form, and it is what lets the UI say "we believe X, because document Y said so".
  *
- * Two backends behind one interface:
- *   dev         JSON file (PROFILE_STORE, default .data/profile-memory.json)
- *   databricks  INSERT INTO workspace.vthacks_2026.profile_memory
+ * Current state is read through the profile_current view (latest row per
+ * (user_id, fact_key)), never by mutating rows here.
  *
- * TABLE OWNER: Tarang. Schema lives in docs/FEATURE_LIST.md. The table is being
- * created in parallel with this code, so the Databricks path may 404 at first.
- * When it does we degrade to the dev store and warn — an upload must never fail
- * because the warehouse is not ready yet.
+ * Column names are the workspace's, not this module's: fact_key / fact_value /
+ * source_ref. source_ref carries the intake_documents.document_id.
  */
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { executeStatement, hasDatabricks } from '@/lib/databricks-sql';
+
+import { sql, type SqlParam } from '@/lib/databricks';
 import type { ExtractedProfile, ExtractProvider } from '@/lib/extract/types';
 
 const TABLE = 'workspace.vthacks_2026.profile_memory';
 
-export type FactKind = 'contact' | 'education' | 'experience' | 'project' | 'skill' | 'course' | 'certification' | 'summary';
+/**
+ * Facts per INSERT. Each fact contributes 8 bound parameters, and the Statement
+ * Execution API caps parameters per request, so a 200-fact resume has to arrive in
+ * batches rather than one enormous statement.
+ */
+const FACTS_PER_INSERT = 25;
+
+export type FactKind =
+  | 'contact'
+  | 'education'
+  | 'experience'
+  | 'project'
+  | 'skill'
+  | 'course'
+  | 'certification'
+  | 'summary'
+  | 'preference';
 
 export type ProfileFact = {
   factId: string;
@@ -35,17 +46,11 @@ export type ProfileFact = {
   value: string;
   /** 0..1. Provenance, not decoration: the UI shows it next to the fact. */
   confidence: number;
-  /** Where it came from, e.g. "resume:gemini:gemini-2.5-flash". */
+  /** Where it came from, e.g. "resume:databricks:databricks-llama-4-maverick". */
   source: string;
-  /** Pointer to the originating artifact, e.g. the uploaded filename. */
+  /** intake_documents.document_id that produced this fact. */
   sourceRef: string;
   observedAt: string;
-};
-
-export type AppendResult = {
-  appended: number;
-  backend: 'databricks' | 'dev-file';
-  warnings: string[];
 };
 
 /* ------------------------------------------------------------------ flatten */
@@ -60,10 +65,17 @@ export type AppendResult = {
  */
 export function toFacts(
   profile: ExtractedProfile,
-  meta: { userId: string; provider: ExtractProvider; model: string; sourceRef: string; observedAt?: string },
+  meta: {
+    userId: string;
+    provider: ExtractProvider;
+    model: string;
+    sourceRef: string;
+    sourceKind?: string;
+    observedAt?: string;
+  },
 ): ProfileFact[] {
   const observedAt = meta.observedAt ?? new Date().toISOString();
-  const source = `resume:${meta.provider}:${meta.model}`;
+  const source = `${meta.sourceKind ?? 'resume'}:${meta.provider}:${meta.model}`;
   const facts: ProfileFact[] = [];
 
   const push = (kind: FactKind, key: string, value: string | undefined, confidence: number) => {
@@ -120,9 +132,34 @@ export function toFacts(
     const value = [course.code, course.title].filter(Boolean).join(' ');
     push('course', `course.${slug(course.code ?? course.title ?? String(i), i)}`, value || undefined, 0.85);
   });
-  profile.certifications.forEach((cert, i) => push('certification', `certification.${slug(cert, i)}`, cert, 0.85));
+  profile.certifications.forEach((cert, i) =>
+    push('certification', `certification.${slug(cert, i)}`, cert, 0.85),
+  );
 
   return facts;
+}
+
+/** A single fact, for sources that are one value rather than a whole document. */
+export function singleFact(args: {
+  userId: string;
+  kind: FactKind;
+  key: string;
+  value: string;
+  confidence: number;
+  source: string;
+  sourceRef: string;
+}): ProfileFact {
+  return {
+    factId: randomUUID(),
+    userId: args.userId,
+    kind: args.kind,
+    key: args.key,
+    value: args.value,
+    confidence: args.confidence,
+    source: args.source,
+    sourceRef: args.sourceRef,
+    observedAt: new Date().toISOString(),
+  };
 }
 
 function joinDates(start?: string, end?: string): string | undefined {
@@ -140,148 +177,76 @@ function slug(value: string, fallbackIndex: number): string {
 
 /* -------------------------------------------------------------------- store */
 
-export type ProfileMemoryStore = {
-  append: (facts: ProfileFact[]) => Promise<void>;
-  readAll: (userId: string) => Promise<ProfileFact[]>;
-};
-
-/* dev: JSON file */
-
-function devStorePath(): string {
-  return process.env.PROFILE_STORE?.trim() || path.join('.data', 'profile-memory.json');
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
-export const devFileStore: ProfileMemoryStore = {
-  async append(facts) {
-    if (facts.length === 0) return;
-    const file = devStorePath();
-    await mkdir(path.dirname(file), { recursive: true });
-    const existing = await readDevFile(file);
-    await writeFile(file, JSON.stringify([...existing, ...facts], null, 2), 'utf8');
-  },
-  async readAll(userId) {
-    const all = await readDevFile(devStorePath());
-    return all.filter((fact) => fact.userId === userId);
-  },
-};
+/** Append facts. Batched, because one statement per fact would be hundreds of round trips. */
+export async function appendFacts(facts: ProfileFact[]): Promise<number> {
+  if (facts.length === 0) return 0;
 
-async function readDevFile(file: string): Promise<ProfileFact[]> {
-  try {
-    const raw = await readFile(file, 'utf8');
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as ProfileFact[]) : [];
-  } catch {
-    // Missing or unreadable file means "no memory yet", which is a valid state.
-    return [];
-  }
-}
-
-/* databricks: append-only INSERT */
-
-export const databricksStore: ProfileMemoryStore = {
-  async append(facts) {
-    // One statement per fact keeps parameter binding simple and the failure
-    // granular. At resume scale (tens of facts) the round-trips are acceptable;
-    // if this ever gets hot, batch with a multi-row VALUES clause.
-    for (const fact of facts) {
-      await executeStatement(
-        `INSERT INTO ${TABLE}
-           (fact_id, user_id, kind, key, value, confidence, source, source_ref, observed_at)
-         VALUES
-           (:fact_id, :user_id, :kind, :key, :value, CAST(:confidence AS DOUBLE), :source, :source_ref, CAST(:observed_at AS TIMESTAMP))`,
-        [
-          { name: 'fact_id', value: fact.factId, type: 'STRING' },
-          { name: 'user_id', value: fact.userId, type: 'STRING' },
-          { name: 'kind', value: fact.kind, type: 'STRING' },
-          { name: 'key', value: fact.key, type: 'STRING' },
-          { name: 'value', value: fact.value, type: 'STRING' },
-          { name: 'confidence', value: String(fact.confidence), type: 'STRING' },
-          { name: 'source', value: fact.source, type: 'STRING' },
-          { name: 'source_ref', value: fact.sourceRef, type: 'STRING' },
-          { name: 'observed_at', value: fact.observedAt, type: 'STRING' },
-        ],
+  for (const batch of chunk(facts, FACTS_PER_INSERT)) {
+    const parameters: SqlParam[] = [];
+    const tuples = batch.map((fact, i) => {
+      parameters.push(
+        { name: `id${i}`, value: fact.factId },
+        { name: `user${i}`, value: fact.userId },
+        { name: `kind${i}`, value: fact.kind },
+        { name: `key${i}`, value: fact.key },
+        { name: `value${i}`, value: fact.value },
+        { name: `conf${i}`, value: String(fact.confidence), type: 'DOUBLE' },
+        { name: `source${i}`, value: fact.source },
+        { name: `ref${i}`, value: fact.sourceRef },
+        { name: `at${i}`, value: fact.observedAt, type: 'TIMESTAMP' },
       );
-    }
-  },
+      return `(:id${i}, :user${i}, :kind${i}, :key${i}, :value${i}, :conf${i}, :source${i}, :ref${i}, :at${i})`;
+    });
 
-  async readAll(userId) {
-    const { rows } = await executeStatement(
-      `SELECT fact_id, user_id, kind, key, value, confidence, source, source_ref,
-              CAST(observed_at AS STRING)
-         FROM ${TABLE}
-        WHERE user_id = :user_id
-        ORDER BY observed_at`,
-      [{ name: 'user_id', value: userId, type: 'STRING' }],
+    await sql(
+      `INSERT INTO ${TABLE}
+         (fact_id, user_id, kind, fact_key, fact_value, confidence, source, source_ref, observed_at)
+       VALUES ${tuples.join(', ')}`,
+      parameters,
     );
-    return rows.map((row) => ({
-      factId: row[0],
-      userId: row[1],
-      kind: row[2] as FactKind,
-      key: row[3],
-      value: row[4],
-      confidence: Number(row[5]),
-      source: row[6],
-      sourceRef: row[7],
-      observedAt: row[8],
-    }));
-  },
+  }
+
+  return facts.length;
+}
+
+export type CurrentFact = {
+  key: string;
+  value: string;
+  confidence: number;
+  source: string;
+  sourceRef: string;
+  observedAt: string;
 };
 
-/* ----------------------------------------------------------------- facade */
-
-/**
- * Append facts, preferring Databricks and falling back to the dev file.
- *
- * Never throws: losing the write is bad, but failing the upload the student just
- * made is worse. The fallback is reported so the UI can say so out loud.
- */
-export async function appendFacts(facts: ProfileFact[]): Promise<AppendResult> {
-  const warnings: string[] = [];
-
-  if (hasDatabricks()) {
-    try {
-      await databricksStore.append(facts);
-      return { appended: facts.length, backend: 'databricks', warnings };
-    } catch (error) {
-      warnings.push(
-        `Could not write profile memory to ${TABLE} (${(error as Error).message}). ` +
-          'Saved locally instead — the table may not exist yet.',
-      );
-    }
-  } else {
-    warnings.push('Databricks is not configured, so profile memory was saved to the local dev store.');
-  }
-
-  try {
-    await devFileStore.append(facts);
-    return { appended: facts.length, backend: 'dev-file', warnings };
-  } catch (error) {
-    warnings.push(`Local profile memory write also failed: ${(error as Error).message}`);
-    return { appended: 0, backend: 'dev-file', warnings };
-  }
+/** Current state, straight from the view. No mutation, no client-side reduction. */
+export async function readCurrentFacts(userId: string): Promise<CurrentFact[]> {
+  const result = await sql(
+    `SELECT fact_key, fact_value, confidence, source, source_ref, observed_at
+       FROM workspace.vthacks_2026.profile_current
+      WHERE user_id = :user
+      ORDER BY fact_key`,
+    [{ name: 'user', value: userId }],
+  );
+  return result.rows.map((row) => ({
+    key: row[0] ?? '',
+    value: row[1] ?? '',
+    confidence: Number(row[2] ?? 0),
+    source: row[3] ?? '',
+    sourceRef: row[4] ?? '',
+    observedAt: row[5] ?? '',
+  }));
 }
 
-/** Read every fact we hold for a user, newest last. Databricks first, dev fallback. */
-export async function readFacts(userId: string): Promise<{ facts: ProfileFact[]; backend: AppendResult['backend'] }> {
-  if (hasDatabricks()) {
-    try {
-      return { facts: await databricksStore.readAll(userId), backend: 'databricks' };
-    } catch {
-      // Table missing or warehouse asleep — fall through to the dev store.
-    }
-  }
-  return { facts: await devFileStore.readAll(userId), backend: 'dev-file' };
-}
-
-/**
- * profile_current semantics: latest fact per key wins. Derived here rather than
- * stored, so the append-only rule stays unbreakable.
- */
-export function currentFacts(facts: ProfileFact[]): ProfileFact[] {
-  const latest = new Map<string, ProfileFact>();
-  for (const fact of facts) {
-    const existing = latest.get(fact.key);
-    if (!existing || fact.observedAt >= existing.observedAt) latest.set(fact.key, fact);
-  }
-  return [...latest.values()].sort((a, b) => a.key.localeCompare(b.key));
+/** How much the memory holds. Cheap enough to render on the profile page. */
+export async function countFacts(userId: string): Promise<number> {
+  const result = await sql(`SELECT count(*) FROM ${TABLE} WHERE user_id = :user`, [
+    { name: 'user', value: userId },
+  ]);
+  return Number(result.rows[0]?.[0] ?? 0);
 }
