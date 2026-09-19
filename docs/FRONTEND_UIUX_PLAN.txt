@@ -150,15 +150,23 @@ PALETTE (contrast-checked, real numbers)
     failure on navy  #b8888a  (5.08:1)
   Don't use the base accents on navy. Ever.
 
-TYPE — Forum, and a caveat that will bite you
-  Display / headings / the wordmark ... Forum (Google Fonts)
+TYPE — Forum on EVERYTHING (decided), and the caveats
+  Every element on the page uses Forum. Inter has been removed.
   *** FORUM SHIPS ONLY WEIGHT 400. THERE IS NO BOLD. ***
   So hierarchy comes from SIZE, LETTER-SPACING and COLOUR, never font-weight.
     - big headings: Forum, generous letter-spacing, full ink
     - de-emphasis: same size, ink at 60% opacity — not a lighter weight
-  Body / UI / numbers / code ....... one neutral sans (Inter or system stack).
-    Forum at 14px in a table is unreadable. Use it for display only.
-  Scale: 14 / 16 / 20 / 32 / 56. Nothing else.
+  *** FORUM ALSO HAS NO ITALIC. *** The hero's bold+italic is SYNTHESIZED by
+  the browser (faux weight + oblique slant). It holds up at 56px. Do not use
+  synthesized bold/italic below ~32px — it turns to mush.
+  Because Forum is spindly at UI sizes, small text is nudged UP and tracked
+  wider (body 16, labels 12.5 at .18em, rows 14). Do not shrink these back.
+  Scale: 12.5 / 14 / 16 / 17 / 20 / 40 / 56.
+
+SHAPE
+  Radius 0 everywhere. Sharp edges, no exceptions.
+  NO WHITE. Cards are the same colour as the page (--surface = --paper);
+  separation comes from a 1px hairline, never a fill or a shadow.
 
 THE REST
   [ ] SPACING   8px grid, no exceptions
@@ -186,8 +194,8 @@ Status as of the applicant-page styling pass.
 | [x] | F1 Design tokens            | paper/ink everywhere, Forum    | CRIT   | 30m  |
 |     |    paper/ink/success/fail   | headings, hairline borders     |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
-| [x] | F2 Forum + Inter fonts      | headings turn serif; body      | CRIT   | 15m  |
-|     |    (Forum has NO bold)      | stays Inter and readable       |        |      |
+| [x] | F2 Forum on ALL text        | entire page is one serif face; | CRIT   | 25m  |
+|     |    Inter removed            | small sizes nudged up+tracked  |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [x] | F3 Lenis, reduced-motion    | scroll gains subtle weight;    | HIGH   | 20m  |
 |     |    gated                    | off entirely if user opts out  |        |      |
@@ -210,6 +218,13 @@ Status as of the applicant-page styling pass.
 +-----+-----------------------------+--------------------------------+--------+------+
 | [x] | A3 Row hover: indent +      | job rows feel alive under the  | MED    | 10m  |
 |     |    arrow slide              | cursor and the keyboard        |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A7 Sharp edges everywhere   | radius 0 on every element      | MED    | 10m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A8 One surface colour       | cards = page colour, separated | MED    | 10m  |
+|     |    no white anywhere        | by a hairline only             |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A9 Hero bold + italic       | synthesized, Forum has neither | MED    | 5m   |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [ ] | A4 Count-up on the 4 metric | 24 / 8 / 5 / 3 tick up from 0  | MED    | 20m  |
 |     |    numbers                  | when they enter view           |        |      |
@@ -265,7 +280,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 7 of 27   ·   spent ~2h05m   ·   remaining P0 ~4h20m, everything ~6h15m
+  DONE 11 of 30  ·   spent ~2h40m  ·   remaining P0 ~4h05m, everything ~6h00m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4

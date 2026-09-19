@@ -514,3 +514,86 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
   .job:hover { padding-left: 22px; }
   .metrics article:hover, .pathway:hover { transform: none; }
 }
+
+/* ===========================================================================
+   OVERRIDE PASS 2 — sharp edges, one surface colour, Forum everywhere.
+   Design decision, not a default. See docs/FRONTEND_UIUX_PLAN.txt §5.
+   =========================================================================== */
+
+:root {
+  --radius: 0px;
+  /* Cards are the SAME colour as the page. Separation comes from a hairline,
+     never from a fill. No white anywhere. */
+  --surface: var(--paper);
+  --font-body: var(--font-display);
+}
+
+/* --- Forum on absolutely everything ------------------------------------- */
+
+html, body, button, input, select, textarea, nav, nav span, nav a,
+h1, h2, h3, p, span, strong, small, em, li, td, th, label, .eyebrow,
+.metrics strong, .verified, .muted, footer, footer span {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+/* Forum is a Roman-capitals face and gets spindly at UI sizes. Nudge the small
+   end up and open the tracking so it stays legible — this is an accessibility
+   product before it is a beautiful one. */
+body { font-size: 16px; letter-spacing: 0.005em; }
+.eyebrow, small { font-size: 12.5px; letter-spacing: 0.18em; }
+.job p, .approval > div, .metrics article, footer span { font-size: 14px; }
+.job h3 { font-size: 17px; }
+.verified { font-size: 13px; letter-spacing: 0.04em; }
+
+/* --- Hero: bold + italic, both synthesized ------------------------------ */
+
+.hero h1 {
+  font-weight: 700;
+  font-style: italic;
+  font-synthesis: weight style;
+  letter-spacing: -0.005em;
+  line-height: 1.06;
+}
+
+/* --- Sharp edges, everywhere -------------------------------------------- */
+
+*, *::before, *::after { border-radius: 0 !important; }
+
+/* --- One surface. Hairlines do all the separating. ---------------------- */
+
+.metrics article, .panel, .pathway, footer, .approval {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+.metrics article:hover, .pathway:hover {
+  background: color-mix(in srgb, var(--ink) 3%, var(--paper));
+  border-color: var(--ink);
+  transform: none;
+}
+
+/* --- Buttons: sharp, flat, no fills beyond ink -------------------------- */
+
+.primary {
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+.primary:hover { background: var(--success); border-color: var(--success); }
+
+nav button {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  letter-spacing: 0.03em;
+}
+nav button:hover { background: transparent; border-color: var(--ink); }
+
+.job:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
