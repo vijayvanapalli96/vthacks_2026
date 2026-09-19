@@ -30,7 +30,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { sql, type SqlParam } from '@/lib/databricks';
+import { arrayLiteral, sql, type SqlParam } from '@/lib/databricks';
 import { detectGaps, emptyProfile, type ExtractedProfile } from '@/lib/extract/types';
 import {
   extractLinkedInExport,
@@ -269,7 +269,7 @@ async function knownProfile(userId: string): Promise<ExtractedProfile> {
  * the salary you would accept or whether you need visa sponsorship — so they stay
  * open until someone asks out loud. That is the handoff to the voice agent.
  */
-const GAP_FIELDS: ReadonlyArray<{
+export const GAP_FIELDS: ReadonlyArray<{
   field: string;
   priority: number;
   question: string;
@@ -287,10 +287,24 @@ const GAP_FIELDS: ReadonlyArray<{
   { field: 'projects', priority: 90, question: 'Any projects you would want an employer to see?', fromDocument: true },
   { field: 'links', priority: 100, question: 'Do you have a GitHub or portfolio link?', fromDocument: true },
 
+  // ---- P0 decisions: the first voice conversation. ~8 questions, 3-4 minutes.
+  //
+  // The four added here (employment_type, work_location_pref, work_authorization,
+  // graduation_date) are interleaved at ODD-ISH priorities rather than renumbering
+  // the five that shipped before them. recomputeGaps() only ever updates `status`,
+  // never `priority`, so renumbering would leave rows already in profile_gaps on
+  // their old numbers and the ask order would differ per user depending on when they
+  // signed up. Gaps in the number line are free; a silent per-user reordering is not.
   { field: 'target_role', priority: 200, question: 'What kind of role are you looking for?', fromDocument: false },
-  { field: 'sponsorship', priority: 210, question: 'Will you need visa sponsorship?', fromDocument: false },
+  { field: 'employment_type', priority: 202, question: 'Are you looking for full-time, an internship, or a co-op?', fromDocument: false },
+  { field: 'work_location_pref', priority: 204, question: 'Onsite, hybrid, or remote — and which cities work for you?', fromDocument: false },
+  { field: 'sponsorship', priority: 210, question: 'Will you need visa sponsorship, now or later?', fromDocument: false },
+  { field: 'work_authorization', priority: 212, question: 'How are you authorised to work in the US right now — citizen, permanent resident, F-1 or OPT, or something else?', fromDocument: false },
+  { field: 'graduation_date', priority: 214, question: 'When do you graduate?', fromDocument: false },
   { field: 'comp_floor', priority: 220, question: 'Is there a salary below which you would rather not be contacted?', fromDocument: false },
   { field: 'start_date', priority: 230, question: 'When could you start?', fromDocument: false },
+
+  // ---- P1: asked the NEXT time they talk to the agent, not in the first session.
   { field: 'accommodations', priority: 240, question: 'Any accommodations I should request on your behalf?', fromDocument: false },
 ];
 
@@ -364,13 +378,6 @@ async function recomputeGaps(userId: string, profile: ExtractedProfile): Promise
 }
 
 /* -------------------------------------------------- structured profile write */
-
-function arrayLiteral(values: string[]): string {
-  // Values are model output, so they are escaped rather than trusted. Delta has no
-  // array parameter type, so an array() literal is the only way in.
-  const escaped = values.map((value) => `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`);
-  return escaped.length ? `array(${escaped.join(', ')})` : 'array()';
-}
 
 async function writeStructuredProfile(
   userId: string,

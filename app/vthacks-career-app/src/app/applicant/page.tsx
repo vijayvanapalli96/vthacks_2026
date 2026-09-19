@@ -1,9 +1,10 @@
-import { ArrowRight, BriefcaseBusiness, FileCheck2, Mic, ShieldCheck } from 'lucide-react';
+import { ArrowRight, BriefcaseBusiness, FileCheck2, ShieldCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
 import { IntakeProgress } from '@/components/IntakeProgress';
 import { Reveal } from '@/components/Reveal';
 import { SignOutForm } from '@/components/SignOutForm';
+import { VoiceAgent } from '@/components/voice/VoiceAgent';
 import { VoiceConsole } from '@/components/VoiceConsole';
 import { intakeGate } from '@/lib/intake';
 import { requireRole } from '@/lib/session';
@@ -50,9 +51,11 @@ export default async function ApplicantDashboard() {
         <span>Overview</span>
         <span>Jobs</span>
         <span>Materials</span>
-        <button>
-          <Mic size={17} aria-hidden="true" /> Voice navigation
-        </button>
+        {/* The "Voice navigation" button that used to sit here did nothing when
+            clicked. The floating control is the real one, and it is always on
+            screen — a button that looks like it starts a microphone and does not is
+            worse than no button, particularly for someone who cannot see whether
+            anything happened. */}
         <SignOutForm />
       </nav>
 
@@ -145,6 +148,22 @@ export default async function ApplicantDashboard() {
         <strong>Human approval is always required.</strong>
         <span>The system recommends; you control every external action.</span>
       </Reveal>
+
+      {/* Last in the DOM, so tab order reaches the page content before the floating
+          control rather than making every keyboard user pass through it first. It
+          connects nothing until asked.
+
+          WHOEVER RESOLVES THE MERGE CONFLICT ON THIS FILE, READ THIS.
+          PR #14 (already on main, not in this branch) renders <VoiceConsole /> on this
+          same page. VoiceConsole calls navigator.mediaDevices.getUserMedia itself, and
+          its buttons are a state-picker harness, not an agent — it talks to no
+          endpoint. Two getUserMedia grabs on one page is a real bug: the streams
+          compete and the second request can simply fail. Keep ONE. This component is
+          the functional one (ElevenLabs session, client tool, /api/voice/answer), so
+          <VoiceConsole /> should stop being rendered here.
+          Their <VoiceOrb /> is worth keeping and is genuinely reusable — wire it into
+          VoiceWidget's `visual` prop, which exists for exactly that. */}
+      <VoiceAgent />
     </main>
   );
 }

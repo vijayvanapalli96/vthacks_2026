@@ -516,3 +516,72 @@ CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.scan_locks (
   CONSTRAINT scan_locks_pk PRIMARY KEY (lock_name)
 ) USING DELTA
 COMMENT 'Single-writer lock for the job scan tick. One row per lock name.';
+
+
+-- ---------------------------------------------------------------------------
+-- SECTION 6 — the voice agent. Applied 2026-09-19. See docs/VOICE_AGENT_PLAN.md §5.
+--
+-- Two problems found by reading this file rather than assuming, and what was done
+-- about each:
+--
+--   1. voice_events has no user_id and is keyed on application_id, which does not
+--      exist during onboarding — there is no application yet. So it cannot hold an
+--      onboarding transcript. Rather than bend it, the transcript gets its own
+--      table (voice_turns): turns are a different shape and a much higher volume
+--      than telemetry events. voice_events is widened only so a session can be
+--      attributed to a user at all.
+--
+--   2. goals.sponsorship_required is a BOOLEAN. "I'm on F-1 OPT and I'll need
+--      H-1B in about two years" is not a boolean, and the part an employer cares
+--      about is exactly the part a boolean throws away. The column STAYS, as a
+--      derived convenience for the match query; the user's own words are appended
+--      to profile_memory as voice.sponsorship. The memory keeps what they said,
+--      the column keeps what we can filter on.
+--
+-- NOTE FOR RE-RUNS: the two ALTERs below are the only NON-idempotent statements
+-- in this file. `ADD COLUMNS IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` are
+-- both PARSE ERRORS on this warehouse. DESCRIBE TABLE first and skip them if the
+-- columns are already there.
+-- ---------------------------------------------------------------------------
+
+-- voice_turns — the transcript, in order, including what the system DID.
+--   role='action' rows are why this is worth storing: they are the audit trail of
+--   a voice turn changing the user's data, which is the claim the product makes.
+--   turn_id is a client-minted uuid so a retry cannot double-log a turn.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.voice_turns (
+  turn_id         STRING NOT NULL,
+  user_id         STRING NOT NULL,
+  conversation_id STRING NOT NULL COMMENT 'ElevenLabs conversation id, or typed:<uuid> for the typed fallback',
+  turn_index      INT    NOT NULL COMMENT 'Order within the conversation',
+  role            STRING NOT NULL COMMENT 'user | agent | action',
+  text            STRING,
+  action_kind     STRING COMMENT 'profile_updated | job_matched | refused | interview_feedback. NULL unless role=action',
+  action_detail   STRING,
+  field_key       STRING COMMENT 'The gap this turn answered, when it answered one',
+  spoken_at       TIMESTAMP NOT NULL,
+  CONSTRAINT voice_turns_pk PRIMARY KEY (turn_id)
+) USING DELTA
+COMMENT 'One row per conversation turn. role=action rows record what the turn changed.';
+
+-- Attribution for voice telemetry. NOT the transcript — see voice_turns.
+ALTER TABLE workspace.vthacks_2026.voice_events ADD COLUMNS (
+  user_id         STRING COMMENT 'users.user_id. Onboarding has no application_id.',
+  conversation_id STRING COMMENT 'ElevenLabs conversation id'
+);
+
+-- The structured side of the P0 question set. Free text, not enums: "May 2027"
+-- and "hybrid, Blacksburg or Arlington" are real answers and normalising them
+-- here would discard the part that makes them useful.
+ALTER TABLE workspace.vthacks_2026.goals ADD COLUMNS (
+  employment_type    STRING COMMENT 'full-time | internship | co-op, in the user''s words',
+  work_location_pref STRING COMMENT 'Onsite/hybrid/remote plus cities, free text',
+  work_authorization STRING COMMENT 'Citizen | permanent resident | F-1 OPT | ... free text',
+  graduation_date    STRING COMMENT 'Free text: "May 2027" is a real answer',
+  clearance          STRING,
+  industries_avoid   ARRAY<STRING>,
+  pii_release_policy ARRAY<STRING> COMMENT 'Field names the user consents to release. NOTHING READS THIS YET.',
+  company_size       STRING
+);
+
+-- profile_gaps needs NO change: field_key is already a free-form STRING, so the
+-- four new P0 questions are rows, not columns.

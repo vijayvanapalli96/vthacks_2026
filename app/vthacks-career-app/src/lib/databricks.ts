@@ -197,3 +197,17 @@ export async function sql(statement: string, parameters: SqlParam[] = []): Promi
 export function firstCell(result: SqlResult): string | undefined {
   return result.rows[0]?.[0] ?? undefined;
 }
+
+/**
+ * An ARRAY<STRING> literal, escaped.
+ *
+ * The Statement Execution API has no array parameter type, so an array() literal is
+ * the only way to write one — which means these values cannot be bound and have to
+ * be escaped instead. Everything else in this codebase is a named parameter; this is
+ * the one documented exception, and it exists here rather than being re-written per
+ * caller so there is a single place to audit the escaping.
+ */
+export function arrayLiteral(values: string[]): string {
+  const escaped = values.map((value) => `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`);
+  return escaped.length ? `array(${escaped.join(', ')})` : 'array()';
+}
