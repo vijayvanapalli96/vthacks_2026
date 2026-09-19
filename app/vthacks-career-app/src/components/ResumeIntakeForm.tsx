@@ -33,7 +33,7 @@ export function ResumeIntakeForm() {
           aria-invalid={invalid}
           aria-describedby={invalid ? 'resume-hint resume-error' : 'resume-hint'}
         />
-        <small id="resume-hint">Up to 10 MB. Two-column layouts are fine.</small>
+        <small id="resume-hint">Up to 10 MB.</small>
       </div>
 
       <div className="actions">
