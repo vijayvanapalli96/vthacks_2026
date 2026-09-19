@@ -118,7 +118,16 @@ export type Project = z.infer<typeof projectSchema>;
 export type Course = z.infer<typeof courseSchema>;
 export type ProfileLink = z.infer<typeof linkSchema>;
 
-export type ExtractProvider = 'databricks' | 'gemini';
+/**
+ * Who produced an extraction.
+ *
+ * 'linkedin-export' is not a model. The LinkedIn data export has a fixed CSV
+ * schema, so it is parsed by code (src/lib/extract/linkedin-export.ts) with no
+ * model call at all — and provenance has to be able to say that, because
+ * "Databricks ai_query" on a row we read out of a spreadsheet would be a false
+ * claim in the one field whose whole job is being true.
+ */
+export type ExtractProvider = 'databricks' | 'gemini' | 'linkedin-export';
 
 export type ExtractionResult = {
   profile: ExtractedProfile;

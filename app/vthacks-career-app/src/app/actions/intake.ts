@@ -16,7 +16,13 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { skipIntake, stageDocument, stageLinkedInUrl, validateUpload } from '@/lib/intake';
+import {
+  skipIntake,
+  stageDocument,
+  stageLinkedInUrl,
+  validateExportUpload,
+  validateUpload,
+} from '@/lib/intake';
 import { requireRole } from '@/lib/session';
 
 /**
@@ -26,8 +32,17 @@ import { requireRole } from '@/lib/session';
  *
  * The only state worth rendering is therefore a validation failure the user has to
  * act on. Success is a redirect.
+ *
+ * `field` exists for accessibility, not decoration. The LinkedIn step now has two
+ * controls, so a bare message would leave a screen-reader user with "that needs to
+ * be a LinkedIn profile URL" and no idea which of the two inputs carries
+ * aria-invalid. Omitted means "not attributable to one field".
  */
-export type IntakeState = { status: 'error'; message: string } | null;
+export type IntakeField = 'resume' | 'linkedinUrl' | 'linkedinExport';
+
+export type IntakeState =
+  | { status: 'error'; message: string; field?: IntakeField }
+  | null;
 
 /**
  * linkedin.com/in/<slug>. Deliberately narrow: a silently-saved typo is worse than
@@ -71,14 +86,31 @@ export async function uploadResumeAction(
   const candidate = formData.get('resume');
   const file = candidate instanceof File ? candidate : null;
   const invalid = validateUpload(file);
-  if (invalid || !file) return { status: 'error', message: invalid ?? 'Choose a PDF to upload.' };
+  if (invalid || !file) {
+    return { status: 'error', message: invalid ?? 'Choose a PDF to upload.', field: 'resume' };
+  }
 
   const result = await stageDocument({ userId: user.id, kind: 'resume_pdf', file });
-  if (!result.ok) return { status: 'error', message: result.error };
+  if (!result.ok) return { status: 'error', message: result.error, field: 'resume' };
 
   redirect('/applicant/intake/linkedin');
 }
 
+/**
+ * LinkedIn step: a required URL, and an OPTIONAL data export.
+ *
+ * The two are staged as two documents ('linkedin_url' and 'linkedin_export_pdf')
+ * rather than one, because they are different kinds of evidence with different
+ * confidence and different failure modes — the URL is a link we display, the export
+ * is a file we parse — and intake_documents already keys on (user_id, kind).
+ *
+ * ORDER MATTERS. The URL is validated and staged FIRST. If a 40 MB export blows up
+ * on the Volume write, the thing the user actually typed is already durable and the
+ * only thing they have to retry is the file.
+ *
+ * The export never blocks the step. It is optional, so a rejected file returns a
+ * message and keeps them on the page to try again; it does not lose the URL.
+ */
 export async function linkedInAction(_prev: IntakeState, formData: FormData): Promise<IntakeState> {
   const user = await requireRole('applicant');
 
@@ -91,11 +123,41 @@ export async function linkedInAction(_prev: IntakeState, formData: FormData): Pr
 
   const parsed = linkedInUrl.safeParse(String(formData.get('linkedinUrl') ?? ''));
   if (!parsed.success) {
-    return { status: 'error', message: parsed.error.issues[0]?.message ?? 'That URL is not valid.' };
+    return {
+      status: 'error',
+      message: parsed.error.issues[0]?.message ?? 'That URL is not valid.',
+      field: 'linkedinUrl',
+    };
+  }
+
+  // An empty file input still posts a File, with size 0. That is "no export", not a
+  // validation failure — the field is optional and must stay silent when unused.
+  const candidate = formData.get('linkedinExport');
+  const exportFile = candidate instanceof File && candidate.size > 0 ? candidate : null;
+  if (exportFile) {
+    const invalid = validateExportUpload(exportFile);
+    if (invalid) return { status: 'error', message: invalid, field: 'linkedinExport' };
   }
 
   const result = await stageLinkedInUrl(user.id, parsed.data);
-  if (!result.ok) return { status: 'error', message: result.error };
+  if (!result.ok) return { status: 'error', message: result.error, field: 'linkedinUrl' };
+
+  if (exportFile) {
+    const stored = await stageDocument({
+      userId: user.id,
+      kind: 'linkedin_export_pdf',
+      file: exportFile,
+    });
+    // The URL is saved either way, so this reports the file problem and keeps them
+    // here rather than silently advancing with the export missing.
+    if (!stored.ok) {
+      return {
+        status: 'error',
+        message: `Your URL is saved, but the export did not upload: ${stored.error}`,
+        field: 'linkedinExport',
+      };
+    }
+  }
 
   revalidatePath('/applicant/profile');
   // Collection is finished. Everything staged gets read together on the next page.
