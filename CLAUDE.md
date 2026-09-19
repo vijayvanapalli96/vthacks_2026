@@ -188,3 +188,11 @@ payments · mobile · resume WYSIWYG · Presage · Gmail ingestion (the
   constantly and a merge bubble per branch will make the history unreadable.
 - Run `npm run typecheck && npm run lint && npm run build` before you open a PR.
   A red branch costs a teammate more time than it saved you.
+- **One checkout per worker — human or agent.** If two of you (or two coding
+  agents) edit the same working tree, a `git add -A` sweeps up the other's
+  half-finished files and neither of you can tell which are yours. Give each
+  concurrent worker its own tree:
+  `git worktree add ../vthacks-<lane> -b feat/<thing> origin/main`, then merge
+  through a PR like any other branch. Run `git worktree list` before you assume
+  you are alone in here — and never switch branches in a tree someone else is
+  working in, because it changes files under them.
