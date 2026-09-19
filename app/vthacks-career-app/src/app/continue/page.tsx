@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
-import { dashboardPath } from '@/lib/session';
+import { DEFAULT_ROLE, dashboardPath } from '@/lib/session';
 import { setUserRole, type Role } from '@/lib/users';
 
 function asRole(value: string | string[] | undefined): Role | undefined {
@@ -10,12 +10,18 @@ function asRole(value: string | string[] | undefined): Role | undefined {
 }
 
 /**
- * Post-auth hop: the single place that decides where a signed-in person belongs.
+ * Post-auth hop: the single place that decides where a signed-in person belongs,
+ * and the only place that ever writes a missing role.
  *
- * Google returns here with ?role=… when the landing page already asked which
- * pathway they're on. Claiming it here is what keeps /choose-role out of the
- * normal flow — that page is now only a fallback for a Google sign-in that
- * carried no role at all.
+ * There is no "pick a workspace" screen. The pathway is chosen once on the
+ * landing page and travels from there: as a form field for email/password, and
+ * as ?role=… through the Google OAuth round trip. This page persists it.
+ *
+ * If a role is somehow still missing — a Google sign-in begun straight from
+ * /signin, or an account created before the pass-through existed — we write
+ * DEFAULT_ROLE rather than interrupting with a question. Accepted tradeoff: an
+ * employer arriving that way lands in the applicant workspace. That is
+ * recoverable; a dead-end prompt in the middle of sign-in is not.
  */
 export default async function ContinuePage({
   searchParams,
@@ -25,16 +31,14 @@ export default async function ContinuePage({
   const session = await auth();
   if (!session?.user) redirect('/signin');
 
+  if (session.user.role) redirect(dashboardPath[session.user.role]);
+
   const { role } = await searchParams;
-  const requested = asRole(role);
+  const resolved = asRole(role) ?? DEFAULT_ROLE;
 
-  // Only ever SET a role, never overwrite one. An existing account keeps the side
-  // it signed up as, whatever a URL claims.
-  if (!session.user.role && requested && session.user.email) {
-    await setUserRole(session.user.email, requested);
-    redirect(dashboardPath[requested]);
-  }
+  // Only ever SET a missing role, never overwrite one — an existing account keeps
+  // the side it signed up as, whatever a URL claims.
+  if (session.user.email) await setUserRole(session.user.email, resolved);
 
-  if (!session.user.role) redirect('/choose-role');
-  redirect(dashboardPath[session.user.role]);
+  redirect(dashboardPath[resolved]);
 }

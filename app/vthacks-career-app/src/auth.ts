@@ -52,9 +52,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
-      // A Google user may be brand new. Create the record now, but leave `role`
-      // undefined on purpose: Google cannot tell us whether this person is an
-      // applicant or an employer, so /choose-role has to ask.
+      // A Google user may be brand new. Create the record now with no role:
+      // Google cannot tell us which side of the handshake they are on. The role
+      // arrives separately at /continue, carried from the landing page.
       if (account?.provider === 'google' && user.email) {
         const existing = await findUserByEmail(user.email);
         if (!existing) {
@@ -68,7 +68,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
     async jwt({ token }) {
-      // Re-read the store on every call so a role set at /choose-role takes
+      // Re-read the store on every call so a role written at /continue takes
       // effect on the very next request, with no session-refresh dance. This is
       // one cheap lookup; revisit if the store ever becomes a remote call.
       if (token.email) {

@@ -146,7 +146,7 @@ export async function setRoleAction(formData: FormData): Promise<void> {
   if (!session?.user?.email) redirect('/signin');
 
   const parsed = roleSchema.safeParse(text(formData, 'role'));
-  if (!parsed.success) redirect('/choose-role');
+  if (!parsed.success) redirect('/continue');
 
   await setUserRole(session.user.email, parsed.data);
   redirect(parsed.data === 'applicant' ? '/applicant' : '/employer');

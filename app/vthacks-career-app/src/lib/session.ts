@@ -18,6 +18,12 @@ export const dashboardPath: Record<Role, string> = {
   employer: '/employer',
 };
 
+/**
+ * Used only when an account somehow has no role at all — see continue/page.tsx.
+ * Applicants are the dominant persona, so they are the safer default.
+ */
+export const DEFAULT_ROLE: Role = 'applicant';
+
 export async function requireUser() {
   const session = await auth();
   if (!session?.user) redirect('/signin');
@@ -26,7 +32,8 @@ export async function requireUser() {
 
 export async function requireRole(role: Role) {
   const user = await requireUser();
-  if (!user.role) redirect('/choose-role');
+  // No role yet: /continue writes one, then forwards to a dashboard. Never prompt.
+  if (!user.role) redirect('/continue');
   if (user.role !== role) redirect(dashboardPath[user.role]);
   return user;
 }
