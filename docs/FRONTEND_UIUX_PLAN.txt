@@ -285,6 +285,10 @@ Status as of the applicant-page styling pass.
 | [x] | A17 Panels de-carded        | workspace + auth are rules and | HIGH   | 20m  |
 |     |     everywhere              | space; no boxes anywhere       |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A18 Architecture rail       | 9 stage cards scroll SIDEWAYS  | HIGH   | 50m  |
+|     |     horizontal-on-vertical  | as you scroll down; each names |        |      |
+|     |     scroll, 9 cards         | the sponsor tech it uses       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
 |     | PHASE S — VOICE ORB (signature object)                                        |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [x] | S1 Orb, 5 visual states     | ink ring + 64 radial ticks on  | CRIT   | 50m  |
@@ -332,7 +336,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 26 of 39  ·   1 cut  ·  spent ~9h45m  ·  remaining P0 ~1h05m, all ~2h15m
+  DONE 27 of 40  ·   1 cut  ·  spent ~10h35m ·  remaining P0 ~1h05m, all ~2h15m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4

@@ -252,6 +252,113 @@ main, [id] { scroll-margin-top: 100px; }
 }
 .path__cta:hover { border-color: var(--ink); gap: 15px; }
 
+/* --- Architecture rail: vertical scroll drives horizontal travel --------- */
+/* The section is N viewports tall; the inner panel pins and the track slides.
+   Under reduced motion this whole mechanism is replaced by a plain stack — see
+   the early return in ArchitectureRail.tsx. */
+
+.rail { position: relative; }
+
+.rail__pin {
+  position: sticky;
+  top: var(--nav-h);
+  height: calc(100svh - var(--nav-h));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rail__title {
+  font-size: clamp(30px, 3.6vw, 48px);
+  font-style: italic;
+  font-weight: 700;
+  -webkit-text-stroke: 0.3px var(--ink);
+  letter-spacing: -0.015em;
+  padding: 34px 0 26px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.rail__track { display: flex; flex: 1; will-change: transform; }
+
+.stage {
+  flex: 0 0 calc(100% / 3);
+  padding: 40px 48px 40px 0;
+  margin-right: 48px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.stage:last-child { border-right: 0; }
+
+.stage__n {
+  font-size: 13px;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+
+.stage h3 {
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-style: italic;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+}
+
+.stage__lede { color: var(--ink); font-size: 17px; line-height: 1.6; margin: 0 0 22px; }
+
+.stage__points { list-style: none; margin: 0 0 26px; padding: 0; display: grid; gap: 11px; }
+.stage__points li {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-left: 18px;
+  position: relative;
+}
+.stage__points li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 8px;
+  height: 1px;
+  background: var(--line-strong);
+}
+
+/* The stack block is what a track judge scans for. Keep it unmissable. */
+.stage__stack {
+  margin: auto 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-strong);
+  display: grid;
+  gap: 14px;
+}
+.stage__stack div { display: grid; gap: 4px; }
+.stage__stack dt {
+  font-size: 12.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--success);
+}
+.stage__stack dd { margin: 0; font-size: 14.5px; color: var(--muted); line-height: 1.5; }
+
+/* Reduced motion: a stack, not a rail. */
+.rail--static { padding: 80px 0; border-top: 1px solid var(--line); }
+.rail--static .rail__title { padding-top: 0; }
+.rail__stack { display: grid; gap: 0; }
+.rail--static .stage {
+  flex: none;
+  border-right: 0;
+  border-bottom: 1px solid var(--line);
+  margin-right: 0;
+  padding: 36px 0;
+  overflow: visible;
+}
+
+@media (max-width: 1100px) { .stage { flex: 0 0 calc(100% / 2); } }
+@media (max-width: 760px) { .stage { flex: 0 0 88%; } }
+
 /* --- Feature marquee ---------------------------------------------------- */
 
 .marquee {

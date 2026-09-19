@@ -2,6 +2,7 @@ import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { AgentGreeter } from '@/components/AgentGreeter';
+import { ArchitectureRail } from '@/components/ArchitectureRail';
 import { FeatureMarquee } from '@/components/FeatureMarquee';
 import { Reveal } from '@/components/Reveal';
 
@@ -46,7 +47,9 @@ export default function Home() {
         </p>
       </Reveal>
 
-      {/* Screen two: the question, answered. */}
+      <ArchitectureRail />
+
+      {/* Screen three: the question, answered. */}
       <section className="why" aria-labelledby="why-h">
         <Reveal className="why__q" onScroll>
           <h2 id="why-h">Why HireWire?</h2>
