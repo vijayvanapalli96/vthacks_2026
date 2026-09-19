@@ -20,15 +20,16 @@ export default function LinkedInIntakePage() {
 
       <div className="intake-shell">
         <ol className="intake-steps">
-          <li className="done">1. Resume</li>
+          <li className="is-done">1. Resume</li>
           <li aria-current="step">2. LinkedIn</li>
-          <li>3. Profile</li>
+          <li>3. Reading</li>
         </ol>
 
         <p className="eyebrow">STEP TWO</p>
         <h1>Add your LinkedIn.</h1>
         <p className="muted">
-          It goes on your profile and travels with anything I send on your behalf.
+          It goes on your profile and travels with anything I send on your behalf. This is the last
+          thing I ask for — next I read everything at once.
         </p>
 
         <LinkedInIntakeForm />

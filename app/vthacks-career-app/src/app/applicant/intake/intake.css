@@ -17,11 +17,13 @@
   color: #68746c;
 }
 
-.intake-steps span[aria-current='step'] {
+/* The step list is an <ol> of <li>, not spans — an earlier selector said `span` and
+   silently matched nothing, so the current step was never highlighted. */
+.intake-steps li[aria-current='step'] {
   color: var(--green);
 }
 
-.intake-steps .done {
+.intake-steps li.is-done {
   color: #267453;
 }
 
@@ -166,6 +168,154 @@
 /* Focus must stay obvious: the whole demo is run on the keyboard. */
 .intake-form :focus-visible,
 .outcome a:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ progress */
+/* The reading step. A log, not a spinner: the user is waiting 30-60s and what the
+   system is doing with their data is the most interesting thing it has to show. */
+
+.progress {
+  display: grid;
+  gap: 18px;
+}
+
+.progress-log {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 8px 0;
+  margin: 0;
+  list-style: none;
+}
+
+.progress-line {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: start;
+  gap: 10px;
+  padding: 11px 20px;
+  border-top: 1px solid #f0f2f0;
+}
+
+.progress-line:first-child {
+  border-top: 0;
+}
+
+.progress-mark {
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: center;
+  color: #267453;
+}
+
+.progress-line.is-start .progress-mark {
+  color: #68746c;
+}
+
+.progress-line.is-warn .progress-mark {
+  color: #9a5b16;
+}
+
+.progress-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.progress-body strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* The detail line carries model names, byte counts and honest caveats, so it has to
+   stay legible rather than decorative: 4.5:1 against white. */
+.progress-body small {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #59635b;
+  overflow-wrap: anywhere;
+}
+
+.progress-line.is-warn .progress-body small {
+  color: #7a4a12;
+}
+
+.progress-ms {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #68746c;
+  padding-top: 2px;
+}
+
+/* In-progress rows pulse so it is obvious which step is live. Animation only —
+   the state is also in the text, for anyone who cannot see it or has motion off. */
+.progress-line.is-start .progress-body strong {
+  animation: progress-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-line.is-start .progress-body strong {
+    animation: none;
+  }
+}
+
+.progress-done,
+.progress-error {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-done p,
+.progress-error p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.progress-error {
+  border-color: #e6c9b4;
+  background: #fdf6f0;
+}
+
+.progress-done a,
+.progress-error a {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.progress-done a.primary,
+.progress-error a.primary {
+  background: var(--green);
+  color: white;
+}
+
+.progress-done a.ghost,
+.progress-error a.ghost {
+  border: 1px solid var(--line);
+  color: #2b332c;
+}
+
+.progress-done a:focus-visible,
+.progress-error a:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 2px;
 }

@@ -1,57 +1,46 @@
 /**
- * intake.ts — the one path from "user handed us something" to "the profile knows it".
+ * intake.ts — the path from "user handed us something" to "the profile knows it".
  *
- * Every source goes through ingest(): a resume PDF, a LinkedIn URL, later a
- * transcript. The steps are always the same, which is why they live in one place
- * rather than in each route:
+ * TWO PHASES, ON PURPOSE.
  *
- *   hash -> idempotency check -> store bytes -> record the source
- *        -> extract -> structured profile -> append memory -> recompute gaps
+ *   stage    stageDocument / stageLinkedInUrl / skipIntake
+ *            Make it durable and record a 'received' row. No model call. Fast, so
+ *            the upload pages are just "choose, next, choose, next".
+ *
+ *   analyse  analyzeIntake
+ *            Read everything staged, COMBINE it, write the structured profile,
+ *            append to memory, recompute the gaps. This is where the 30-to-60
+ *            seconds goes, and it streams a progress log while it runs.
+ *
+ * Doing it in one blocking step was worse twice over: the user waited on a dead
+ * submit button, and each source was read in isolation, so the resume pass could
+ * not see anything the LinkedIn step provided and vice versa. Reading them together
+ * means a field missing from one source can be supplied by another BEFORE we decide
+ * what is still an open question.
  *
  * IDEMPOTENCY IS A FEATURE, NOT A NICETY. profile_memory is append-only, so a
- * second upload of the same file would permanently double every fact and the
- * profile page would show each skill twice. A demo operator re-uploading during
- * rehearsal is the likeliest way to trigger it. The (user_id, content_hash) check
- * in step 2 is what prevents that.
+ * second upload of the same file would permanently double every fact and the profile
+ * page would show each skill twice. A demo operator re-uploading during rehearsal is
+ * the likeliest way to trigger it. Two things prevent it: the (user_id,
+ * content_hash) check when staging, and marking each document 'parsed' the moment
+ * its facts land, so an interrupted analysis resumes instead of re-appending.
  *
- * ingest() never throws at its caller. A failed parse is a rendered error and a
- * 'failed' row, not a 500.
+ * Nothing here throws at its caller. A failed parse is a 'failed' row and a warning
+ * in the log, not a 500 — one unreadable resume must not cost the whole profile.
  */
 import { randomUUID } from 'node:crypto';
 
 import { sql, type SqlParam } from '@/lib/databricks';
-import {
-  detectGaps,
-  emptyProfile,
-  type ExtractedProfile,
-  type ExtractProvider,
-} from '@/lib/extract/types';
+import { detectGaps, emptyProfile, type ExtractedProfile } from '@/lib/extract/types';
 import { extractProfile } from '@/lib/extract';
 import { appendFacts, singleFact, toFacts } from '@/lib/profile-memory';
-import { putUpload } from '@/lib/uploads';
+import { getUpload, putUpload } from '@/lib/uploads';
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 const DOCS = 'workspace.vthacks_2026.intake_documents';
 
 export type IntakeKind = 'resume_pdf' | 'linkedin_url' | 'linkedin_export_pdf' | 'transcript_pdf';
-
-export type IntakeOk = {
-  ok: true;
-  documentId: string;
-  /** True when we recognised the bytes and did no work. */
-  reused: boolean;
-  skipped: boolean;
-  profile: ExtractedProfile;
-  provider: ExtractProvider | null;
-  model: string | null;
-  factsAppended: number;
-  openGaps: number;
-  warnings: string[];
-};
-
-export type IntakeErr = { ok: false; error: string };
-export type IntakeResult = IntakeOk | IntakeErr;
 
 /* -------------------------------------------------------------- onboarding */
 
@@ -68,13 +57,58 @@ export type IntakeResult = IntakeOk | IntakeErr;
  */
 export async function nextIntakeStep(userId: string): Promise<string | null> {
   const result = await sql(
-    `SELECT kind FROM ${DOCS} WHERE user_id = :user AND kind IN ('resume_pdf', 'linkedin_url') GROUP BY kind`,
+    `SELECT
+       max(CASE WHEN kind = 'resume_pdf'   THEN 1 ELSE 0 END) AS has_resume,
+       max(CASE WHEN kind = 'linkedin_url' THEN 1 ELSE 0 END) AS has_linkedin,
+       max(CASE WHEN status = 'received'   THEN 1 ELSE 0 END) AS has_pending,
+       (SELECT count(*) FROM workspace.vthacks_2026.profile_gaps WHERE user_id = :user) AS gaps
+     FROM ${DOCS} WHERE user_id = :user`,
     [{ name: 'user', value: userId }],
   );
-  const seen = new Set(result.rows.map((row) => row[0]));
-  if (!seen.has('resume_pdf')) return '/applicant/intake/resume';
-  if (!seen.has('linkedin_url')) return '/applicant/intake/linkedin';
+  const row = result.rows[0] ?? [];
+  const truthy = (value: unknown) => String(value ?? '0') === '1';
+
+  if (!truthy(row[0])) return '/applicant/intake/resume';
+  if (!truthy(row[1])) return '/applicant/intake/linkedin';
+
+  // Collecting is done, but something still has to be read. Analysis is a separate
+  // step precisely so the two upload pages stay fast: the model call is the slow
+  // part, and it should happen once, over everything at once, with the user looking
+  // at a progress view instead of a frozen submit button.
+  if (truthy(row[2])) return '/applicant/intake/processing';
+
+  // Gap rows are the OUTPUT of analysis, so none existing means analysis has never
+  // run for this user. That is the case where both steps were skipped: there are no
+  // 'received' rows to read, but the voice agent still needs its question queue, so
+  // the processing step has to run to build it.
+  if (Number(row[3] ?? 0) === 0) return '/applicant/intake/processing';
   return null;
+}
+
+/** Sources that have been collected but not yet read. */
+export type PendingDocument = {
+  documentId: string;
+  kind: IntakeKind;
+  storagePath: string | null;
+  externalUrl: string | null;
+  fileName: string | null;
+};
+
+export async function pendingIntake(userId: string): Promise<PendingDocument[]> {
+  const result = await sql(
+    `SELECT document_id, kind, storage_path, external_url, file_name
+       FROM ${DOCS}
+      WHERE user_id = :user AND status = 'received'
+      ORDER BY uploaded_at`,
+    [{ name: 'user', value: userId }],
+  );
+  return result.rows.map((row) => ({
+    documentId: String(row[0]),
+    kind: String(row[1]) as IntakeKind,
+    storagePath: row[2] == null ? null : String(row[2]),
+    externalUrl: row[3] == null ? null : String(row[3]),
+    fileName: row[4] == null ? null : String(row[4]),
+  }));
 }
 
 /* ------------------------------------------------------------------- gaps */
@@ -122,11 +156,14 @@ const GAP_FIELDS: ReadonlyArray<{
  * salary floor must not be asked again because a later resume upload happens not
  * to mention it.
  */
-async function recomputeGaps(userId: string, profile: ExtractedProfile, everything: boolean): Promise<number> {
+async function recomputeGaps(userId: string, profile: ExtractedProfile): Promise<number> {
+  // An empty profile — every step skipped, or every parse failed — makes every
+  // document-derived field missing, which is exactly right: all of them become
+  // questions. No separate "open everything" mode is needed.
   const missingFromDoc = new Set(detectGaps(profile).map((gap) => gap.key));
 
   const rows = GAP_FIELDS.map((gap) => {
-    const open = everything || !gap.fromDocument || missingFromDoc.has(gap.field);
+    const open = !gap.fromDocument || missingFromDoc.has(gap.field);
     return { ...gap, desired: open ? 'open' : 'answered' };
   });
 
@@ -446,24 +483,98 @@ export function validateUpload(file: File | null): string | null {
   return null;
 }
 
-/** Skipping is a recorded outcome: it opens every gap so the agent knows what to ask. */
-export async function skipIntake(userId: string, kind: IntakeKind): Promise<IntakeResult> {
+/* ------------------------------------------------------------------ staging */
+
+/**
+ * Collecting is separated from reading.
+ *
+ * The two intake pages only STAGE: they make the bytes (or the URL) durable, write
+ * a 'received' row, and return. Nothing calls a model. That is what makes "upload,
+ * next, upload, next" feel instant — the 30-to-60-second part happens once,
+ * afterwards, over everything at once, on a page built to show progress.
+ *
+ * It is also better analysis. Reading each source the moment it arrives means the
+ * resume pass cannot see the LinkedIn URL and vice versa; reading them together
+ * lets one source cover what the other omits.
+ */
+export type StageResult =
+  | { ok: true; documentId: string; reused: boolean }
+  | { ok: false; error: string };
+
+/** Skipping is a recorded outcome, not the absence of one. */
+export async function skipIntake(userId: string, kind: IntakeKind): Promise<StageResult> {
   try {
     const documentId = randomUUID();
+    await clearUnread(userId, kind);
     await insertDocument({ documentId, userId, kind, status: 'skipped' });
-    const openGaps = await recomputeGaps(userId, emptyProfile(), true);
-    return {
-      ok: true,
+    return { ok: true, documentId, reused: false };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Drop a previous, never-read row for this slot.
+ *
+ * Someone who goes back and uploads a different resume should replace what they
+ * staged, not queue a second document. Only 'received' rows are removed: nothing
+ * downstream can reference them yet, because being referenced is what 'parsed'
+ * means. A parsed document is never touched.
+ */
+async function clearUnread(userId: string, kind: IntakeKind): Promise<void> {
+  await sql(
+    `DELETE FROM ${DOCS} WHERE user_id = :user AND kind = :kind AND status IN ('received', 'skipped')`,
+    [
+      { name: 'user', value: userId },
+      { name: 'kind', value: kind },
+    ],
+  );
+}
+
+/** Store the bytes and record the source. Does NOT read the document. */
+export async function stageDocument(args: {
+  userId: string;
+  kind: Extract<IntakeKind, 'resume_pdf' | 'linkedin_export_pdf' | 'transcript_pdf'>;
+  file: File;
+}): Promise<StageResult> {
+  const { userId, kind, file } = args;
+
+  const invalid = validateUpload(file);
+  if (invalid) return { ok: false, error: invalid };
+
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const stored = await putUpload({
+      userId,
+      kind,
+      bytes,
+      fileName: file.name,
+      mimeType: file.type || 'application/pdf',
+    });
+
+    // Already read these exact bytes. Staging it again would make analysis append
+    // every fact a second time, and profile_memory is append-only — there is no
+    // undo. Report it as reused and stage nothing.
+    const existing = await findParsedByHash(userId, stored.contentHash);
+    if (existing) {
+      await clearUnread(userId, kind);
+      return { ok: true, documentId: existing, reused: true };
+    }
+
+    const documentId = randomUUID();
+    await clearUnread(userId, kind);
+    await insertDocument({
       documentId,
-      reused: false,
-      skipped: true,
-      profile: emptyProfile(),
-      provider: null,
-      model: null,
-      factsAppended: 0,
-      openGaps,
-      warnings: [],
-    };
+      userId,
+      kind,
+      status: 'received',
+      storagePath: stored.storagePath,
+      fileName: file.name,
+      mimeType: file.type || 'application/pdf',
+      byteSize: stored.byteSize,
+      contentHash: stored.contentHash,
+    });
+    return { ok: true, documentId, reused: false };
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }
@@ -476,151 +587,335 @@ export async function skipIntake(userId: string, kind: IntakeKind): Promise<Inta
  * it, and hand it on; the structured profile stays thin until something downstream
  * actually fetches the page. The gap fields it would fill are left open on purpose.
  */
-export async function ingestLinkedInUrl(userId: string, url: string): Promise<IntakeResult> {
+export async function stageLinkedInUrl(userId: string, url: string): Promise<StageResult> {
   try {
     const documentId = randomUUID();
+    await clearUnread(userId, 'linkedin_url');
     await insertDocument({
       documentId,
       userId,
       kind: 'linkedin_url',
-      status: 'parsed',
+      status: 'received',
       externalUrl: url,
     });
-    await writeStructuredProfile(userId, documentId, emptyProfile(), { linkedinUrl: url });
-    const factsAppended = await appendFacts([
-      singleFact({
-        userId,
-        kind: 'contact',
-        key: 'contact.linkedin',
-        value: url,
-        confidence: 1,
-        source: 'linkedin:user:typed',
-        sourceRef: documentId,
-      }),
-    ]);
-    await markDocument(documentId, { status: 'parsed', provider: 'none' });
-    const openGaps = await recomputeGaps(userId, emptyProfile(), false);
-    return {
-      ok: true,
-      documentId,
-      reused: false,
-      skipped: false,
-      profile: emptyProfile(),
-      provider: null,
-      model: null,
-      factsAppended,
-      openGaps,
-      warnings: [],
-    };
+    return { ok: true, documentId, reused: false };
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }
 }
 
-/** Ingest a document: store the bytes, extract, and fold the result into the profile. */
-export async function ingestDocument(args: {
-  userId: string;
-  kind: Extract<IntakeKind, 'resume_pdf' | 'linkedin_export_pdf' | 'transcript_pdf'>;
-  file: File;
-}): Promise<IntakeResult> {
-  const { userId, kind, file } = args;
+/* ----------------------------------------------------------------- combining */
 
-  const invalid = validateUpload(file);
-  if (invalid) return { ok: false, error: invalid };
+function firstOf(values: Array<string | undefined>): string | undefined {
+  return values.find((value) => value !== undefined && value !== '');
+}
 
-  const documentId: string = randomUUID();
+function dedupe(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = value.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Fold several extracted profiles into one.
+ *
+ * Order matters: earlier sources win on the single-value fields, so callers pass
+ * the more authoritative document first. Collections are unioned rather than
+ * overwritten, which is the whole point of combining — a resume that lists no
+ * coursework and a transcript that lists nothing else should produce a profile
+ * holding both, not whichever was read last.
+ *
+ * De-duplication is by a case-insensitive key, so "Python" from one source and
+ * "python" from another are one skill.
+ */
+export function mergeProfiles(profiles: ExtractedProfile[]): ExtractedProfile {
+  if (profiles.length === 0) return emptyProfile();
+  if (profiles.length === 1) return profiles[0];
+
+  return {
+    name: firstOf(profiles.map((p) => p.name)),
+    email: firstOf(profiles.map((p) => p.email)),
+    phone: firstOf(profiles.map((p) => p.phone)),
+    location: firstOf(profiles.map((p) => p.location)),
+    summary: firstOf(profiles.map((p) => p.summary)),
+    links: dedupeBy(profiles.flatMap((p) => p.links), (link) => link.url ?? link.label ?? ''),
+    education: dedupeBy(
+      profiles.flatMap((p) => p.education),
+      (entry) => `${entry.school ?? ''}|${entry.degree ?? ''}`,
+    ),
+    experience: dedupeBy(
+      profiles.flatMap((p) => p.experience),
+      (entry) => `${entry.company ?? ''}|${entry.title ?? ''}`,
+    ),
+    projects: dedupeBy(profiles.flatMap((p) => p.projects), (entry) => entry.name ?? ''),
+    skills: dedupe(profiles.flatMap((p) => p.skills)),
+    courses: dedupeBy(
+      profiles.flatMap((p) => p.courses),
+      (entry) => entry.code ?? entry.title ?? '',
+    ),
+    certifications: dedupe(profiles.flatMap((p) => p.certifications)),
+  };
+}
+
+function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const k = key(item).trim().toLowerCase();
+    if (k === '') return true; // Keep unkeyable entries rather than collapsing them all into one.
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/* ------------------------------------------------------------------ analysis */
+
+/**
+ * One line of the progress log the user watches.
+ *
+ * `state` drives the UI: 'start' renders a spinner, and a later event with the same
+ * `id` settles it. The log is deliberately specific about what is happening to whose
+ * data and which model is being called — a progress bar that just says "Processing"
+ * teaches the user nothing about a system whose entire pitch is that it explains
+ * itself.
+ */
+export type IntakeProgress =
+  | {
+      type: 'log';
+      id: string;
+      label: string;
+      detail?: string;
+      state: 'start' | 'ok' | 'warn' | 'skip';
+      ms?: number;
+    }
+  | { type: 'complete'; factsAppended: number; openGaps: number; next: string; ms: number }
+  | { type: 'error'; message: string };
+
+export type AnalysisSummary = {
+  factsAppended: number;
+  openGaps: number;
+  logs: IntakeProgress[];
+  error?: string;
+};
+
+/**
+ * Read everything staged, combine it, and write the profile — yielding a log line
+ * at every step so the caller can stream it.
+ *
+ * An async generator rather than a callback so the SSE route stays a dumb pipe and
+ * this file keeps the entire sequence in one readable list. Each document is marked
+ * 'parsed' as it completes, so an interrupted run resumes instead of redoing work
+ * (and, more importantly, instead of appending its facts twice).
+ *
+ * Never throws. A failure yields an 'error' event and marks that document 'failed';
+ * one unreadable resume must not cost the user the rest of their profile.
+ */
+export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgress> {
+  const startedAll = Date.now();
+  let factsAppended = 0;
+  let openGaps = 0;
+
+  const step = (id: string, label: string, detail?: string): IntakeProgress => ({
+    type: 'log',
+    id,
+    label,
+    detail,
+    state: 'start',
+  });
+  const settle = (
+    id: string,
+    label: string,
+    at: number,
+    state: 'ok' | 'warn' | 'skip',
+    detail?: string,
+  ): IntakeProgress => ({ type: 'log', id, label, detail, state, ms: Date.now() - at });
+
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    let at = Date.now();
+    yield step('collect', 'Checking what you gave me');
+    const pending = await pendingIntake(userId);
+    const resumes = pending.filter((doc) => doc.kind !== 'linkedin_url');
+    const links = pending.filter((doc) => doc.kind === 'linkedin_url');
+    yield settle(
+      'collect',
+      'Checking what you gave me',
+      at,
+      'ok',
+      pending.length === 0
+        ? 'Nothing new to read — you skipped both steps, so everything becomes a question instead.'
+        : `${resumes.length} document(s) and ${links.length} link(s) waiting.`,
+    );
 
-    // Store first, then dedupe on the hash the upload computed: the bytes are
-    // content-addressed, so re-storing an identical file is a no-op overwrite.
-    const stored = await putUpload({
-      userId,
-      kind,
-      bytes,
-      fileName: file.name,
-      mimeType: file.type || 'application/pdf',
-    });
+    // Most authoritative first: a resume the user chose to upload beats a link we
+    // could not fetch. mergeProfiles resolves single-value conflicts in this order.
+    const extracted: ExtractedProfile[] = [];
+    let linkedinUrl: string | undefined;
 
-    const existing = await findParsedByHash(userId, stored.contentHash);
-    if (existing) {
-      // Already parsed. Appending again would duplicate every fact forever.
-      const openGaps = Number(
-        (
-          await sql(
-            `SELECT count(*) FROM workspace.vthacks_2026.profile_gaps
-              WHERE user_id = :user AND status = 'open'`,
-            [{ name: 'user', value: userId }],
-          )
-        ).rows[0]?.[0] ?? 0,
-      );
-      return {
-        ok: true,
-        documentId: existing,
-        reused: true,
-        skipped: false,
-        profile: emptyProfile(),
-        provider: null,
-        model: null,
-        factsAppended: 0,
-        openGaps,
-        warnings: ['We already read this exact file, so nothing was added twice.'],
-      };
+    for (const doc of resumes) {
+      const what = doc.fileName ?? 'your document';
+      if (!doc.storagePath) {
+        yield settle(`doc:${doc.documentId}`, `Reading ${what}`, Date.now(), 'warn', 'No stored file to read.');
+        await markDocument(doc.documentId, { status: 'failed', error: 'No storage_path on a received document.' });
+        continue;
+      }
+
+      try {
+        at = Date.now();
+        yield step(`fetch:${doc.documentId}`, `Fetching ${what} back from secure storage`);
+        const bytes = await getUpload(doc.storagePath);
+        yield settle(
+          `fetch:${doc.documentId}`,
+          `Fetching ${what} back from secure storage`,
+          at,
+          'ok',
+          `${(bytes.byteLength / 1024).toFixed(0)} KB from the Unity Catalog volume.`,
+        );
+
+        at = Date.now();
+        yield step(
+          `read:${doc.documentId}`,
+          `Reading ${what}`,
+          'Extracting text, then asking the model for structured fields. This is the slow part.',
+        );
+        const outcome = await extractProfile(bytes);
+        extracted.push(outcome.profile);
+        yield settle(
+          `read:${doc.documentId}`,
+          `Reading ${what}`,
+          at,
+          outcome.warnings.length ? 'warn' : 'ok',
+          [
+            `${outcome.provider} · ${outcome.model}`,
+            `${outcome.profile.skills.length} skills, ${outcome.profile.experience.length} roles, ${outcome.profile.education.length} schools, ${outcome.profile.courses.length} courses.`,
+            ...outcome.warnings,
+          ].join(' — '),
+        );
+
+        at = Date.now();
+        yield step(`save:${doc.documentId}`, `Filing what ${what} told me`);
+        await writeStructuredProfile(userId, doc.documentId, outcome.profile, {});
+        const appended = await appendFacts(
+          toFacts(outcome.profile, {
+            userId,
+            provider: outcome.provider,
+            model: outcome.model,
+            sourceRef: doc.documentId,
+            sourceKind: doc.kind === 'transcript_pdf' ? 'transcript' : 'resume',
+          }),
+        );
+        factsAppended += appended;
+        await markDocument(doc.documentId, {
+          status: 'parsed',
+          provider: outcome.provider,
+          model: outcome.model,
+          warnings: outcome.warnings,
+        });
+        yield settle(
+          `save:${doc.documentId}`,
+          `Filing what ${what} told me`,
+          at,
+          'ok',
+          `${appended} facts recorded, each with where it came from.`,
+        );
+      } catch (error) {
+        const message = (error as Error).message;
+        yield settle(`read:${doc.documentId}`, `Reading ${what}`, Date.now(), 'warn', message);
+        try {
+          await markDocument(doc.documentId, { status: 'failed', error: message });
+        } catch {
+          // Bookkeeping only. The yielded warning above is the report that matters.
+        }
+      }
     }
 
-    await insertDocument({
-      documentId,
-      userId,
-      kind,
-      status: 'received',
-      storagePath: stored.storagePath,
-      fileName: file.name,
-      mimeType: file.type || 'application/pdf',
-      byteSize: stored.byteSize,
-      contentHash: stored.contentHash,
-    });
+    for (const doc of links) {
+      linkedinUrl = doc.externalUrl ?? undefined;
+      at = Date.now();
+      yield step('linkedin', 'Recording your LinkedIn');
+      try {
+        await writeStructuredProfile(userId, doc.documentId, emptyProfile(), { linkedinUrl });
+        if (linkedinUrl) {
+          factsAppended += await appendFacts([
+            singleFact({
+              userId,
+              kind: 'contact',
+              key: 'contact.linkedin',
+              value: linkedinUrl,
+              confidence: 1,
+              source: 'linkedin:user:typed',
+              sourceRef: doc.documentId,
+            }),
+          ]);
+        }
+        await markDocument(doc.documentId, { status: 'parsed', provider: 'none' });
+        // Stated plainly rather than dressed up as a read. LinkedIn has no public
+        // profile API and blocks unauthenticated fetches, so claiming to have read
+        // the page would be a lie the profile page would immediately contradict.
+        yield settle(
+          'linkedin',
+          'Recording your LinkedIn',
+          at,
+          'warn',
+          'Saved and attached to your profile. I have not read the page: LinkedIn has no public profile API and blocks anonymous fetches, so an agent has to collect it separately.',
+        );
+      } catch (error) {
+        yield settle('linkedin', 'Recording your LinkedIn', at, 'warn', (error as Error).message);
+      }
+    }
 
-    const outcome = await extractProfile(bytes);
-
-    await writeStructuredProfile(userId, documentId, outcome.profile, {});
-    const factsAppended = await appendFacts(
-      toFacts(outcome.profile, {
-        userId,
-        provider: outcome.provider,
-        model: outcome.model,
-        sourceRef: documentId,
-        sourceKind: kind === 'transcript_pdf' ? 'transcript' : 'resume',
-      }),
+    at = Date.now();
+    yield step('combine', 'Combining every source into one profile');
+    const merged = mergeProfiles(extracted);
+    yield settle(
+      'combine',
+      'Combining every source into one profile',
+      at,
+      'ok',
+      `Union of ${extracted.length || 'no'} source(s): ${merged.skills.length} skills, ${merged.experience.length} roles, ${merged.education.length} schools, ${merged.courses.length} courses. A gap in one source is filled by another before I decide what to ask you.`,
     );
-    await markDocument(documentId, {
-      status: 'parsed',
-      provider: outcome.provider,
-      model: outcome.model,
-      warnings: outcome.warnings,
-    });
-    const openGaps = await recomputeGaps(userId, outcome.profile, false);
 
-    return {
-      ok: true,
-      documentId,
-      reused: false,
-      skipped: false,
-      profile: outcome.profile,
-      provider: outcome.provider,
-      model: outcome.model,
+    at = Date.now();
+    yield step('gaps', 'Working out what I still need to ask');
+    openGaps = await recomputeGaps(userId, merged);
+    yield settle(
+      'gaps',
+      'Working out what I still need to ask',
+      at,
+      'ok',
+      `${openGaps} open question(s) queued for the voice agent.`,
+    );
+
+    yield {
+      type: 'complete',
       factsAppended,
       openGaps,
-      warnings: outcome.warnings,
+      next: '/applicant',
+      ms: Date.now() - startedAll,
     };
   } catch (error) {
-    const message = (error as Error).message;
-    // Best-effort. The row may not exist yet — the failure could have been the
-    // upload itself — and a failed bookkeeping write must not mask the real error.
-    try {
-      await markDocument(documentId, { status: 'failed', error: message });
-    } catch {
-      // Swallowed deliberately: `message` below is the one worth reporting.
-    }
-    return { ok: false, error: message };
+    yield { type: 'error', message: (error as Error).message };
   }
+}
+
+/** Drain the generator. For callers that want the outcome, not the narration. */
+export async function runIntakeAnalysis(userId: string): Promise<AnalysisSummary> {
+  const logs: IntakeProgress[] = [];
+  let factsAppended = 0;
+  let openGaps = 0;
+  let error: string | undefined;
+
+  for await (const event of analyzeIntake(userId)) {
+    logs.push(event);
+    if (event.type === 'complete') {
+      factsAppended = event.factsAppended;
+      openGaps = event.openGaps;
+    }
+    if (event.type === 'error') error = event.message;
+  }
+
+  return { factsAppended, openGaps, logs, error };
 }

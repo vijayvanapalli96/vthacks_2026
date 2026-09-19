@@ -37,7 +37,7 @@ export function LinkedInIntakeForm() {
 
       <div className="actions">
         <button className="primary" type="submit" name="intent" value="save" disabled={pending}>
-          {pending ? 'Saving…' : 'Save my LinkedIn'}
+          {pending ? 'Saving…' : 'Next'}
         </button>
         <button className="ghost" type="submit" name="intent" value="skip" disabled={pending}>
           Skip for now
@@ -48,7 +48,7 @@ export function LinkedInIntakeForm() {
         {pending ? 'Saving your profile URL.' : ''}
       </p>
 
-      {/* Success redirects to the dashboard, so the only thing left to render is a
+      {/* Success redirects to the reading step, so the only thing left to render is a
           validation failure the user has to act on. */}
       {invalid && (
         <p id="linkedin-error" className="outcome outcome-error" role="alert">

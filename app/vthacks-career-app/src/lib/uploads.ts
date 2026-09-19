@@ -89,3 +89,27 @@ export async function putUpload(args: {
 
   return { storagePath, contentHash, byteSize: bytes.byteLength };
 }
+
+/**
+ * Read stored bytes back out of the Volume.
+ *
+ * This is what makes staging separable from analysis: the upload step can return
+ * the moment the bytes are durable, and the analysis step — which runs later, in a
+ * different request — fetches them again from the one place they are guaranteed to
+ * still exist. Holding them in server memory between the two would not survive a
+ * redeploy, a restart, or a second replica picking up the request.
+ */
+export async function getUpload(storagePath: string): Promise<Uint8Array> {
+  const res = await fetch(`${databricksHost()}/api/2.0/fs/files${storagePath}`, {
+    headers: { authorization: `Bearer ${await bearerToken()}` },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    throw new DatabricksError(
+      `Volume read failed for ${storagePath}: ${res.status} ${(await res.text()).slice(0, 300)}`,
+    );
+  }
+
+  return new Uint8Array(await res.arrayBuffer());
+}

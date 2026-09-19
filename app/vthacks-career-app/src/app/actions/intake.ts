@@ -16,18 +16,18 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { ingestDocument, ingestLinkedInUrl, skipIntake, validateUpload } from '@/lib/intake';
+import { skipIntake, stageDocument, stageLinkedInUrl, validateUpload } from '@/lib/intake';
 import { requireRole } from '@/lib/session';
 
-export type IntakeState = {
-  status: 'idle' | 'done' | 'skipped' | 'reused' | 'error';
-  message?: string;
-  warnings?: string[];
-  openGaps?: number;
-  factsAppended?: number;
-  provider?: string;
-  model?: string;
-} | null;
+/**
+ * Both actions only ever STAGE and advance. Nothing here calls a model, so neither
+ * page can leave the user watching a disabled button — the reading happens once,
+ * afterwards, on /applicant/intake/processing where there is something to look at.
+ *
+ * The only state worth rendering is therefore a validation failure the user has to
+ * act on. Success is a redirect.
+ */
+export type IntakeState = { status: 'error'; message: string } | null;
 
 /**
  * linkedin.com/in/<slug>. Deliberately narrow: a silently-saved typo is worse than
@@ -59,13 +59,12 @@ export async function uploadResumeAction(
 ): Promise<IntakeState> {
   const user = await requireRole('applicant');
 
+  // The row must land BEFORE the redirect. nextIntakeStep() reads these rows to
+  // decide where to send people, so skipping without writing one would loop the user
+  // back to this page forever.
   if (formData.get('intent') === 'skip') {
-    // The row must land BEFORE the redirect. nextIntakeStep() reads these rows to
-    // decide where to send people, so skipping without writing one would loop the
-    // user back to this page forever.
     const result = await skipIntake(user.id, 'resume_pdf');
     if (!result.ok) return { status: 'error', message: result.error };
-    revalidatePath('/applicant/profile');
     redirect('/applicant/intake/linkedin');
   }
 
@@ -74,21 +73,10 @@ export async function uploadResumeAction(
   const invalid = validateUpload(file);
   if (invalid || !file) return { status: 'error', message: invalid ?? 'Choose a PDF to upload.' };
 
-  const result = await ingestDocument({ userId: user.id, kind: 'resume_pdf', file });
+  const result = await stageDocument({ userId: user.id, kind: 'resume_pdf', file });
   if (!result.ok) return { status: 'error', message: result.error };
 
-  revalidatePath('/applicant/profile');
-  return {
-    status: result.reused ? 'reused' : 'done',
-    message: result.reused
-      ? 'I had already read this exact file, so nothing was added twice.'
-      : 'Read your resume and updated your profile.',
-    warnings: result.warnings,
-    openGaps: result.openGaps,
-    factsAppended: result.factsAppended,
-    provider: result.provider ?? undefined,
-    model: result.model ?? undefined,
-  };
+  redirect('/applicant/intake/linkedin');
 }
 
 export async function linkedInAction(_prev: IntakeState, formData: FormData): Promise<IntakeState> {
@@ -98,7 +86,7 @@ export async function linkedInAction(_prev: IntakeState, formData: FormData): Pr
     const result = await skipIntake(user.id, 'linkedin_url');
     if (!result.ok) return { status: 'error', message: result.error };
     revalidatePath('/applicant/profile');
-    redirect('/applicant');
+    redirect('/applicant/intake/processing');
   }
 
   const parsed = linkedInUrl.safeParse(String(formData.get('linkedinUrl') ?? ''));
@@ -106,11 +94,10 @@ export async function linkedInAction(_prev: IntakeState, formData: FormData): Pr
     return { status: 'error', message: parsed.error.issues[0]?.message ?? 'That URL is not valid.' };
   }
 
-  const result = await ingestLinkedInUrl(user.id, parsed.data);
+  const result = await stageLinkedInUrl(user.id, parsed.data);
   if (!result.ok) return { status: 'error', message: result.error };
 
   revalidatePath('/applicant/profile');
-  // Last step of onboarding, so this one lands on the dashboard rather than
-  // rendering an outcome panel nobody needs to read.
-  redirect('/applicant');
+  // Collection is finished. Everything staged gets read together on the next page.
+  redirect('/applicant/intake/processing');
 }

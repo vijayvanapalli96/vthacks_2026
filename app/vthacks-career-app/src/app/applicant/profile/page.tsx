@@ -234,11 +234,25 @@ export default async function ProfilePage() {
                   {INTAKE_SOURCES.map(({ kind, label, href }) => {
                     const row = sources.find((candidate) => candidate.kind === kind);
                     const usable = row && row.status !== 'skipped' && row.status !== 'failed';
+                    // 'received' means we hold it but have not read it — the analysis
+                    // step was interrupted or never finished. That is a different
+                    // problem from "never given", and it has a different fix, so it
+                    // gets its own label and sends you to the reading step.
+                    const pending = row?.status === 'received';
+                    const suffix = pending
+                      ? ' — waiting to be read'
+                      : usable
+                        ? ''
+                        : row?.status === 'skipped'
+                          ? ' — skipped'
+                          : row?.status === 'failed'
+                            ? ' — could not be read'
+                            : ' — not added yet';
                     return (
                       <li key={kind}>
                         <strong>
                           {label}
-                          {usable ? '' : row?.status === 'skipped' ? ' — skipped' : ' — not added yet'}
+                          {suffix}
                         </strong>
                         {usable ? (
                           <>
@@ -247,9 +261,12 @@ export default async function ProfilePage() {
                               {row?.model ? ` · ${row.model}` : ''}
                             </span>
                             {row?.storagePath && <code>{row.storagePath}</code>}
+                            {pending && <Link href="/applicant/intake/processing">Read it now</Link>}
                           </>
                         ) : (
-                          <Link href={href}>Add it now</Link>
+                          <Link href={href}>
+                            {row?.status === 'failed' ? 'Try another file' : 'Add it now'}
+                          </Link>
                         )}
                       </li>
                     );

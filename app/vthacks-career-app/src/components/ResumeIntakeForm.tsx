@@ -1,21 +1,24 @@
 'use client';
 
 /**
- * Resume upload, or skip.
+ * Resume upload, or skip. Stores the file and moves on — it does NOT read it.
+ *
+ * The pending state is short (an upload, not a model call), which is why the button
+ * says "Next" and not "Read my resume": promising a read here would be a lie, and the
+ * reading step has its own page where the wait is visible and explained.
  *
  * Upload and skip share ONE action on purpose: giving the skip button its own
  * `formAction` would bypass the useActionState reducer, so the UI would never
- * re-render with the skip result. The intent rides in as the submit button's own
+ * re-render with a skip failure. The intent rides in as the submit button's own
  * name/value pair.
  */
 import { useActionState } from 'react';
 
 import { uploadResumeAction, type IntakeState } from '@/app/actions/intake';
 
-import { IntakeOutcome } from './IntakeOutcome';
-
 export function ResumeIntakeForm() {
   const [state, action, pending] = useActionState<IntakeState, FormData>(uploadResumeAction, null);
+  const invalid = state?.status === 'error';
 
   return (
     <form action={action} className="intake-form" aria-busy={pending}>
@@ -27,14 +30,15 @@ export function ResumeIntakeForm() {
           type="file"
           accept="application/pdf,.pdf"
           disabled={pending}
-          aria-describedby="resume-hint"
+          aria-invalid={invalid}
+          aria-describedby={invalid ? 'resume-hint resume-error' : 'resume-hint'}
         />
         <small id="resume-hint">Up to 10 MB. Two-column layouts are fine.</small>
       </div>
 
       <div className="actions">
         <button className="primary" type="submit" name="intent" value="upload" disabled={pending}>
-          {pending ? 'Reading your resume…' : 'Read my resume'}
+          {pending ? 'Saving…' : 'Next'}
         </button>
         <button className="ghost" type="submit" name="intent" value="skip" disabled={pending}>
           Skip for now
@@ -43,10 +47,14 @@ export function ResumeIntakeForm() {
 
       {/* Politely announced so a screen-reader user hears progress they cannot see. */}
       <p className="status" role="status">
-        {pending ? 'Uploading and extracting. This can take up to half a minute.' : ''}
+        {pending ? 'Storing your file.' : ''}
       </p>
 
-      <IntakeOutcome state={state} nextHref="/applicant/intake/linkedin" nextLabel="Next: LinkedIn" />
+      {invalid && (
+        <p id="resume-error" className="outcome outcome-error" role="alert">
+          {state?.message}
+        </p>
+      )}
     </form>
   );
 }
