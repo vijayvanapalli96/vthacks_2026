@@ -1,0 +1,196 @@
+/* Profile page. Same tokens as globals.css — the agent hands you cards. */
+
+.profile-shell {
+  padding: 40px 0 64px;
+  display: grid;
+  gap: 20px;
+}
+
+.profile-head {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: #3d4a42;
+}
+
+.profile-contact a {
+  color: var(--green);
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.profile-section {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+  display: grid;
+  gap: 14px;
+}
+
+.profile-section > h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* Provenance, not decoration: every section says which document it came from. */
+.provenance {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #68746c;
+}
+
+.entry {
+  display: grid;
+  gap: 5px;
+  padding-top: 14px;
+  border-top: 1px solid #edf0ec;
+}
+
+.entry:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.entry h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.entry .meta {
+  margin: 0;
+  font-size: 12px;
+  color: #69766e;
+}
+
+.entry ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  display: grid;
+  gap: 3px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #e2f2e9;
+  color: #1d4635;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gap-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.gap-list li {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf0ec;
+}
+
+.gap-list li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.gap-question {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.gap-field {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  color: #68746c;
+}
+
+.sources {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.sources li {
+  display: grid;
+  gap: 2px;
+}
+
+.sources code {
+  font-size: 11px;
+  color: #68746c;
+  word-break: break-all;
+}
+
+.profile-empty {
+  background: white;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  padding: 40px 26px;
+  text-align: center;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.profile-empty h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.profile-empty p {
+  margin: 0;
+  max-width: 44ch;
+  color: #667269;
+  line-height: 1.6;
+}
+
+.profile-shell a:focus-visible,
+.profile-shell button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}

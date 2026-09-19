@@ -1,0 +1,376 @@
+/* Intake pages. Shares the tokens in globals.css — no new colours, no new fonts. */
+
+.intake-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 0 64px;
+}
+
+.intake-steps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  color: #68746c;
+}
+
+/* The step list is an <ol> of <li>, not spans — an earlier selector said `span` and
+   silently matched nothing, so the current step was never highlighted. */
+.intake-steps li[aria-current='step'] {
+  color: var(--green);
+}
+
+.intake-steps li.is-done {
+  color: #267453;
+}
+
+.intake-form {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 26px;
+  display: grid;
+  gap: 20px;
+}
+
+.intake-form .field {
+  display: grid;
+  gap: 7px;
+}
+
+.intake-form label {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.intake-form input[type='file'],
+.intake-form input[type='url'] {
+  font: inherit;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+}
+
+.intake-form input[aria-invalid='true'] {
+  border-color: #a4261d;
+}
+
+.intake-form small {
+  color: #667269;
+  font-size: 12px;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.intake-form .actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.intake-form .primary {
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--green);
+  color: white;
+  font-weight: 750;
+}
+
+.intake-form .ghost {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  color: #3d4a42;
+  font-weight: 700;
+}
+
+.intake-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Reserve no space when empty so the live region does not push layout around. */
+.intake-form .status:empty {
+  display: none;
+}
+
+.intake-form .status {
+  margin: 0;
+  font-size: 12px;
+  color: #267453;
+  font-weight: 700;
+}
+
+.outcome {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.outcome-error {
+  background: #fdeeec;
+  border: 1px solid #f0c4be;
+  /* 4.6:1 on this background. */
+  color: #8c1f17;
+  font-weight: 700;
+}
+
+.outcome-ok {
+  background: #e8f5ed;
+  border: 1px solid #cae5d5;
+  color: #1d4635;
+  display: grid;
+  gap: 10px;
+}
+
+.outcome-headline {
+  margin: 0;
+  font-weight: 800;
+}
+
+.outcome-facts {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+}
+
+.outcome-warnings summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.outcome-warnings ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #3d4a42;
+}
+
+.outcome-next {
+  margin: 0;
+  font-weight: 750;
+}
+
+.outcome-next a {
+  color: var(--green);
+}
+
+/* Focus must stay obvious: the whole demo is run on the keyboard. */
+.intake-form :focus-visible,
+.outcome a:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ progress */
+/* The reading step. A log, not a spinner: the user is waiting 30-60s and what the
+   system is doing with their data is the most interesting thing it has to show. */
+
+.progress {
+  display: grid;
+  gap: 18px;
+}
+
+.progress-log {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 8px 0;
+  margin: 0;
+  list-style: none;
+}
+
+.progress-line {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: start;
+  gap: 10px;
+  padding: 11px 20px;
+  border-top: 1px solid #f0f2f0;
+}
+
+.progress-line:first-child {
+  border-top: 0;
+}
+
+.progress-mark {
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: center;
+  color: #267453;
+}
+
+.progress-line.is-start .progress-mark {
+  color: #68746c;
+}
+
+.progress-line.is-warn .progress-mark {
+  color: #9a5b16;
+}
+
+.progress-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.progress-body strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* The detail line carries model names, byte counts and honest caveats, so it has to
+   stay legible rather than decorative: 4.5:1 against white. */
+.progress-body small {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #59635b;
+  overflow-wrap: anywhere;
+}
+
+.progress-line.is-warn .progress-body small {
+  color: #7a4a12;
+}
+
+.progress-ms {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #68746c;
+  padding-top: 2px;
+}
+
+/* In-progress rows pulse so it is obvious which step is live. Animation only —
+   the state is also in the text, for anyone who cannot see it or has motion off. */
+.progress-line.is-start .progress-body strong {
+  animation: progress-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-line.is-start .progress-body strong {
+    animation: none;
+  }
+}
+
+.progress-done,
+.progress-error {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-done p,
+.progress-error p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.progress-error {
+  border-color: #e6c9b4;
+  background: #fdf6f0;
+}
+
+.progress-done a,
+.progress-error a {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.progress-done a.primary,
+.progress-error a.primary {
+  background: var(--green);
+  color: white;
+}
+
+.progress-done a.ghost,
+.progress-error a.ghost {
+  border: 1px solid var(--line);
+  color: #2b332c;
+}
+
+.progress-done a:focus-visible,
+.progress-error a:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- setup band */
+/* The first-run state of the dashboard. Replaces the hero while the analysis runs,
+   so onboarding finishes at /applicant instead of at a url the user should never
+   have had to look at. */
+
+.setup-band {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 40px 0 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.setup-band h1 {
+  margin: 0;
+  font-size: clamp(26px, 3.4vw, 36px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.setup-band .muted {
+  margin: 0 0 14px;
+  max-width: 62ch;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #59635b;
+}
+
+/* Buttons in the outcome row are <button> now, not <a>: completion reveals the
+   dashboard in place rather than navigating, so there is nowhere to link to. */
+.progress-done button,
+.progress-error button {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.progress-done button.primary,
+.progress-error button.primary {
+  background: var(--green);
+  color: white;
+}
+
+.progress-done button:focus-visible,
+.progress-error button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}

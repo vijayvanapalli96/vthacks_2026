@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { intakeGate } from '@/lib/intake';
 import { DEFAULT_ROLE, dashboardPath } from '@/lib/session';
 import { setUserRole, type Role } from '@/lib/users';
 
@@ -22,7 +23,17 @@ function asRole(value: string | string[] | undefined): Role | undefined {
  * DEFAULT_ROLE rather than interrupting with a question. Accepted tradeoff: an
  * employer arriving that way lands in the applicant workspace. That is
  * recoverable; a dead-end prompt in the middle of sign-in is not.
+ *
+ * Applicants also go through intake before their dashboard: resume, then LinkedIn.
+ * Employers have no intake and go straight to /employer.
  */
+async function destinationFor(role: Role, userId: string): Promise<string> {
+  if (role !== 'applicant') return dashboardPath[role];
+  // Only the COLLECT steps have their own url. If analysis is outstanding the
+  // dashboard shows it in place, so this hop still lands there.
+  return (await intakeGate(userId)).nextStep ?? dashboardPath.applicant;
+}
+
 export default async function ContinuePage({
   searchParams,
 }: {
@@ -31,7 +42,9 @@ export default async function ContinuePage({
   const session = await auth();
   if (!session?.user) redirect('/signin');
 
-  if (session.user.role) redirect(dashboardPath[session.user.role]);
+  if (session.user.role) {
+    redirect(await destinationFor(session.user.role, session.user.id));
+  }
 
   const { role } = await searchParams;
   const resolved = asRole(role) ?? DEFAULT_ROLE;
@@ -40,5 +53,5 @@ export default async function ContinuePage({
   // the side it signed up as, whatever a URL claims.
   if (session.user.email) await setUserRole(session.user.email, resolved);
 
-  redirect(dashboardPath[resolved]);
+  redirect(await destinationFor(resolved, session.user.id));
 }
