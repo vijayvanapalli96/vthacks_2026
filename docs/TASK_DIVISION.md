@@ -29,15 +29,15 @@ What broke the budget was keeping all three datastores (Databricks + TigerData +
 MongoDB) with three people instead of four. That was a deliberate call for track
 coverage. The price is paid in §3's P1 lists, which are genuinely optional.
 
-**Two environment traps, both cheap and both demo-fatal if missed:**
-- Build on the **TEAM** workspace, schema `workspace.vthacks_2026`, and put `-p TEAM`
-  on every CLI call. The personal Free Edition workspace is a throwaway.
-- `app/vthacks-career-app/databricks.yml` targets `dbc-0bfd7b56-c2eb` +
-  warehouse `441b670a0ff475e0`. **Probably the team workspace — leave it alone
-  until someone confirms.** That host/warehouse pair arrived together in
-  `79a8fde` ("collaborative … baseline") and the warehouse ID matches the one
-  the strategy doc lists under TEAM. Confirm by checking that
-  `workspace.vthacks_2026` exists there with the team's tables, or ask Vijay.
+**Environment, now verified — no trap here, so don't go hunting one:**
+- Build on the **TEAM** workspace, schema `workspace.vthacks_2026`, and put
+  `-p TEAM` on every CLI call.
+- The host is `https://dbc-0bfd7b56-c2eb.cloud.databricks.com` (workspace id
+  `7474648702108753`), and `app/vthacks-career-app/databricks.yml` already points
+  there. **Leave it alone.** Checked on 2026-09-19: that workspace holds
+  `workspace.vthacks_2026` with all six team objects, and warehouse
+  `441b670a0ff475e0` resolves there. Earlier revisions of this file called it a
+  throwaway and told you to repoint the bundle — that was wrong.
 
 ---
 

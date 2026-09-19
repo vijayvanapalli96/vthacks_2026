@@ -91,7 +91,7 @@ build there. **Every CLI call needs `-p TEAM`.**
 
 | | |
 |---|---|
-| Workspace host | `<TEAM_WORKSPACE_HOST>` — see `.env.local`, not committed |
+| Workspace host | `https://dbc-0bfd7b56-c2eb.cloud.databricks.com` (workspace id `7474648702108753`) |
 | CLI profile | `TEAM` (`DEFAULT` = throwaway, ignore) |
 | SQL warehouse | `441b670a0ff475e0` ("Serverless Starter", 2X-Small, serverless) |
 | Catalog / schema | **`workspace.vthacks_2026`** — already exists, tables built, rows empty |
@@ -100,18 +100,15 @@ build there. **Every CLI call needs `-p TEAM`.**
 | LLM | `databricks-llama-4-maverick` (verified on TEAM), `databricks-gpt-oss-120b`, others |
 | Group | `vthacks-team` |
 
-`app/vthacks-career-app/databricks.yml` targets host `dbc-0bfd7b56-c2eb` with
-warehouse `441b670a0ff475e0`. **That is very probably the team workspace, so do
-not "fix" it.** Warehouse IDs are workspace-scoped, and this pair was introduced
-together in `79a8fde` ("Add collaborative Next.js Databricks app baseline") —
-the same warehouse ID the strategy doc lists under TEAM. An earlier revision of
-this file claimed it pointed at the throwaway; that was an inference from the
-doc's layout, not evidence, and it was wrong.
-
-Settle it once and delete this paragraph: log in, then check whether
-`workspace.vthacks_2026` exists there with `job_snapshots` and
-`match_evaluations`. Those tables are the team's work, so their presence is the
-decider. Or just ask Vijay — he deployed the app.
+**Settled by inspection — `databricks.yml` is correct, do not "fix" it.** Logged in
+on 2026-09-19 as `tarangnair98@gmail.com` and confirmed against that host:
+`workspace.vthacks_2026` is present with all six team objects (`job_snapshots`,
+`match_evaluations`, `application_events`, `voice_events`,
+`email_classifications`, `latest_application_state`), and warehouse
+`441b670a0ff475e0` resolves there as "Serverless Starter Warehouse", 2X-Small.
+So `dbc-0bfd7b56-c2eb` **is** the team workspace. Two earlier revisions of this
+file called it a throwaway and told you to repoint the bundle; both were wrong,
+inferred from the strategy doc's layout rather than checked.
 
 Secrets live in `.env.local` (gitignored) and, in production, in the Databricks
 App `resources` block. Never commit a key, a cert, or a real DNS token.
@@ -130,7 +127,7 @@ databricks api post /api/2.0/sql/statements --json @q.json -p TEAM  # SQL: ALWAY
 databricks warehouses get 441b670a0ff475e0 -p TEAM                  # is it awake?
 databricks current-user me -p TEAM                                  # am I on the right workspace?
 databricks bundle deploy                                            # deploy the app
-databricks auth login --host <TEAM_WORKSPACE_HOST> --profile TEAM    # re-auth
+databricks auth login --host https://dbc-0bfd7b56-c2eb.cloud.databricks.com --profile TEAM
 ```
 
 ### Gotchas that have already bitten us
