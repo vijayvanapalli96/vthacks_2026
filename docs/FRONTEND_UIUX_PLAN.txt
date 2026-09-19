@@ -163,6 +163,16 @@ TYPE — Forum on EVERYTHING (decided), and the caveats
   wider (body 16, labels 12.5 at .18em, rows 14). Do not shrink these back.
   Scale: 12.5 / 14 / 16 / 17 / 20 / 40 / 56.
 
+APPLIES TO EVERY PAGE (rolled out, do not diverge)
+  landing / signin / signup / applicant / employer all share:
+    - Forum on all text; hero h1 at clamp(56,8.5vw,92) bold+italic+0.7px stroke
+    - auth page h1 at 40px bold+italic+0.35px stroke (a title, not a statement)
+    - cards and inputs: transparent fill, 1px hairline, radius 0
+    - footer is a top rule with text, never a box
+    - Reveal stagger on load, onScroll reveal for anything below the fold
+  A new page adds NO new colours, fonts, radii or shadows. If it needs one,
+  the answer is no.
+
 SHAPE
   Radius 0 everywhere. Sharp edges, no exceptions.
   NO WHITE. Cards are the same colour as the page (--surface = --paper);
@@ -236,8 +246,18 @@ Status as of the applicant-page styling pass.
 |     |    with ICON + TEXT, not    | row red — each with its own    |        |      |
 |     |    colour alone             | icon so colour is not the msg  |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
-| [ ] | A6 Decide: roll out to all  | signin/signup/employer/landing | CRIT   | 30m  |
-|     |    other pages              | all match                      |        |      |
+| [x] | A6 Roll out to all pages    | landing/signin/signup/employer | CRIT   | 40m  |
+|     |                             | all match the applicant page   |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A10 Auth pages restyled     | sharp cards, Forum inputs,     | HIGH   | 20m  |
+|     |     forms + inputs          | 40px italic titles, rule       |        |      |
+|     |                             | dividers                       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A11 Footer = rule, not box  | one hairline above text; the   | MED    | 5m   |
+|     |                             | box is gone on every page      |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A12 Motion on landing +     | same stagger on load and       | HIGH   | 20m  |
+|     |     employer                | reveal on scroll               |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
 |     | PHASE S — VOICE ORB (signature object)                                        |
 +-----+-----------------------------+--------------------------------+--------+------+
@@ -284,7 +304,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 15 of 31  ·   1 cut  ·  spent ~4h30m  ·  remaining P0 ~2h15m, all ~3h50m
+  DONE 19 of 34  ·   1 cut  ·  spent ~5h55m  ·  remaining P0 ~1h35m, all ~3h10m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4

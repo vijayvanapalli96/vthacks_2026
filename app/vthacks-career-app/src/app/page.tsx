@@ -1,16 +1,18 @@
 import { ArrowRight, BriefcaseBusiness, ShieldCheck, UserRoundSearch } from 'lucide-react';
 import Link from 'next/link';
 
+import { Reveal } from '@/components/Reveal';
+
 export default function Home() {
   return (
-    <main>
+    <main id="main">
       <nav>
         <strong>HireWire</strong>
         <Link href="/signin">Sign in</Link>
         <Link href="/signup">Create account</Link>
       </nav>
 
-      <section className="hero">
+      <Reveal as="section" className="hero">
         <p className="eyebrow">VERIFIED AGENT-TO-AGENT HIRING</p>
         <h1>
           Both sides
@@ -22,10 +24,10 @@ export default function Home() {
           is real before releasing anything. An employer&rsquo;s agent checks that the applicant is a
           real, domain-anchored person. Nobody&rsquo;s documents move until both sides verify.
         </p>
-      </section>
+      </Reveal>
 
       <section className="pathways">
-        <article className="pathway">
+        <Reveal as="article" className="pathway" index={1}>
           <UserRoundSearch aria-hidden="true" />
           <h2>I&rsquo;m looking for a role</h2>
           <p>
@@ -36,9 +38,9 @@ export default function Home() {
           <Link className="primary" href="/signup?role=applicant">
             Get started as an applicant <ArrowRight size={18} aria-hidden="true" />
           </Link>
-        </article>
+        </Reveal>
 
-        <article className="pathway">
+        <Reveal as="article" className="pathway" index={2}>
           <BriefcaseBusiness aria-hidden="true" />
           <h2>I&rsquo;m hiring</h2>
           <p>
@@ -48,14 +50,14 @@ export default function Home() {
           <Link className="primary" href="/signup?role=employer">
             Get started as an employer <ArrowRight size={18} aria-hidden="true" />
           </Link>
-        </article>
+        </Reveal>
       </section>
 
-      <footer>
+      <Reveal as="footer" onScroll>
         <ShieldCheck aria-hidden="true" />
         <strong>Human approval is always required.</strong>
         <span>The system recommends; you control every external action.</span>
-      </footer>
+      </Reveal>
     </main>
   );
 }

@@ -775,3 +775,130 @@ main { padding-bottom: 96px; }
 @media (max-width: 860px) {
   .console { grid-template-columns: 1fr; justify-items: start; }
 }
+
+/* ===========================================================================
+   ROLLOUT PASS — the applicant page's system applied to every other page.
+   Landing, sign in, sign up, employer. Same tokens, same shapes, same type.
+   =========================================================================== */
+
+/* --- Auth pages --------------------------------------------------------- */
+
+.auth-shell {
+  display: grid;
+  place-items: center;
+  min-height: 100svh;
+  padding: 48px 24px;
+}
+
+.auth-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: none;
+  padding: 44px 40px;
+  width: 100%;
+  max-width: 460px;
+}
+
+/* Display size, but nowhere near the landing hero — this is a page title, not
+   a statement. Forum's faux italic needs room, so it stops here. */
+.auth-card h1 {
+  font-size: 40px;
+  font-weight: 700;
+  font-style: italic;
+  -webkit-text-stroke: 0.35px var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  margin: 0 0 14px;
+}
+
+.auth-card .muted { font-size: 15px; line-height: 1.65; }
+.auth-card .muted a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 26px 0;
+}
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* --- Form fields -------------------------------------------------------- */
+
+.field { display: grid; gap: 7px; margin-bottom: 18px; }
+
+.field label {
+  font-size: 12.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field input {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  padding: 12px 14px;
+  font-size: 16px;
+  font-family: var(--font-display), Georgia, serif;
+  transition: border-color 0.2s ease;
+  width: 100%;
+}
+.field input:hover { border-color: var(--ink); }
+.field input[aria-invalid='true'] { border-color: var(--failure); }
+
+/* Failure is never colour alone — the message text carries it too. */
+.field-error, .auth-error {
+  color: var(--failure);
+  font-size: 14px;
+  margin: 0;
+}
+.auth-error {
+  border: 1px solid var(--failure);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+}
+
+.auth-form button, .auth-card button {
+  width: 100%;
+  justify-content: center;
+  padding: 13px 18px;
+  letter-spacing: 0.03em;
+}
+
+/* --- Landing pathway cards ---------------------------------------------- */
+
+.pathway {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 32px;
+  gap: 14px;
+}
+.pathway:hover { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 3%, var(--paper)); }
+.pathway h2 { font-size: 24px; margin: 6px 0 0; }
+.pathway p { color: var(--muted); line-height: 1.65; }
+.pathway svg { width: 22px; height: 22px; stroke-width: 1.4; }
+.pathway .primary { margin-top: auto; align-self: flex-start; }
+
+/* --- Footer: text with a rule, not a box -------------------------------- */
+
+footer {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 22px 0 0;
+  margin-top: 40px;
+}
+footer strong { font-weight: 400; }
+
+/* --- Employer "Pending" reads as in-progress, not success --------------- */
+
+.is-pending { color: var(--muted); }
