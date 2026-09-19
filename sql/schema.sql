@@ -121,8 +121,8 @@ COMMENT 'User accounts for HireWire sign-in (email/password + Google).';
 
 
 -- ---------------------------------------------------------------------------
--- SECTION 3 — PLANNED. Not created yet; these are the tables the rest of the
--- feature list needs. See docs/FEATURE_LIST.md "Data model".
+-- SECTION 3 — LIVE as of 2026-09-19. Created, empty, waiting on their lanes.
+-- See docs/FEATURE_LIST.md "Data model" and docs/DATA_MODEL.md.
 -- ---------------------------------------------------------------------------
 
 -- profile_memory — APPEND-ONLY. The profile that grows over time.
@@ -213,3 +213,155 @@ CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.agent_verifications (
   checked_at          TIMESTAMP NOT NULL
 ) USING DELTA
 COMMENT 'Every agent-to-agent verification, including the refusals.';
+
+
+-- ---------------------------------------------------------------------------
+-- SECTION 4 — intake + the structured profile. See docs/DATA_MODEL.md.
+--
+-- Three layers, on purpose:
+--   uploads (Volume)  the actual bytes
+--   documents         one row per source, carrying the path to those bytes
+--   profiles + kids   what we believe now; this is what the profile page renders
+--   profile_memory    everything we ever learned (SECTION 3) — the growing memory
+--   profile_gaps      what is still unknown; the ElevenLabs agent's queue
+--
+-- profiles/* is a page-shaped copy of the truth in profile_memory, not a rival
+-- source. Every write appends a fact AND updates the structured row.
+-- ---------------------------------------------------------------------------
+
+-- Bytes live here. NOT on the app's local disk: the Databricks Apps filesystem is
+-- ephemeral, so anything written there dies on redeploy. Keeping the original PDF
+-- also means we can RE-EXTRACT later when the prompt or schema improves.
+CREATE VOLUME IF NOT EXISTS workspace.vthacks_2026.uploads
+  COMMENT 'Applicant-supplied documents. /Volumes/workspace/vthacks_2026/uploads/<user_id>/<kind>/<sha256>.<ext>';
+
+-- intake_documents — every source the applicant gave us, INCLUDING the ones they skipped.
+--   status='skipped' is a real row: it is what tells the voice agent the field is
+--   still open. "Upload or skip" only works as a product if skipping records something.
+--   content_hash is the idempotency key. Before spending a model call, look for an
+--   existing 'parsed' row with the same (user_id, content_hash) and reuse it.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.intake_documents (
+  document_id      STRING    NOT NULL COMMENT 'uuid',
+  user_id          STRING    NOT NULL COMMENT 'users.user_id',
+  kind             STRING    NOT NULL COMMENT 'resume_pdf | linkedin_url | linkedin_export_pdf | transcript_pdf',
+  status           STRING    NOT NULL COMMENT 'received | parsed | failed | skipped',
+  storage_path     STRING             COMMENT 'UC Volume path. NULL for link-only sources.',
+  external_url     STRING             COMMENT 'The LinkedIn profile URL. NULL for files.',
+  file_name        STRING,
+  mime_type        STRING,
+  byte_size        BIGINT,
+  content_hash     STRING             COMMENT 'sha256 of the bytes. THE IDEMPOTENCY KEY.',
+  extract_provider STRING             COMMENT 'databricks | gemini | none',
+  extract_model    STRING,
+  warnings         ARRAY<STRING>,
+  error_message    STRING,
+  uploaded_at      TIMESTAMP NOT NULL,
+  parsed_at        TIMESTAMP,
+  CONSTRAINT intake_documents_pk PRIMARY KEY (document_id)
+) USING DELTA
+COMMENT 'Sources of profile data. storage_path links a row to its bytes in the uploads Volume.';
+
+-- profiles — one current row per user. The header of the profile page.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profiles (
+  user_id          STRING NOT NULL,
+  full_name        STRING,
+  email            STRING,
+  phone            STRING,
+  location         STRING,
+  headline         STRING COMMENT 'e.g. "CS senior at Virginia Tech"',
+  summary          STRING,
+  linkedin_url     STRING COMMENT 'Saved even though a URL alone cannot be parsed — no public API, scraping blocked.',
+  github_url       STRING,
+  portfolio_url    STRING,
+  years_experience DOUBLE,
+  updated_at       TIMESTAMP NOT NULL,
+  CONSTRAINT profiles_pk PRIMARY KEY (user_id)
+) USING DELTA;
+
+-- Child tables. Every row carries source_document_id so each line on the profile
+-- page can say where it came from — that is the evidence-not-claims principle, and
+-- it is what makes a generated resume defensible.
+
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_experience (
+  experience_id      STRING    NOT NULL,
+  user_id            STRING    NOT NULL,
+  company            STRING,
+  title              STRING,
+  location           STRING,
+  start_date         STRING             COMMENT 'Free text on purpose because resumes say "Jun 2024"',
+  end_date           STRING,
+  is_current         BOOLEAN,
+  description        STRING,
+  bullets            ARRAY<STRING>,
+  ordinal            INT                COMMENT 'Display order, newest first.',
+  source_document_id STRING,
+  created_at         TIMESTAMP NOT NULL,
+  CONSTRAINT profile_experience_pk PRIMARY KEY (experience_id)
+) USING DELTA;
+
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_education (
+  education_id       STRING    NOT NULL,
+  user_id            STRING    NOT NULL,
+  school             STRING,
+  degree             STRING,
+  field              STRING,
+  start_date         STRING,
+  end_date           STRING,
+  gpa                STRING,
+  source_document_id STRING,
+  created_at         TIMESTAMP NOT NULL,
+  CONSTRAINT profile_education_pk PRIMARY KEY (education_id)
+) USING DELTA;
+
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_skills (
+  user_id            STRING    NOT NULL,
+  skill              STRING    NOT NULL COMMENT 'Canonical form — career-ops/skill-extract.mjs',
+  raw_skill          STRING             COMMENT 'Exactly as written on the resume',
+  category           STRING             COMMENT 'language | framework | tool | cloud | soft',
+  source_document_id STRING,
+  created_at         TIMESTAMP NOT NULL,
+  CONSTRAINT profile_skills_pk PRIMARY KEY (user_id, skill)
+) USING DELTA;
+
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_projects (
+  project_id         STRING    NOT NULL,
+  user_id            STRING    NOT NULL,
+  name               STRING,
+  description        STRING,
+  tech               ARRAY<STRING>,
+  url                STRING,
+  source_document_id STRING,
+  created_at         TIMESTAMP NOT NULL,
+  CONSTRAINT profile_projects_pk PRIMARY KEY (project_id)
+) USING DELTA;
+
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_certifications (
+  certification_id   STRING    NOT NULL,
+  user_id            STRING    NOT NULL,
+  name               STRING,
+  issuer             STRING,
+  issued_date        STRING,
+  source_document_id STRING,
+  created_at         TIMESTAMP NOT NULL,
+  CONSTRAINT profile_certifications_pk PRIMARY KEY (certification_id)
+) USING DELTA;
+
+-- profile_gaps — the table that joins intake to the voice agent.
+--   Extraction writes an 'open' row for every field it could not find. The agent
+--   reads status='open' ORDER BY priority, asks, and writes the answer back, which
+--   appends to profile_memory and updates the structured tables — the same
+--   pipeline a resume upload uses, just a different source.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_gaps (
+  user_id       STRING    NOT NULL,
+  field_key     STRING    NOT NULL COMMENT 'phone | location | target_role | sponsorship | comp_floor | start_date | accommodations | ...',
+  status        STRING    NOT NULL COMMENT 'open | asked | answered | skipped',
+  priority      INT       NOT NULL COMMENT 'Ask order: basics first, then decisions.',
+  question      STRING             COMMENT 'The phrasing the agent should use out loud.',
+  answer_value  STRING,
+  answer_source STRING             COMMENT 'voice | form',
+  asked_at      TIMESTAMP,
+  answered_at   TIMESTAMP,
+  updated_at    TIMESTAMP NOT NULL,
+  CONSTRAINT profile_gaps_pk PRIMARY KEY (user_id, field_key)
+) USING DELTA
+COMMENT 'What we still need to ask. Drives the ElevenLabs question queue.';

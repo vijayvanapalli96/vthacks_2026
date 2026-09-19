@@ -1,12 +1,16 @@
 # HIREWIRE — What is stored where
 
-**Plan, not yet built.** Review this before we run any DDL.
+**APPLIED 2026-09-19.** All 22 tables, the `profile_current` view, and the
+`uploads` Volume now exist in the TEAM workspace (catalog `workspace`, schema
+`vthacks_2026`). `sql/schema.sql` is the idempotent source of truth — re-running
+it is safe.
 
-Everything lives in the Databricks TEAM workspace, catalog `workspace`, schema
-`vthacks_2026`. `sql/schema.sql` already sketches six of these tables but they
-were never applied — the workspace today holds only `users`, `job_snapshots`,
-`match_evaluations`, `application_events`, `voice_events`,
-`email_classifications`, `latest_application_state`.
+Two naming notes, both real:
+- The sources table is **`intake_documents`**, not `documents`. Vijay had already
+  created a *Volume* named `documents`, and one name meaning two different
+  securables is a trap. His volume is empty and untouched; bytes go to `uploads`.
+- `profile_memory` uses `fact_key` / `fact_value` / `source_ref` (it predates this
+  doc). `source_ref` carries the `document_id`.
 
 ---
 
@@ -69,12 +73,12 @@ that is impossible.
 
 ## 3. Tables
 
-### 3.1 `documents` — every source, and where its bytes live
+### 3.1 `intake_documents` — every source, and where its bytes live
 
 One row per thing the applicant gave us, including the ones they skipped.
 
 ```sql
-CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.documents (
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.intake_documents (
   document_id      STRING   NOT NULL COMMENT 'uuid',
   user_id          STRING   NOT NULL COMMENT 'users.user_id',
   kind             STRING   NOT NULL COMMENT 'resume_pdf | linkedin_url | transcript_pdf',
@@ -223,7 +227,7 @@ resume upload does. Same pipeline, different source.
 
 ## 4. The two pages
 
-Both applicant-only, both skippable, each writing a `documents` row either way.
+Both applicant-only, both skippable, each writing a `intake_documents` row either way.
 
 | Page | Input | Writes |
 |---|---|---|
@@ -302,7 +306,7 @@ duplication, not architecture.
    facts and a rule that a human edit beats an extracted value.
 3. **Who runs the DDL?** `sql/` is Tarang's lane and `profile_memory`, `courses`,
    `goals`, `artifacts`, `agent_verifications`, `job_embeddings` are already
-   written there but unapplied. This plan adds `documents`, `profiles`, the five
+   written there but unapplied. This plan adds `intake_documents`, `profiles`, the five
    child tables, `profile_gaps`, and the Volume.
 4. **Cold start.** Every profile page load is now a warehouse query. Same 20–30 s
    idle penalty as sign-in. Warm it before demoing.
