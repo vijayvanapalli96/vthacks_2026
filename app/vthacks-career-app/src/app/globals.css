@@ -784,15 +784,26 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 .rail__title { border-bottom-color: color-mix(in srgb, #eef4ed 18%, transparent); }
 
 /* --- Stage collages ------------------------------------------------------ */
-/* One composition per stage. The shared polaroid chrome lives here; each
-   .collage--<layout> below places and tilts its own frames. */
+/* One composition per stage.
+   Frames are sized by HEIGHT, not width: the image is square, so the frame's
+   width follows from its height and `top + height <= 100%` is enough to
+   guarantee nothing spills onto the text below. Sizing by width made the
+   height derived and unbounded, which is what overlapped the copy. */
 
-.collage { position: relative; min-height: 210px; margin: 12px 0 4px; }
+.collage {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  width: 100%;
+  margin: 10px 0 2px;
+  flex-shrink: 0;
+}
 
 .polaroid {
   position: absolute;
   margin: 0;
-  padding: 7px 7px 0;
+  padding: 6px 6px 0;
+  display: flex;
+  flex-direction: column;
   background: #eef4ed;
   border: 1px solid color-mix(in srgb, #0b2545 14%, transparent);
   box-shadow: 0 8px 26px color-mix(in srgb, #0b2545 30%, transparent);
@@ -801,9 +812,9 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 
 .polaroid__img {
   display: block;
-  position: relative;
-  overflow: hidden;
+  flex: 1;
   aspect-ratio: 1;
+  overflow: hidden;
   background:
     repeating-linear-gradient(45deg,
       color-mix(in srgb, #0b2545 5%, #eef4ed) 0 7px,
@@ -812,9 +823,11 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 .polaroid__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .polaroid figcaption {
-  padding: 6px 2px 7px;
+  flex-shrink: 0;
+  padding: 5px 2px 6px;
   font-size: 11px;
-  letter-spacing: 0.05em;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
   text-align: center;
   font-style: italic;
   color: color-mix(in srgb, #0b2545 58%, transparent);
@@ -824,54 +837,54 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 }
 
 /* 01 — one large, two stepping down the right */
-.collage--stack .polaroid:nth-child(1) { width: 47%; left: 2%;  top: 6%;  transform: rotate(-4deg); z-index: 3; }
-.collage--stack .polaroid:nth-child(2) { width: 33%; left: 52%; top: 0;   transform: rotate(3deg);  z-index: 2; }
-.collage--stack .polaroid:nth-child(3) { width: 33%; left: 62%; top: 44%; transform: rotate(-2deg); z-index: 1; }
+.collage--stack .polaroid:nth-child(1) { height: 64%; top: 4%;  left: 2%;  transform: rotate(-4deg); z-index: 3; }
+.collage--stack .polaroid:nth-child(2) { height: 44%; top: 0;   left: 50%; transform: rotate(3deg);  z-index: 2; }
+.collage--stack .polaroid:nth-child(3) { height: 44%; top: 50%; left: 58%; transform: rotate(-2deg); z-index: 1; }
 
 /* 02 — two large, facing */
-.collage--pair .polaroid:nth-child(1) { width: 46%; left: 1%;  top: 8%; transform: rotate(-6deg); z-index: 2; }
-.collage--pair .polaroid:nth-child(2) { width: 46%; left: 50%; top: 0;  transform: rotate(5deg);  z-index: 3; }
+.collage--pair .polaroid:nth-child(1) { height: 66%; top: 12%; left: 4%;  transform: rotate(-6deg); z-index: 2; }
+.collage--pair .polaroid:nth-child(2) { height: 66%; top: 0;   left: 50%; transform: rotate(5deg);  z-index: 3; }
 
 /* 03 — a loose 2x2 */
-.collage--grid .polaroid { width: 31%; }
-.collage--grid .polaroid:nth-child(1) { left: 6%;  top: 2%;  transform: rotate(-5deg); z-index: 2; }
-.collage--grid .polaroid:nth-child(2) { left: 40%; top: 0;   transform: rotate(2deg);  z-index: 3; }
-.collage--grid .polaroid:nth-child(3) { left: 21%; top: 46%; transform: rotate(4deg);  z-index: 4; }
-.collage--grid .polaroid:nth-child(4) { left: 56%; top: 42%; transform: rotate(-3deg); z-index: 1; }
+.collage--grid .polaroid { height: 40%; }
+.collage--grid .polaroid:nth-child(1) { top: 2%;  left: 8%;  transform: rotate(-5deg); z-index: 2; }
+.collage--grid .polaroid:nth-child(2) { top: 0;   left: 45%; transform: rotate(2deg);  z-index: 3; }
+.collage--grid .polaroid:nth-child(3) { top: 52%; left: 20%; transform: rotate(4deg);  z-index: 4; }
+.collage--grid .polaroid:nth-child(4) { top: 48%; left: 55%; transform: rotate(-3deg); z-index: 1; }
 
 /* 04 — two heavily overlapping */
-.collage--overlap .polaroid:nth-child(1) { width: 50%; left: 8%;  top: 4%;  transform: rotate(-8deg); z-index: 2; }
-.collage--overlap .polaroid:nth-child(2) { width: 50%; left: 40%; top: 14%; transform: rotate(6deg);  z-index: 3; }
+.collage--overlap .polaroid:nth-child(1) { height: 66%; top: 4%;  left: 10%; transform: rotate(-8deg); z-index: 2; }
+.collage--overlap .polaroid:nth-child(2) { height: 66%; top: 18%; left: 42%; transform: rotate(6deg);  z-index: 3; }
 
 /* 05 — a diagonal cascade */
-.collage--cascade .polaroid { width: 36%; }
-.collage--cascade .polaroid:nth-child(1) { left: 0;   top: 0;   transform: rotate(-6deg); z-index: 1; }
-.collage--cascade .polaroid:nth-child(2) { left: 30%; top: 18%; transform: rotate(2deg);  z-index: 2; }
-.collage--cascade .polaroid:nth-child(3) { left: 60%; top: 36%; transform: rotate(7deg);  z-index: 3; }
+.collage--cascade .polaroid { height: 46%; }
+.collage--cascade .polaroid:nth-child(1) { top: 0;   left: 2%;  transform: rotate(-6deg); z-index: 1; }
+.collage--cascade .polaroid:nth-child(2) { top: 22%; left: 33%; transform: rotate(2deg);  z-index: 2; }
+.collage--cascade .polaroid:nth-child(3) { top: 44%; left: 62%; transform: rotate(7deg);  z-index: 3; }
 
 /* 06 — one hero, one inset */
-.collage--hero .polaroid:nth-child(1) { width: 62%; left: 4%;  top: 0;   transform: rotate(-3deg); z-index: 1; }
-.collage--hero .polaroid:nth-child(2) { width: 34%; left: 58%; top: 42%; transform: rotate(8deg);  z-index: 3; }
+.collage--hero .polaroid:nth-child(1) { height: 74%; top: 0;   left: 6%;  transform: rotate(-3deg); z-index: 1; }
+.collage--hero .polaroid:nth-child(2) { height: 40%; top: 48%; left: 58%; transform: rotate(8deg);  z-index: 3; }
 
-/* 07 — mirrored, tilting away from each other */
-.collage--mirror .polaroid { width: 44%; top: 6%; }
-.collage--mirror .polaroid:nth-child(1) { left: 2%;  transform: rotate(-9deg); z-index: 2; }
-.collage--mirror .polaroid:nth-child(2) { left: 52%; transform: rotate(9deg);  z-index: 2; }
+/* 07 — mirrored, tilting apart */
+.collage--mirror .polaroid { height: 62%; top: 10%; }
+.collage--mirror .polaroid:nth-child(1) { left: 4%;  transform: rotate(-9deg); z-index: 2; }
+.collage--mirror .polaroid:nth-child(2) { left: 50%; transform: rotate(9deg);  z-index: 2; }
 
 /* 08 — scattered, deliberately untidy */
-.collage--scatter .polaroid:nth-child(1) { width: 38%; left: 0;   top: 12%; transform: rotate(-12deg); z-index: 1; }
-.collage--scatter .polaroid:nth-child(2) { width: 34%; left: 33%; top: 0;   transform: rotate(7deg);   z-index: 2; }
-.collage--scatter .polaroid:nth-child(3) { width: 40%; left: 58%; top: 26%; transform: rotate(-5deg);  z-index: 3; }
+.collage--scatter .polaroid:nth-child(1) { height: 48%; top: 14%; left: 0;   transform: rotate(-12deg); z-index: 1; }
+.collage--scatter .polaroid:nth-child(2) { height: 44%; top: 0;   left: 34%; transform: rotate(7deg);   z-index: 2; }
+.collage--scatter .polaroid:nth-child(3) { height: 50%; top: 34%; left: 58%; transform: rotate(-5deg);  z-index: 3; }
 
-/* 09 — one tall, two stacked */
-.collage--tall .polaroid:nth-child(1) { width: 44%; left: 2%;  top: 2%;  transform: rotate(-3deg); z-index: 2; }
+/* 09 — one tall portrait, two stacked */
+.collage--tall .polaroid:nth-child(1) { height: 80%; top: 2%;  left: 2%;  transform: rotate(-3deg); z-index: 2; }
 .collage--tall .polaroid:nth-child(1) .polaroid__img { aspect-ratio: 3 / 4; }
-.collage--tall .polaroid:nth-child(2) { width: 36%; left: 52%; top: 0;   transform: rotate(4deg);  z-index: 3; }
-.collage--tall .polaroid:nth-child(3) { width: 36%; left: 58%; top: 48%; transform: rotate(-6deg); z-index: 1; }
+.collage--tall .polaroid:nth-child(2) { height: 40%; top: 0;   left: 55%; transform: rotate(4deg);  z-index: 3; }
+.collage--tall .polaroid:nth-child(3) { height: 40%; top: 46%; left: 60%; transform: rotate(-6deg); z-index: 1; }
 
-/* Hover lifts the pile slightly out of true. */
-.stage:hover .polaroid:nth-child(odd)  { transform: rotate(0deg) translateY(-6px); }
-.stage:hover .polaroid:nth-child(even) { transform: rotate(0deg) translateY(6px); }
+/* Hover straightens the pile slightly. Kept small so nothing escapes the box. */
+.stage:hover .polaroid:nth-child(odd)  { transform: rotate(0deg) translateY(-4px); }
+.stage:hover .polaroid:nth-child(even) { transform: rotate(0deg) translateY(4px); }
 
 @media (prefers-reduced-motion: reduce) {
   .stage:hover .polaroid { transform: none; }
