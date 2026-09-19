@@ -56,37 +56,9 @@ The Application API reads and writes current state in Tiger Data. Lakeflow Jobs 
 
 ## 6. High-level Architecture
 
-```mermaid
-flowchart LR
-    USER[Candidate] <--> VOICE[ElevenLabs Conversational Agent]
-    USER --> UI[Accessible Web Application]
-    VOICE -->|Client navigation tools| UI
-    VOICE -->|Webhook data tools| API
-    UI --> API[Application API]
+![System architecture](diagrams/system-architecture.svg)
 
-    API --> TIGER[(Tiger Data Postgres)]
-    API --> FILES[Governed Resume and Document Storage]
-    API --> GEMINI[Gemini API]
-
-    MANUAL[Job URL, Text, PDF, or Email] --> INGEST[Databricks Ingestion and Scoring]
-    ATS[Greenhouse and Lever Public Job APIs] --> INGEST
-    INGEST --> TIGER
-    INGEST --> LAKE[(Delta Event and Analytics Tables)]
-
-    GMAIL[Gmail API] --> MAILWORKER[Mailbox Sync Worker]
-    MAILWORKER --> GEMINI
-    GEMINI --> DECISION[Positive-response Gate]
-    DECISION --> TIGER
-    DECISION -->|High confidence| ALERT[Accessible Alert Event]
-    ALERT --> UI
-    ALERT --> VOICE
-
-    TIGER --> DASH[Real-time Application Dashboard]
-    LAKE --> DASH
-
-    PRESAGE[Presage SDK - Optional] --> COACH[Private Interview Coaching]
-    COACH --> TIGER
-```
+Editable source: [system-architecture.mmd](diagrams/system-architecture.mmd)
 
 ## 7. Component Responsibilities
 
