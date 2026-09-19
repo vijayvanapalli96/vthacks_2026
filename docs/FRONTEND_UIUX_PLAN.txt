@@ -1,0 +1,199 @@
+================================================================================
+FRONTEND UI/UX PLAN — HIREWIRE
+Owner: Nidhi · ~10 hours left · Target: Best UI/UX Hack (Polaroid) + 1st Place
+Tick boxes as you go. [ ] todo  [x] done  [~] partial  [-] cut
+================================================================================
+
+
+0. FIX FIRST (5 min) — setup is currently wrong
+--------------------------------------------------------------------------------
+[ ] lenis is installed at the REPO ROOT, not in the app. Move it:
+       cd app/vthacks-career-app && npm i lenis motion
+       (then delete the stray root package.json + node_modules)
+[ ] Node is v26.9.0 via nvm — make sure every terminal has it (`nvm use`)
+[ ] npm i -D eslint-plugin-jsx-a11y   (a11y errors as you type, not at the end)
+
+
+1. THE CORE DECISION — read this before writing any CSS
+--------------------------------------------------------------------------------
+Lenis.dev is a MARKETING SITE. Its motion is SCROLL-driven: you scroll, the hand
+turns. Beautiful, and wrong for us.
+
+We are not a marketing site. We are an agent that DOES things. So our motion must
+be STATE-driven: the agent listens, thinks, verifies, refuses, sends — and the
+screen reacts to THAT, not to the scrollbar.
+
+    Scroll-driven  = "look how cool this site is"
+    State-driven   = "look what this agent just did"   <- this wins the demo
+
+Keep Lenis for feel (it's 3kb, one line, makes everything smoother). But the
+signature moment is the AGENT STATE MACHINE, not a scroll sequence.
+
+THE THESIS THAT MAKES ANIMATION LEGITIMATE ON AN ACCESSIBILITY APP:
+  One event stream drives BOTH the voice and the visuals. Same state change
+  fires the ElevenLabs line AND the animation, at the same moment.
+    - blind users get the audio
+    - LOW-VISION users (most of our users) get big, high-contrast motion cues
+    - sighted judges get the show
+  Say this sentence in the pitch. It turns "pretty animations" into an
+  accessibility argument, which is the whole difference between a nice UI and a
+  UI that wins a prize on THIS project.
+
+NON-NEGOTIABLE: prefers-reduced-motion must kill or flatten everything. Vestibular
+disorders are a disability. Failing that check on an accessibility app is the one
+mistake a judge will actually punish us for.
+
+
+2. THE HAND-MODEL EQUIVALENT — our signature object
+--------------------------------------------------------------------------------
+Lenis's hand is a 3D WebGL model (Three.js / R3F). NOT achievable in 10 hours on
+top of voice + agent loop. Don't try.
+
+Our equivalent, and honestly a better fit: THE VOICE ORB.
+A single SVG/canvas object, centre of the screen, driven by REAL audio amplitude
+from a Web Audio AnalyserNode. Five states, each visually distinct:
+
+  idle       slow breathing pulse, dim
+  listening  deforms live to the user's mic amplitude
+  thinking   slow orbit / shimmer, no amplitude
+  speaking   deforms to the ElevenLabs output amplitude
+  REFUSING   hard stop, desaturate, red ring, sharp shake — then still
+
+The refusing state is the one nobody else will have. It is the ANS story made
+visible. Build it last but do not cut it.
+
+[ ] orb component with 5 states
+[ ] wired to real mic amplitude (AnalyserNode)
+[ ] wired to real TTS output amplitude
+[ ] every state also announced via aria-live
+[ ] reduced-motion: states become colour/text changes, no movement
+
+
+3. ANIMATION MOMENTS TIED TO WHAT THE PRODUCT ACTUALLY DOES
+--------------------------------------------------------------------------------
+Ranked by (judge impact) / (build time). Each has an audio counterpart.
+
+[ ] A. VOICE ORB REACTS TO SPEECH            ~45m  the signature
+[ ] B. TRUST CARD REVEAL                     ~40m  5 dimensions stagger in,
+       scores count up, reason text fades under each. THE hero component.
+[ ] C. REFUSAL STAMP                         ~25m  card flips red, a "REFUSED"
+       seal stamps down, orb halts, voice says why. Biggest moment in the pitch.
+[ ] D. APPLICATION DISPATCH                  ~30m  application card travels
+       applicant -> employer along an SVG path, checkmark draws on arrival
+       (stroke-dashoffset). Fires when a job is actually sent.
+[ ] E. MATCH CARDS STAGGER + SCORE RINGS     ~25m  results list animates in,
+       each fit score draws as a ring
+[ ] F. ATTACKS-BLOCKED COUNTER               ~20m  number ticks up + shield
+       pulse each time fraud.webmesh.ai is repelled
+[ ] G. SKILL-GAP BARS DRAW ON ENTER          ~15m
+[ ] H. PAGE TRANSITIONS                      ~20m  Motion AnimatePresence
+
+Rule: an animation only fires on a REAL event from the backend. No decorative
+motion that isn't reporting something true. That restraint is what separates
+this from a template.
+
+
+4. LIBRARIES — what we use and what we ignore
+--------------------------------------------------------------------------------
+USE
+  Lenis      3kb   smooth scroll feel, one line, already installed
+  Motion     30kb  THE workhorse. React components, AnimatePresence, layout
+                   animations, gestures. 35M weekly downloads. Start here.
+  CSS        0kb   transitions + keyframes for anything simple. Cheapest wins.
+
+MAYBE (only if A-D are done)
+  anime.js v4  ~6kb  best-in-class SVG draw + stagger grids. Use ONLY for the
+                     dispatch path (D) if Motion's SVG handling annoys you.
+                     Adding a 2nd animation lib for anything else is a net loss.
+
+IGNORE — all of these are correct choices on a normal project and wrong here
+  GSAP        great, but a second mental model we don't have time for
+  Three.js/R3F 155kb, hard, days not hours. This is the hand model. Let it go.
+  Rive/Lottie  need a designer + asset pipeline we don't have
+  Aceternity   gorgeous, but a busy UI reads as unfinished. One flourish only.
+
+LENIS CONFIG — gate it, don't just drop it in
+  [ ] disable entirely under prefers-reduced-motion
+  [ ] make sure focus scrolling still works (keyboard nav must reach elements)
+  [ ] lerp ~0.1, no crazy duration. Subtle. If judges NOTICE the scroll, it's
+      too much.
+  Smooth scroll can cause motion sickness and can break screen-reader virtual
+  cursors. On this project that's not a footnote, it's the thesis.
+
+
+5. THE VIBE — lock these once, apply everywhere
+--------------------------------------------------------------------------------
+[ ] DARK, high contrast, one accent. Near-black bg, warm off-white text.
+    Rationale: low-vision users need contrast; dark reads as serious tooling
+    rather than a consumer app; and it matches GoDaddy's own deck aesthetic
+    (teal on near-black) which quietly flatters the ANS judges.
+
+[ ] COLOUR ROLES — semantic, not decorative
+      bg        near-black          #0A0F0F-ish
+      text      warm off-white
+      accent    teal/cyan           verified, active, trusted
+      danger    red                 refused, blocked, unverified
+      muted     grey                pending, idle
+    Two signal colours only. Verified vs refused IS the product.
+
+[ ] TYPE — one family. Inter or Geist. Sizes: 14/16/20/32/56. Nothing else.
+[ ] SPACING — 8px grid. No exceptions.
+[ ] CONTRAST — 4.5:1 body, 3:1 large. Check every accent on every bg.
+[ ] RADIUS — pick one (8px or 12px) and never vary it.
+[ ] FOCUS RING — visible, 2px, accent colour, on EVERYTHING. Non-negotiable.
+
+Lock these in a tokens file on the homepage. Every later page imports it and
+adds nothing new.
+
+
+6. HOMEPAGE — the one we're designing first
+--------------------------------------------------------------------------------
+DO NOT build a 6-section marketing site. Judges see the landing for ~10 seconds
+and the demo starts inside the app. Budget accordingly.
+
+  Screen 1 (no scroll needed)
+    [ ] the voice orb, centred, breathing
+    [ ] one line: what it does, for whom
+    [ ] one button: "Talk to it" — and it actually starts listening
+    [ ] tiny line: "or press / to type" (proves voice isn't a gimmick)
+
+  One scroll, three beats (this is where Lenis earns its place)
+    [ ] beat 1: it finds jobs against your skills AND coursework
+    [ ] beat 2: it checks the employer is real  <- Trust Card appears here
+    [ ] beat 3: it refuses when they're not     <- refusal stamp
+
+  That's it. Then straight into the app.
+
+[ ] Everything keyboard-reachable
+[ ] Tab order matches visual order
+[ ] Works with the mouse untouched (we're demoing it that way)
+
+
+7. 10-HOUR BUDGET — you also own voice + the agent loop
+--------------------------------------------------------------------------------
+Frontend animation gets ~3.5h of the 10. Be ruthless.
+
+  T-10:00  [ ] 0. setup fixes (5m) + tokens/colour/type locked (25m)
+  T-09:30  [ ] homepage skeleton, shadcn in, Lenis gated, reduced-motion (60m)
+  T-08:30  [ ] VOICE ORB, 5 states, real amplitude (A)            (45m)
+  T-07:45  --- switch to voice/agent-loop work, come back later ---
+  T-04:00  [ ] TRUST CARD reveal (B) + REFUSAL STAMP (C)          (65m)
+  T-02:45  [ ] whatever of D/E/F fits, in that order
+  T-02:00  [ ] a11y pass: axe + Lighthouse, screenshot the score
+  T-01:30  [ ] rehearse the mouse-free demo
+  T-00:00  ship
+
+DESCOPE ORDER if you fall behind: H, G, F, E, D. Never cut A, B, or C.
+
+
+8. FINAL CHECKS BEFORE FREEZE
+--------------------------------------------------------------------------------
+[ ] prefers-reduced-motion actually works (toggle it in devtools, verify)
+[ ] Lighthouse accessibility score screenshotted for the slide
+[ ] axe scan: zero violations
+[ ] full demo runs without touching the mouse
+[ ] no lorem ipsum, no "John Doe", no "Acme Corp" anywhere
+[ ] every animation fires from a real backend event, not a timer
+[ ] one accent colour, one font, one radius — grep for strays
+[ ] dark mode is the only mode (don't build light mode, no time, say so)
+================================================================================
