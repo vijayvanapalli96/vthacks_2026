@@ -259,7 +259,7 @@ main, [id] { scroll-margin-top: 100px; }
    #8c2f39 measure 2.23:1 and 1.89:1 on navy, which is unreadable. These are
    4.76:1 and 5.08:1. */
 
-.rail, .why {
+.rail {
   --paper: #0b2545;
   --ink: #eef4ed;
   --success: #7a9494;
@@ -269,16 +269,13 @@ main, [id] { scroll-margin-top: 100px; }
 }
 
 /* Full-bleed backing, the same trick the nav uses. */
-.rail::before, .why::before {
+.rail::before {
   content: '';
   position: absolute;
   inset: 0 calc(50% - 50vw);
   background: #0b2545;
   z-index: -1;
 }
-
-/* The rail's own top rule would double up against the band edge. */
-.why { border-top: 0; }
 
 /* --- Architecture rail: vertical scroll drives horizontal travel --------- */
 /* The section is N viewports tall; the inner panel pins and the track slides.
@@ -768,12 +765,10 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
    outright so nothing can inherit navy-on-navy. Muted text keeps its alpha so
    the hierarchy survives. */
 
-.rail, .rail *, .why, .why * { color: #eef4ed; }
+.rail, .rail * { color: #eef4ed; }
 
 .rail .stage__n,
-.rail .stage__points li,
-.rail .stage__stack dd,
-.why__a p {
+.rail .stage__stack dd {
   color: color-mix(in srgb, #eef4ed 68%, transparent);
 }
 
