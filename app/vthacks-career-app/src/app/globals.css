@@ -1050,7 +1050,7 @@ footer strong { font-weight: 400; }
 
 .marquee {
   width: 100vw;
-  margin: 52px 0 0;
+  margin: 104px 0 0;
   margin-left: calc(50% - 50vw);
   overflow: hidden;
   border-top: 1px solid var(--line);
