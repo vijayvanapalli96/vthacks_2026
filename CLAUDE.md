@@ -100,9 +100,18 @@ build there. **Every CLI call needs `-p TEAM`.**
 | LLM | `databricks-llama-4-maverick` (verified on TEAM), `databricks-gpt-oss-120b`, others |
 | Group | `vthacks-team` |
 
-⚠️ `app/vthacks-career-app/databricks.yml` still targets the **throwaway** host
-(`dbc-0bfd7b56-c2eb`). Repoint it to the team workspace before deploying, or the
-app will read empty tables in the wrong account.
+`app/vthacks-career-app/databricks.yml` targets host `dbc-0bfd7b56-c2eb` with
+warehouse `441b670a0ff475e0`. **That is very probably the team workspace, so do
+not "fix" it.** Warehouse IDs are workspace-scoped, and this pair was introduced
+together in `79a8fde` ("Add collaborative Next.js Databricks app baseline") —
+the same warehouse ID the strategy doc lists under TEAM. An earlier revision of
+this file claimed it pointed at the throwaway; that was an inference from the
+doc's layout, not evidence, and it was wrong.
+
+Settle it once and delete this paragraph: log in, then check whether
+`workspace.vthacks_2026` exists there with `job_snapshots` and
+`match_evaluations`. Those tables are the team's work, so their presence is the
+decider. Or just ask Vijay — he deployed the app.
 
 Secrets live in `.env.local` (gitignored) and, in production, in the Databricks
 App `resources` block. Never commit a key, a cert, or a real DNS token.

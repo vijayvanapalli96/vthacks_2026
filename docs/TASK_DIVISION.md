@@ -32,9 +32,12 @@ coverage. The price is paid in §3's P1 lists, which are genuinely optional.
 **Two environment traps, both cheap and both demo-fatal if missed:**
 - Build on the **TEAM** workspace, schema `workspace.vthacks_2026`, and put `-p TEAM`
   on every CLI call. The personal Free Edition workspace is a throwaway.
-- `app/vthacks-career-app/databricks.yml` still points at that throwaway
-  (`dbc-0bfd7b56-c2eb`). Repoint it before the first deploy or the app will read
-  empty tables in the wrong account.
+- `app/vthacks-career-app/databricks.yml` targets `dbc-0bfd7b56-c2eb` +
+  warehouse `441b670a0ff475e0`. **Probably the team workspace — leave it alone
+  until someone confirms.** That host/warehouse pair arrived together in
+  `79a8fde` ("collaborative … baseline") and the warehouse ID matches the one
+  the strategy doc lists under TEAM. Confirm by checking that
+  `workspace.vthacks_2026` exists there with the team's tables, or ask Vijay.
 
 ---
 
