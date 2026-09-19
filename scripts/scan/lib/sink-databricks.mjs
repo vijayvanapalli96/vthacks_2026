@@ -18,10 +18,20 @@
 // statement string are integers this file produced itself (Number.parseInt'd
 // slice sizes and LIMITs).
 //
-// WRITE-ONCE (CLAUDE.md hard rule 2). job_snapshots is only ever written by
-// MERGE ... WHEN NOT MATCHED THEN INSERT. There is no UPDATE clause anywhere in
-// this file for that table, so description_text and raw_payload_json cannot be
-// rewritten once captured. Do not add one.
+// WRITE-ONCE (CLAUDE.md hard rule 2). Ingest into job_snapshots is
+// MERGE ... WHEN NOT MATCHED THEN INSERT — insert-only, no update path.
+//
+// ONE exception exists, and it is deliberate: reclassifySnapshots() carries a
+// WHEN MATCHED THEN UPDATE whose SET list is exactly `is_us` and
+// `location_confidence`. Those are derived verdicts, not captured content, and
+// being able to recompute them is the whole reason we store every posting instead
+// of discarding the ones a filter rejects — a stored verdict you can never correct
+// makes "re-examinable later" an empty promise. It took an hour to need it: bare
+// city names were being read as non-US and 1,559 rows needed fixing in place.
+//
+// What rule 2 actually protects is captured content. `description_text` and
+// `raw_payload_json` appear in NO SET list in this file and must never be added to
+// one. If you extend the update, extend it to derived columns only.
 // ---------------------------------------------------------------------------
 
 import { execFile } from 'node:child_process';

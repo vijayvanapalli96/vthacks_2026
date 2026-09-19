@@ -111,13 +111,12 @@ One tick:
 pick slice (least-recently-scanned, skip backed-off boards)
   └ per board, in parallel with a concurrency cap
       fetch via provider          zero tokens
-      drop: no postedAt           cannot claim "open now"
-      drop: postedAt older than N days
-      drop: fails the US filter
-      keep → job_id = urlKey(url)
+      classify, never discard:    is_us + location_confidence, posted_at
+      job_id = dedupKey(job) ?? urlKey(url)
+      de-duplicate by job_id IN MEMORY (a MERGE with duplicate source keys errors)
   └ MERGE INTO job_snapshots ... WHEN NOT MATCHED THEN INSERT
   └ UPDATE job_boards health/backoff
-  └ INSERT scan_runs row (counts, duration, failures)
+  └ INSERT scan_runs row (counts, duration, failures, the uniqueness assertion)
 ```
 
 **Write-once is enforced by the MERGE, per hard rule 2.** `description_text` and
