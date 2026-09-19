@@ -334,74 +334,88 @@ T-0   SUBMIT.   Judging 10:30 AM, full team present.
         callback-rate queries ARE the product.
    "Does it work with Workday today?"
      -> No. A2A with verified employer agents today; legacy ATS bridging is on
-        the roadmap. Be honest — overclaiming loses judges faster than a gap does.
-APPENDIX A — ENVIRONMENT AS PROVISIONED (verified working)
+================================================================================
+APPENDIX A — ENVIRONMENT (verified working)
 ================================================================================
 
-LOCAL TOOLING
-  Databricks CLI ..... v1.17.0 (Homebrew, databricks/tap)
-  AI Dev Kit ......... ~/.ai-dev-kit, global scope, tool=claude
-  Skills ............. 35 in ~/.claude/skills
-                       (26 Databricks agent skills + 8 MLflow + core)
-                       manage with: databricks aitools list|update|uninstall
-  Auth ............... profile DEFAULT, OAuth, creds in OS keyring
+*** USE THE TEAM WORKSPACE. The personal Free Edition workspace set up earlier
+    on Sept 19 is a throwaway — do not build there. ***
 
-WORKSPACE (Databricks Free Edition, AWS)
-  Host ............... <WORKSPACE_HOST>          # see .env.local
-  Workspace ID ....... <WORKSPACE_ID>
-  Catalogs ........... workspace (MANAGED — build here), samples, system
-  SQL Warehouse ...... "Serverless Starter Warehouse"
-                       id = <WAREHOUSE_ID>, 2X-Small, serverless
-                       auto-starts on first query (~20-30s cold)
-  Vector Search ...... endpoint "vthacks-vs" CREATED and ONLINE (STANDARD)
-                       0 indexes so far
+  TEAM WORKSPACE  (profile: TEAM)  <- BUILD HERE
+    Host ............ <TEAM_WORKSPACE_HOST>
+    Workspace ID .... <TEAM_WORKSPACE_ID>
+    Account ......... <TEAM_ACCOUNT_ID>
+    Members ......... group "vthacks-team"
+    Warehouse ....... Serverless Starter, id = 441b670a0ff475e0, 2X-Small
+    Vector Search ... endpoint "vthacks-vs" ONLINE, 0 indexes
+    Schema .......... workspace.vthacks_2026
+    Databricks App .. deployed (npm run start) by vijayvanapalli96@gmail.com
+    Every CLI call needs  -p TEAM
 
-FOUNDATION MODELS AVAILABLE (pay-per-token, no setup, no external API key)
-  LLMs        databricks-llama-4-maverick, databricks-gpt-oss-120b,
-              databricks-gpt-oss-20b, databricks-qwen35-122b-a10b,
-              databricks-qwen3-next-80b-a3b-instruct, databricks-gemma-3-12b,
-              databricks-meta-llama-3-3-70b-instruct,
+  PERSONAL WORKSPACE (profile: DEFAULT) — throwaway, ignore
+    Host ............ <PERSONAL_HOST>
+
+EXISTING SCHEMA — workspace.vthacks_2026 (built by the team; tables empty so far)
+  job_snapshots            job_snapshot_id, job_id, source, source_url,
+                           company_name, job_title, location_text,
+                           description_text, discovered_at, captured_at,
+                           raw_payload_json
+  match_evaluations        evaluation_id, job_id, candidate_profile_id,
+                           model_provider, model_name, overall_score,
+                           recommendation, explanation_text,
+                           requirement_scores_json, created_at
+  application_events       event_id, application_id, job_id, event_type,
+                           event_source, event_at, metadata_json
+  voice_events             voice_event_id, application_id, session_id,
+                           event_type, outcome, event_at, metadata_json
+  email_classifications    classification_id, application_id, gmail_message_id,
+                           classification, confidence, rationale_text,
+                           received_at, classified_at, requires_review
+  latest_application_state VIEW: application_id, job_id, current_state,
+                           event_source, state_changed_at
+
+  GAP: nothing records agent identity / ANS verification yet. If we do the
+  GoDaddy track we need a table alongside application_events holding:
+  which agent, its ANS name + version, the 5 Trust Index scores and reasons,
+  verdict (allowed/refused), and which PII fields were released.
+
+FOUNDATION MODELS (same on both workspaces, no external key, no rate limits)
+  LLMs        databricks-llama-4-maverick, databricks-gpt-oss-120b / -20b,
+              databricks-qwen35-122b-a10b, databricks-qwen3-next-80b-a3b-instruct,
+              databricks-gemma-3-12b, databricks-meta-llama-3-3-70b-instruct,
               databricks-meta-llama-3-1-8b-instruct
-  Embeddings  databricks-gte-large-en (1024-dim, VERIFIED),
-              databricks-bge-large-en, databricks-qwen3-embedding-0-6b
+  Embeddings  databricks-gte-large-en (1024-dim), databricks-bge-large-en,
+              databricks-qwen3-embedding-0-6b
 
-VERIFIED SMOKE TESTS
-  SELECT current_catalog()                                      -> workspace
-  ai_query('databricks-llama-4-maverick', 'Reply with: OK')     -> OK
-  size(ai_query('databricks-gte-large-en','backend engineer'))  -> 1024
+VERIFIED ON THE TEAM WORKSPACE
+  ai_query('databricks-llama-4-maverick','Reply with: OK')     -> OK
+  size(ai_query('databricks-gte-large-en','backend engineer')) -> 1024
+  job_snapshots = 0 rows, application_events = 0 rows
 
-WHAT THIS CHANGES ABOUT THE PLAN
-  * ai_query() works in plain SQL. You can do JD parsing, skill extraction and
-    fit scoring as SQL columns over the jobs table — no Python service, no
-    external key, no rate limit juggling. This is the single fastest path to a
-    credible Databricks track entry. Prefer it over hand-rolled API calls.
-  * Embeddings are one SQL call. Semantic job<->resume matching is:
-      embed the resume once, embed 500 JDs once, cosine similarity.
-    With Vector Search online you can do it properly with an index; if the index
-    build is slow at 3am, the SQL cosine fallback over 500 rows is instant and
-    nobody can tell the difference in a 4-minute demo. Have both.
-  * Gemini is still worth keeping for multimodal resume PDF ingestion and the
-    voice-agent tool routing (that is the MLH track you want), but you no longer
-    need Gemini for the bulk scoring. Split them cleanly in the pitch:
-      Gemini  = multimodal understanding + agent reasoning
-      Databricks = the data plane, embeddings at scale, and the analytics
-    Judges from both companies then hear a reason their tech was chosen.
+  WHY THIS MATTERS: ai_query() runs in plain SQL. JD parsing, skill extraction
+  and fit scoring can be SQL columns over job_snapshots — no Python service, no
+  external key. Fastest credible path to the Databricks track. Note that
+  match_evaluations already has model_provider/model_name columns, so a
+  Gemini-vs-Databricks comparison is nearly free and demos well.
 
-QUICK REFERENCE COMMANDS
-  Run SQL:
-    databricks api post /api/2.0/sql/statements --json @q.json
-    (put the JSON in a file — inline quoting through zsh will bite you)
-  List skills:        databricks aitools list
-  Re-auth:            databricks auth login --profile DEFAULT
-  Warehouse state:    databricks warehouses get <WAREHOUSE_ID>
-  Delete VS endpoint: databricks vector-search-endpoints delete-endpoint vthacks-vs
+LOCAL TOOLING
+  Databricks CLI v1.17.0 (Homebrew)   |  AI Dev Kit global, 35 skills
+  Profiles: TEAM (use this), DEFAULT (throwaway)
+  gh CLI authenticated as nidhipoojari
 
-GOTCHAS FOUND
-  * macOS has no `timeout` command (use gtimeout from coreutils, or omit).
-  * Inline JSON with single quotes inside --json gets mangled by zsh. Use @file.
-  * The warehouse is STOPPED between uses and cold-starts ~20-30s. Fire a dummy
-    query 2 minutes before you demo so it is warm on stage.
+QUICK REFERENCE
+  Run SQL     databricks api post /api/2.0/sql/statements --json @q.json -p TEAM
+              (use @file — inline quoting through zsh will bite you)
+  Re-auth     databricks auth login --host <host> --profile TEAM
+  Who am I    databricks current-user me -p TEAM
+  Warehouse   databricks warehouses get 441b670a0ff475e0 -p TEAM
 
+GOTCHAS
+  * macOS has no `timeout` (use gtimeout, or omit).
+  * Inline JSON with single quotes gets mangled by zsh. Use @file.
+  * Warehouse is STOPPED between uses, cold start ~20-30s. Fire a dummy query
+    two minutes before demoing.
+  * Forgetting -p TEAM silently targets the throwaway workspace.
 
 ================================================================================
 APPENDIX B — WHY THIS SHAPE WINS (VTHacks 11/12/13 winner analysis, condensed)
