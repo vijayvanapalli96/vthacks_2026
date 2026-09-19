@@ -13,7 +13,17 @@
 import { OUTPUT_SPEC, extractedProfileSchema, type ExtractionResult } from './types';
 import { parseJsonObject } from './json';
 
-export const GEMINI_MODEL = 'gemini-2.5-flash';
+/**
+ * An ALIAS, not a pinned version, and that is deliberate.
+ *
+ * This was `gemini-2.5-flash`, which now returns HTTP 404 for a newly created project:
+ * "no longer available to new users". Confirmed against a fresh key in
+ * vthacks-509117 on 2026-09-19 — the model is still listed by /v1beta/models, so
+ * listing is not the same as usable. Pinning a version buys reproducibility and pays
+ * for it with a hard failure the day that version is retired for new callers, which is
+ * exactly what happened here.
+ */
+export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-flash-latest';
 
 const ENDPOINT = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;

@@ -42,6 +42,7 @@ import {
   canEnrich,
   describeFindings,
   enrichFromPublicWeb,
+  takeUnavailableReason,
   isEmptyProfile,
   WEB_CONFIDENCE_SCALE,
 } from '@/lib/enrich/linkedin-web';
@@ -1297,7 +1298,19 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
           // NEW" are different questions, and this is the second one.
           const novel = enriched ? subtractProfile(enriched.profile, known) : null;
 
-          if (!enriched) {
+          // "The search found nothing" and "the search never ran" are different
+          // facts, and reporting the second as the first claims work we did not do.
+          const unavailable = enriched ? null : takeUnavailableReason();
+
+          if (unavailable) {
+            yield settle(
+              'linkedin:web',
+              'Looking for anything public about you',
+              at,
+              'warn',
+              `${NOT_READ} I could not even run the search: ${unavailable}. That is a configuration or billing problem on our side, not a statement about you. ${EXPORT_FIX}`,
+            );
+          } else if (!enriched) {
             yield settle(
               'linkedin:web',
               'Looking for anything public about you',

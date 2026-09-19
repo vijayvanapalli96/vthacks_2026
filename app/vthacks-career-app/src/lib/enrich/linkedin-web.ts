@@ -36,8 +36,18 @@ import { getGeminiKey } from '@/lib/extract/gemini';
 import { parseJsonObject } from '@/lib/extract/json';
 import { extractedProfileSchema, type ExtractedProfile } from '@/lib/extract/types';
 
-/** gemini-2.5-flash supports the google_search tool and is already the resume model. */
-export const ENRICH_MODEL = 'gemini-2.5-flash';
+/**
+ * Same alias as the resume extractor, for the same reason: the pinned
+ * `gemini-2.5-flash` now 404s for newly created projects ("no longer available to new
+ * users"), verified against a fresh key on 2026-09-19.
+ *
+ * NOT VERIFIED that this alias's current target supports the `google_search` tool —
+ * the project's Gemini prepaid credits are depleted, so every call returns 402 before
+ * reaching the model. If grounding turns out to be unsupported, the enrichment path
+ * already degrades to its honest "I could not read the page" message rather than
+ * inventing anything.
+ */
+export const ENRICH_MODEL = process.env.GEMINI_MODEL ?? 'gemini-flash-latest';
 
 const ENDPOINT = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -186,10 +196,32 @@ const defaultTransport: EnrichTransport = async (body, key) => {
  * Never throws. This is an optional upgrade to a profile that already exists; it
  * must not be able to fail the analysis that produced it.
  */
+/**
+ * Why the last call produced nothing, when the reason was that it never ran.
+ *
+ * Module-scoped rather than part of the return type on purpose: `null` already means
+ * "nothing usable" at every one of the eight early returns below, and threading a
+ * discriminated union through all of them to serve one log line would be a larger,
+ * riskier change than the problem deserves. Read it with takeUnavailableReason()
+ * immediately after a null return, which clears it so a later null cannot inherit a
+ * stale explanation.
+ *
+ * Single-flight in practice: one analysis runs one enrichment.
+ */
+let lastUnavailableReason: string | null = null;
+
+/** Returns and clears the reason the last call could not run, if that is why it failed. */
+export function takeUnavailableReason(): string | null {
+  const reason = lastUnavailableReason;
+  lastUnavailableReason = null;
+  return reason;
+}
+
 export async function enrichFromPublicWeb(
   seed: EnrichSeed,
   transport: EnrichTransport = defaultTransport,
 ): Promise<EnrichResult | null> {
+  lastUnavailableReason = null;
   const key = getGeminiKey();
   if (!key) return null;
 
@@ -208,8 +240,15 @@ export async function enrichFromPublicWeb(
       },
       key,
     )) as GeminiResponse;
-  } catch {
-    // Network, quota, or a non-JSON body. Nothing learned; the caller degrades.
+  } catch (error) {
+    // The call itself did not happen — network, quota, billing, a non-JSON body.
+    //
+    // This is NOT the same as "searched and found nothing", and it used to be
+    // reported as if it were. A depleted Gemini credit balance returns HTTP 402, the
+    // transport threw, this catch swallowed it, and the user was told "a public web
+    // search turned up nothing I could confidently tie to you" — a sentence that
+    // claims a search happened. Hard rule 8 is exactly about not doing that.
+    lastUnavailableReason = (error as Error).message.slice(0, 200);
     return null;
   }
 
