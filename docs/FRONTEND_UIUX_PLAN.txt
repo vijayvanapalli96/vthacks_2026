@@ -180,10 +180,14 @@ APPLIES TO EVERY PAGE (rolled out, do not diverge)
   A new page adds NO new colours, fonts, radii or shadows. If it needs one,
   the answer is no.
 
-SHAPE
-  Radius 0 everywhere. Sharp edges, no exceptions.
-  NO WHITE. Cards are the same colour as the page (--surface = --paper);
-  separation comes from a 1px hairline, never a fill or a shadow.
+SHAPE — enforced globally in one place now
+  Radius 0 on *, no exceptions. No white: the only colours in the file are the
+  four tokens plus alpha mixes of ink.
+  NO CARDS. Separation is whitespace first, a hairline second, a box never.
+  Workspace "panels" are sections with a rule and a heading. The auth form is
+  a bare column with underline-only inputs. Metrics are type between two rules.
+  globals.css is ONE system (551 lines) — do not append override passes to it,
+  edit the rule that is already there.
 
 THE REST
   [ ] SPACING   8px grid, no exceptions
@@ -275,6 +279,12 @@ Status as of the applicant-page styling pass.
 |     |     6 moods, draw-on, blink | wordmark, cycling a real       |        |      |
 |     |                             | application script             |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A16 globals.css rewritten   | 1195 -> 551 lines, one system, | HIGH   | 45m  |
+|     |     as ONE system           | no override stacking, no white |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A17 Panels de-carded        | workspace + auth are rules and | HIGH   | 20m  |
+|     |     everywhere              | space; no boxes anywhere       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
 |     | PHASE S — VOICE ORB (signature object)                                        |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [x] | S1 Orb, 5 visual states     | ink ring + 64 radial ticks on  | CRIT   | 50m  |
@@ -322,7 +332,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 24 of 37  ·   1 cut  ·  spent ~8h40m  ·  remaining P0 ~1h05m, all ~2h15m
+  DONE 26 of 39  ·   1 cut  ·  spent ~9h45m  ·  remaining P0 ~1h05m, all ~2h15m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4
