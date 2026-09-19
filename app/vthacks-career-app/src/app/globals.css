@@ -540,88 +540,21 @@ footer strong { font-weight: 400; }
 footer span { color: var(--muted); font-size: 17px; }
 footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); }
 
-/* ===========================================================================
-   VOICE CONSOLE + AGENT BUTTON
-   =========================================================================== */
-
-.console {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 40px;
-  align-items: center;
-  padding: 40px 0 44px;
-  border-bottom: 1px solid var(--line);
-}
-.console h2 { font-size: 26px; font-style: italic; margin: 8px 0 10px; }
-.console p { color: var(--muted); max-width: 46ch; line-height: 1.7; font-size: 17px; margin: 0 0 20px; }
-.console__states { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.console__states button {
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  color: var(--muted);
-  padding: 8px 16px;
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transition: color 0.2s ease, border-color 0.2s ease;
-}
-.console__states button:hover { color: var(--ink); border-color: var(--ink); }
-.console__states button.is-active { color: var(--paper); background: var(--ink); border-color: var(--ink); }
-.console__error { margin-top: 12px; font-size: 14px; }
-
-.agent-button { display: grid; justify-items: center; gap: 16px; flex-shrink: 0; }
-.agent-button__hit {
-  display: grid;
-  place-items: center;
-  padding: 10px;
-  border: 0;
-  background: transparent;
-  transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-.agent-button__hit:hover { transform: translateY(-3px) scale(1.03); }
-.agent-button__hit:active { transform: translateY(0) scale(0.98); }
-.agent-button__hit:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.agent-button .agent-button__caption {
-  font-size: 18px;
-  color: var(--muted);
-  margin: 0;
-  min-height: 3.2em;
-  max-width: 24ch;
-  line-height: 1.5;
-  text-align: center;
-  text-wrap: balance;
-  transition: color 0.4s ease;
-}
-.agent-button__caption.is-success { color: var(--success); }
-.agent-button__caption.is-failure { color: var(--failure); }
-.agent-button .agent-button__error { margin: 0; font-size: 14px; max-width: 30ch; text-align: center; }
-.agent-button--listening .agent-button__caption { color: var(--ink); }
-.agent-button--listening .agent-button__hit { animation: agent-pulse 2.4s ease-in-out infinite; }
-.agent-button--refusing .agent-button__hit { animation: agent-halt 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) 1; }
-@keyframes agent-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.035); }
-}
-@keyframes agent-halt {
-  0%, 100% { transform: translateX(0); }
-  18% { transform: translateX(-7px); }
-  38% { transform: translateX(6px); }
-  60% { transform: translateX(-3px); }
-  80% { transform: translateX(2px); }
-}
-
 /* --- Agent face --------------------------------------------------------- */
 
-.face { overflow: visible; }
+/* Drawn in currentColor rather than --ink directly, so a face on a dark panel
+   needs one `color` override and not a rule per stroke. The mood rules below
+   still set stroke and fill explicitly, so they win either way. */
+.face { overflow: visible; color: var(--ink); }
 .face__head, .face__brow path, .face__mouth {
   fill: none;
-  stroke: var(--ink);
+  stroke: currentColor;
   stroke-width: 2.4;
   stroke-linecap: round;
   transition: stroke 0.4s ease;
 }
 .face__head { stroke-width: 1.6; }
-.face__eye { fill: var(--ink); transition: fill 0.4s ease; }
+.face__eye { fill: currentColor; transition: fill 0.4s ease; }
 .face__eye, .face__brow { transform-box: fill-box; transform-origin: center; }
 .face--happy .face__head, .face--happy .face__brow path, .face--happy .face__mouth { stroke: var(--success); }
 .face--happy .face__eye { fill: var(--success); }
@@ -768,7 +701,6 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
     scroll-behavior: auto !important;
   }
   .opening__scroll { animation: none; }
-  .agent-button__hit { animation: none; transform: none; }
   .job:hover { padding-left: 0; }
   .path__cta:hover { gap: 9px; }
   .marquee { -webkit-mask-image: none; mask-image: none; }
@@ -785,7 +717,6 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 @media (max-width: 900px) {
   .why, .path { grid-template-columns: 1fr; gap: 24px; padding: 72px 0; }
   .why__q h2, .path h2 { max-width: none; }
-  .console { grid-template-columns: 1fr; justify-items: start; }
 }
 
 @media (max-width: 760px) {

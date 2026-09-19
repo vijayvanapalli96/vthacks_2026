@@ -1,10 +1,10 @@
-import { ArrowRight, Mic } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
 import { IntakeProgress } from '@/components/IntakeProgress';
 import { Reveal } from '@/components/Reveal';
 import { SignOutForm } from '@/components/SignOutForm';
-import { VoiceConsole } from '@/components/VoiceConsole';
+import { VoiceAgent } from '@/components/voice/VoiceAgent';
 import { intakeGate } from '@/lib/intake';
 import { requireRole } from '@/lib/session';
 
@@ -37,9 +37,11 @@ export default async function ApplicantDashboard() {
         <span>Overview</span>
         <span>Jobs</span>
         <span>Materials</span>
-        <button>
-          <Mic size={17} aria-hidden="true" /> Voice navigation
-        </button>
+        {/* The "Voice navigation" button that used to sit here did nothing when
+            clicked. The floating control is the real one, and it is always on
+            screen — a button that looks like it starts a microphone and does not is
+            worse than no button, particularly for someone who cannot see whether
+            anything happened. */}
         <SignOutForm />
       </nav>
 
@@ -54,28 +56,33 @@ export default async function ApplicantDashboard() {
           <IntakeProgress />
         </Reveal>
       ) : (
-        <>
-          <Reveal as="section" className="hero hero--center">
-            <p className="eyebrow">APPLICATION COMMAND CENTER</p>
-            <h1>
-              Find the right role.
-              <br />
-              Stay in control.
-            </h1>
-            <p>
-              Evaluate opportunities, create evidence-backed materials, and approve every external
-              action.
-            </p>
-            <button className="primary">
-              Review best match <ArrowRight size={18} aria-hidden="true" />
-            </button>
-          </Reveal>
-
-          <Reveal index={1}>
-            <VoiceConsole />
-          </Reveal>
-        </>
+        <Reveal as="section" className="hero hero--center">
+          <p className="eyebrow">APPLICATION COMMAND CENTER</p>
+          <h1>
+            Find the right role.
+            <br />
+            Stay in control.
+          </h1>
+          <p>
+            Evaluate opportunities, create evidence-backed materials, and approve every external
+            action.
+          </p>
+          <button className="primary">
+            Review best match <ArrowRight size={18} aria-hidden="true" />
+          </button>
+        </Reveal>
       )}
+
+      {/* Last in the DOM, so tab order reaches the page content before the floating
+          control rather than making every keyboard user pass through it first. It
+          connects nothing until asked.
+
+          This is the ONE voice surface on the page. <VoiceConsole /> used to render
+          here too; it called navigator.mediaDevices.getUserMedia itself and its
+          buttons were a state-picker harness that talked to no endpoint, so two
+          microphone grabs competed on one page. VoiceAgent owns the only stream now,
+          and HireWire's face rides along as the widget's visual. */}
+      <VoiceAgent />
     </main>
   );
 }

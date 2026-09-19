@@ -243,16 +243,40 @@ data.** LinkedIn has no public API for profiles and blocks scraping, so we canno
 turn `linkedin.com/in/someone` into their experience list. Anyone claiming
 otherwise at a hackathon is either scraping (fragile, against ToS) or guessing.
 
-So the page should offer both, with the URL required and the export optional:
+So the page offers both, with the URL required and the export optional. **Built
+as of `feat/linkedin-enrichment`;** the limit above still holds exactly as
+written — nothing below fetches a linkedin.com profile page.
 
-1. **LinkedIn URL** — saved, displayed, shared. No parsing.
-2. **Optional: "Upload your LinkedIn data export"** — the `Connections.csv` or
-   profile PDF from *Settings → Get a copy of your data*. This is the path that
-   actually produces skills and experience, and `career-ops/linkedin-join.mjs`
-   plus `career-ops/intake.mjs` already handle those files.
+1. **LinkedIn URL** — saved, displayed, shared. The page is never fetched.
+   When a URL arrives with no export, we make a **best-effort, clearly-labelled
+   attempt at the rest of the public web** (`src/lib/enrich/linkedin-web.ts`): a
+   search-grounded Gemini call, seeded with the URL plus the name, employer and
+   school the resume already established, so we are not enriching a stranger with
+   a similar name. The model has to assert it matched the right person and say on
+   what evidence, is told a `null` is a correct answer, and never returns an email
+   or phone. What survives lands with `source='web:gemini:<model>'`, confidence
+   scaled to **0.5** of normal (max observed 0.48 — never 1.0), under its own
+   `web.*` `fact_key` namespace, ordered **last** in `mergeProfiles()` so it can
+   never override a resume value, and filtered against what the documents already
+   said so it cannot append a second, weaker copy of a known fact. No key, a
+   refusal, a mismatch or an empty result all degrade to a log line that says
+   plainly that the page was not read and points at the export upload.
+2. **Optional: "Upload your LinkedIn data export"** — the ZIP from
+   *Settings → Data privacy → Get a copy of your data*, any single `.csv` out of
+   it, or the profile saved as a PDF. Stored as `kind='linkedin_export_pdf'`
+   through the same `stageDocument()` as a resume, so it gets a `content_hash`,
+   lands in the Volume, and is read in the same combined analysis pass. This is
+   the path that actually produces skills and experience.
+   `src/lib/extract/linkedin-export.ts` opens the ZIP with `node:zlib` and parses
+   the CSVs **with no model call** — the schema is fixed, so a parser beats a
+   model on both cost and accuracy. Sheets are identified by their header row
+   rather than their filename. `Connections.csv` is counted and **deliberately not
+   stored**: it is third-party PII, and the only legitimate use of it is the
+   warm-intro join in `career-ops/linkedin-join.mjs`, which is an operational
+   lookup and not a profile source.
 
-If we only take the URL, expect the profile to stay thin and the voice agent to
-carry the load — which is a legitimate choice, just not an accident.
+Take only the URL and the profile stays thin, the voice agent carries the load,
+and the log says so — which is a legitimate choice, just not an accident.
 
 ---
 
@@ -269,9 +293,27 @@ resume page ──upload──▶ hash the bytes
                                  ├─ extract (Databricks ai_query, or Gemini)
                                  ├─ profile_memory  ← append every fact + provenance
                                  ├─ profiles + experience/education/skills/projects
-                                 └─ profile_gaps    ← one open row per missing field
+                                 └─ profile_gaps    ← one row per field: open, or answered
 
-linkedin page ─URL or skip─▶ documents row + profiles.linkedin_url + memory fact
+linkedin page ─URL─────────▶ documents row + profiles.linkedin_url + memory fact
+              │                             (source='linkedin:user:typed', conf 1.0)
+              │
+              ├─ export uploaded? ─yes─▶ /Volumes/.../uploads/<user>/linkedin_export_pdf/<sha>.{zip,csv,pdf}
+              │                            │
+              │                            ├─ zip/csv ─▶ parsed by code, no model call
+              │                            ├─ pdf ─────▶ the resume provider ladder
+              │                            └─ facts under linkedin.* keys,
+              │                               source='linkedin_export:…'
+              │
+              └─ URL only ────────────▶ public-web search (NOT linkedin.com)
+                                           │
+                                           ├─ matched the person? ─no──▶ honest gap,
+                                           │                            "upload your export"
+                                           └─yes─▶ facts under web.* keys,
+                                                   source='web:gemini:…', conf x0.5,
+                                                   merged LAST, minus what documents said
+
+linkedin page ─skip────────▶ documents row, status='skipped'
 
 profile page ──▶ reads profiles + children, shows source per line
 
