@@ -347,9 +347,11 @@ main, [id] { scroll-margin-top: 100px; }
 }
 .stage__caption p {
   margin: 0;
-  font-size: 16px;
-  letter-spacing: 0.02em;
-  color: var(--muted);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  -webkit-text-stroke: 0.3px currentColor;
 }
 
 .stage__n {
@@ -389,12 +391,14 @@ main, [id] { scroll-margin-top: 100px; }
 }
 .stage__stack div { display: grid; gap: 4px; }
 .stage__stack dt {
-  font-size: 12.5px;
-  letter-spacing: 0.16em;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--success);
+  -webkit-text-stroke: 0.3px currentColor;
 }
-.stage__stack dd { margin: 0; font-size: 14.5px; color: var(--muted); line-height: 1.5; }
+.stage__stack dd { margin: 0; font-size: 14.5px; color: var(--muted); line-height: 1.5; margin-top: 2px; }
 
 /* Reduced motion: a stack, not a rail. */
 .rail--static { padding: 80px 0; border-top: 1px solid var(--line); }
@@ -785,7 +789,6 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 .rail, .rail *, .why, .why * { color: #eef4ed; }
 
 .rail .stage__n,
-.rail .stage__caption p,
 .rail .stage__points li,
 .rail .stage__stack dd,
 .why__a p {
@@ -795,6 +798,7 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 /* Stack labels are the brightest thing in the block — a track judge scans for
    these. Paper, not the success tint, which reads blue against navy. */
 .rail .stage__stack dt { color: #eef4ed; }
+.rail .stage__caption p { color: #eef4ed; }
 
 .rail .stage__card { border-color: color-mix(in srgb, #eef4ed 16%, transparent); }
 .rail .stage:hover .stage__card { border-color: #eef4ed; }
