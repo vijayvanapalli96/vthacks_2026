@@ -32,7 +32,9 @@ export default function Home() {
       {/* Screen one: the name, a single line, nothing else. */}
       <Reveal as="section" className="opening">
         <h1>HireWire</h1>
-        <p className="opening__tag">Both sides prove who they are.</p>
+        <p className="opening__tag">
+          A voice-first job application agent. Neither side moves until both prove who they are.
+        </p>
         <p className="opening__scroll" aria-hidden="true">
           Scroll
         </p>
