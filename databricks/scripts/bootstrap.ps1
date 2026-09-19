@@ -5,9 +5,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repositoryRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$sqlPath = Join-Path $repositoryRoot "databricks\sql\bootstrap.sql"
-$sqlText = Get-Content -Raw -LiteralPath $sqlPath
-$statements = [regex]::Split($sqlText, ';\s*(?=CREATE)')
+$sqlPath = Join-Path $repositoryRoot "sql\schema.sql"
+$statements = [System.Collections.Generic.List[string]]::new()
+$buffer = [System.Text.StringBuilder]::new()
+foreach ($line in Get-Content -LiteralPath $sqlPath) {
+    [void]$buffer.AppendLine($line)
+    if ($line.TrimEnd().EndsWith(';')) {
+        $statements.Add($buffer.ToString())
+        [void]$buffer.Clear()
+    }
+}
+if ($buffer.ToString().Trim()) {
+    $statements.Add($buffer.ToString())
+}
 
 foreach ($statement in $statements) {
     $statement = $statement.Trim()
