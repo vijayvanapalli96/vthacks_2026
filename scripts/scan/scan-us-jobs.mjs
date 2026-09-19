@@ -246,25 +246,40 @@ async function main() {
     // re-examined instead of being frozen at whatever the filter believed on the
     // day the row was captured. It does not fetch anything and cannot touch
     // description_text or raw_payload_json.
+    //
+    // It takes the SAME tick lock as a scan. It cannot create a duplicate (it
+    // only ever updates an existing key), but running it while a tick is mid-MERGE
+    // means one of them recomputes a verdict for a row the other is still
+    // inserting, and "exactly one writer" is easier to keep true than to reason
+    // about exceptions to.
+    const reclassifyLock = await acquireTickLock();
+    if (!reclassifyLock.acquired) {
+      console.log(`⏭  reclassify exiting WITHOUT writing: ${reclassifyLock.reason}`);
+      return;
+    }
     const PAGE = 4_000;
     let offset = 0;
     let scanned = 0;
     let changed = 0;
-    for (;;) {
-      const page = await readLocationInputs(offset, PAGE);
-      if (page.length === 0) break;
-      const updates = [];
-      for (const row of page) {
-        const { isUs, confidence } = classifyLocation(row.location_text, row.source_url, row.job_title);
-        const wasUs = row.is_us === 'true' || row.is_us === true;
-        if (wasUs !== isUs || row.location_confidence !== confidence) {
-          updates.push({ job_id: row.job_id, is_us: isUs, location_confidence: confidence });
+    try {
+      for (;;) {
+        const page = await readLocationInputs(offset, PAGE);
+        if (page.length === 0) break;
+        const updates = [];
+        for (const row of page) {
+          const { isUs, confidence } = classifyLocation(row.location_text, row.source_url, row.job_title);
+          const wasUs = row.is_us === 'true' || row.is_us === true;
+          if (wasUs !== isUs || row.location_confidence !== confidence) {
+            updates.push({ job_id: row.job_id, is_us: isUs, location_confidence: confidence });
+          }
         }
+        if (updates.length > 0) changed += (await reclassifyLocations(updates)).changed;
+        scanned += page.length;
+        offset += PAGE;
+        console.log(`  reclassified ${scanned} rows so far, ${changed} verdicts changed`);
       }
-      if (updates.length > 0) changed += (await reclassifyLocations(updates)).changed;
-      scanned += page.length;
-      offset += PAGE;
-      console.log(`  reclassified ${scanned} rows so far, ${changed} verdicts changed`);
+    } finally {
+      await reclassifyLock.release();
     }
     console.log(`reclassify done: ${scanned} rows read, ${changed} is_us/location_confidence values updated`);
     return;
