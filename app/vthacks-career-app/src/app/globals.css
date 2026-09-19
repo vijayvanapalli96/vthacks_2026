@@ -402,7 +402,7 @@ h1, h2, h3, nav strong, .metrics strong {
 h1 { font-size: clamp(40px, 6vw, 56px); line-height: 1.04; letter-spacing: -0.01em; }
 h2 { font-size: 20px; letter-spacing: 0.005em; }
 h3 { font-size: 16px; }
-nav strong { font-size: 20px; letter-spacing: 0.02em; }
+nav strong { font-size: 27px; letter-spacing: 0.02em; }
 
 .eyebrow, small {
   font-family: var(--font-body), Inter, sans-serif;
@@ -1131,3 +1131,16 @@ main, [id] { scroll-margin-top: 88px; }
 /* The opening screen already subtracts the nav height, so nothing to change
    there — but the marquee is full-bleed and must sit under the nav, not over. */
 .marquee { position: relative; z-index: 1; }
+
+/* --- Nav sizing --------------------------------------------------------- */
+
+nav { height: 84px; font-size: 17px; }
+nav a, nav span { font-size: 17px; letter-spacing: 0.02em; }
+nav button { font-size: 16px; padding: 11px 16px; }
+
+/* keep anchor jumps clear of the taller bar */
+main, [id] { scroll-margin-top: 100px; }
+
+/* the opening screen subtracts the nav height — keep them in step */
+.opening { min-height: calc(100svh - 84px); }
+.auth-shell { min-height: calc(100svh - 84px); }
