@@ -1,0 +1,39 @@
+Welcome to the GoDaddy channel!
+
+I'm Scott Courtney, a GoDaddy VP Engineering and Agent Name Service architect, leading our VTHacks 14 challenge track all weekend.
+
+The challenge: Best Use of ANS 
+Build agents that discover, verify, and communicate with other agents and services across the open web, using ANS (Agent Name Service) for domain-anchored, verifiable identity. Agents that know who they're talking to, and can prove it.
+
+Ideas to get you started
+
+Agent-to-agent commerce and negotiation
+Verified ticket resale where buyer agents catch impostor sellers
+A fantasy draft run entirely by team agents
+Cross-organization scheduling
+An impostor-detection Capture The Flag
+Agents playing Diplomacy, where identity verification is the mechanic
+Or even better, something not on this list.
+
+Resources
+
+ANS + Trust Index specs: https://github.com/agentnameservice/ans-registry
+ANS reference implementation: https://github.com/agentnameservice/ans
+ANS CLI/SDK: https://github.com/agentnameservice/ans-sdk-go
+Trust Index reference implementation: https://github.com/agentnameservice/agent-trust-discovery
+
+We also have live interoperability agents listed at https://webmesh.ai/  -- hosted agents you can interact with today
+
+Find us
+
+Workshops: Fri 9:30–10:15 PM (ANS intro + demo), Sat 4:30–5:15 PM (office hours)
+Sponsor expo: Sat 1:00–3:30 PM
+Questions anytime right here in ⁠godaddy
+
+Prizes (one for each member of the 1st, 2nd, and 3rd place teams):
+
+🥇 Meta Ray-Ban Gen 2 Wayfarer smart AI glasses
+🥈 Beats Studio Pro headphones
+🥉 Cocopar 15.6" portable monitor
+
+We'll judge the track Sunday morning. Now go build something amazing! 

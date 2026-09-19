@@ -1,0 +1,24 @@
+# secrets / local config
+.env
+.env.local
+*.pem
+*.key
+certs/
+
+# databricks
+.databrickscfg
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# node
+node_modules/
+.next/
+dist/
+build/
+
+# os
+.DS_Store

@@ -1,0 +1,41 @@
+Hey hey Hackers, we have 8️⃣ MLH Prize Categories LIVE this weekend!
+
+Best Use of ElevenLabs — AI voice & text-to-speech
+🎧 Wireless Earbuds
+https://mlh.link/elevenlabs
+
+Best Use of Gemini API — Google's multimodal AI models
+🎁 MLH Swag Kits
+https://mlh.link/gemini
+
+Best Use of Solana — fast, low-fee blockchain
+🔒 Ledger Nano S Plus
+https://mlh.link/solana
+
+Best Use of Tiger Data — Postgres built for real-time & time-series
+🎛️ Stream Deck Mini
+https://mlh.link/tigerdata
+
+Best Use of Presage — vitals & emotion sensing from any camera
+⌚ Fitbit Inspire & Presage Perks (free dev credit refills + 30% off your first year!)
+https://mlh.link/presage
+https://mlh.link/presage-sdk
+
+Best Use of Vultr — one-click cloud compute & GPUs
+🖥️ Portable Screens
+https://mlh.link/vultr
+Gift Code: MAJORLEAGUEHACKING
+
+Best Use of MongoDB Atlas — managed NoSQL database in the cloud
+🛜 M5Stack IoT Kit
+https://mlh.link/mongodb
+https://mlh.link/mongodb-free
+
+Best Domain Name from GoDaddy Registry — grab a custom domain for your hack
+💳 Digital Gift Card
+https://mlh.link/GoDaddyRegistry
+Code: MLH0918VTH
+
+👉👉👉 Check out full descriptions and resources at https://mlh.link/VTHacks
+
+Note: You can apply to AS MANY Prize Categories as your project fits, highly recommend using as many partner technologies as you can in your hacks for the best chance of winning 🏆 ! 
