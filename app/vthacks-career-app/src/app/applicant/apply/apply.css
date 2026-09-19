@@ -1,0 +1,319 @@
+/* Verified-apply flow. Colors reuse the dashboard tokens; every state is also
+   carried by text, never by color alone. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.trust-hero {
+  padding: 48px 0 28px;
+}
+
+.trust-hero h1 {
+  font-size: clamp(34px, 4.6vw, 56px);
+}
+
+nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trust-flow {
+  display: grid;
+  gap: 18px;
+  max-width: 860px;
+}
+
+.trust-body {
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.trust-step h2,
+.trust-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.trust-step h2:focus,
+.trust-card h2:focus {
+  outline: none;
+}
+
+.trust-step h2:focus-visible,
+.trust-card h2:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 4px;
+}
+
+.trust-host {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink) !important;
+}
+
+.trust-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.trust-actions .primary {
+  margin-top: 0;
+}
+
+.primary[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.trust-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.trust-toggle input {
+  accent-color: var(--green);
+  width: 16px;
+  height: 16px;
+}
+
+.trust-card header {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.trust-card.is-pass {
+  border-color: #9fd0b3;
+}
+
+.trust-card.is-pass header {
+  background: #eef7f1;
+}
+
+.trust-card.is-pass h2 {
+  color: var(--green);
+}
+
+/* REFUSING: halt, desaturate, go red. The heading text says it too. */
+.trust-card.is-refusing {
+  border: 2px solid var(--danger);
+}
+
+.trust-card.is-refusing header {
+  background: #fbeceb;
+}
+
+.trust-card.is-refusing h2 {
+  color: var(--danger);
+}
+
+.trust-who {
+  margin: 8px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.trust-who span {
+  font-family: Inter, Arial, sans-serif;
+  color: var(--muted);
+}
+
+.trust-speak {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+
+.trust-reason {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.trust-dimensions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.trust-dimensions li {
+  display: grid;
+  gap: 6px;
+}
+
+.trust-dim-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.trust-dim-head strong {
+  text-transform: capitalize;
+}
+
+.trust-dim-head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.trust-dimensions li.below .trust-dim-head span {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.trust-bar {
+  height: 8px;
+  border-radius: 99px;
+  background: #edf0ec;
+  overflow: hidden;
+}
+
+.trust-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--green);
+}
+
+.trust-dimensions li.below .trust-bar span {
+  background: var(--danger);
+}
+
+.trust-dimensions p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.trust-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.trust-fields legend {
+  font-size: 13px;
+  font-weight: 800;
+  padding-bottom: 8px;
+  word-break: break-all;
+}
+
+.trust-fields label {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.trust-fields label:has(input:checked) {
+  border-color: var(--green);
+  background: #eef7f1;
+}
+
+.trust-fields label:has(input:focus-visible) {
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+}
+
+.trust-fields label.is-empty {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.trust-fields input {
+  accent-color: var(--green);
+  width: 17px;
+  height: 17px;
+  margin: 2px 0 0;
+  flex: none;
+}
+
+.trust-fields span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.trust-fields strong {
+  font-size: 14px;
+}
+
+.trust-fields small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  word-break: break-all;
+}
+
+.trust-receipt {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  font-size: 14px;
+}
+
+.trust-receipt dt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+
+.trust-receipt dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.spin {
+  animation: trust-spin 0.9s linear infinite;
+}
+
+@keyframes trust-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .trust-card header {
+    flex-direction: column;
+  }
+
+  .trust-receipt {
+    grid-template-columns: 1fr;
+  }
+}

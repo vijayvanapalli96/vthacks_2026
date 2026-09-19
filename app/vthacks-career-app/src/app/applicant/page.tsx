@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { ArrowRight, BriefcaseBusiness, FileCheck2, ShieldCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
@@ -51,11 +52,8 @@ export default async function ApplicantDashboard() {
         <span>Overview</span>
         <span>Jobs</span>
         <span>Materials</span>
-        {/* The "Voice navigation" button that used to sit here did nothing when
-            clicked. The floating control is the real one, and it is always on
-            screen — a button that looks like it starts a microphone and does not is
-            worse than no button, particularly for someone who cannot see whether
-            anything happened. */}
+        <Link href="/applicant/apply">Verify &amp; apply</Link>
+        {/* Voice navigation lives in the floating VoiceAgent control. */}
         <SignOutForm />
       </nav>
 
