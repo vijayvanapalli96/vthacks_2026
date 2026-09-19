@@ -16,20 +16,28 @@ export default async function SignUpPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // The landing page links here with ?role=… so the pathway the person clicked is
-  // already selected. They can still change it.
+  // The landing page links here with ?role=…, so the pathway is already decided
+  // and the form does not ask again.
   const { role } = await searchParams;
+  const chosen = asRole(role);
 
   return (
     <main className="auth-shell">
       <section className="auth-card panel">
-        <h1>Create your account</h1>
+        <h1>
+          {chosen === 'applicant'
+            ? 'Create your applicant account'
+            : chosen === 'employer'
+              ? 'Create your employer account'
+              : 'Create your account'}
+        </h1>
         <p className="muted">
-          Pick your side of the handshake. Both sides are real accounts, because both sides have to
-          be able to prove who they are.
+          {chosen
+            ? 'Both sides of the handshake are real accounts, because both sides have to be able to prove who they are.'
+            : 'Pick your side of the handshake. Both sides are real accounts, because both sides have to be able to prove who they are.'}
         </p>
 
-        <SignUpForm defaultRole={asRole(role)} />
+        <SignUpForm role={chosen} />
 
         <p className="divider">or</p>
         <GoogleSignInForm label="Sign up with Google" />

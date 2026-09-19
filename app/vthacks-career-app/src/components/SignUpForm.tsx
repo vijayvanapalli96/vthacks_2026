@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 
 import { signUpAction, type AuthFormState } from '@/app/actions/auth';
@@ -20,12 +21,17 @@ const pathways: { value: Role; label: string; hint: string }[] = [
   },
 ];
 
-export function SignUpForm({ defaultRole }: { defaultRole?: Role }) {
+export function SignUpForm({ role }: { role?: Role }) {
   const [state, action, pending] = useActionState(signUpAction, initialState);
   const nameError = state.fieldErrors?.name;
   const emailError = state.fieldErrors?.email;
   const passwordError = state.fieldErrors?.password;
   const roleError = state.fieldErrors?.role;
+
+  // The landing page already asked which pathway you're on, so don't ask twice.
+  // Arriving with ?role=… locks the choice to a hidden field; only a direct visit
+  // to /signup (no role) still has to pick one.
+  const chosen = pathways.find((pathway) => pathway.value === role);
 
   return (
     <form action={action} className="auth-form" noValidate>
@@ -35,35 +41,45 @@ export function SignUpForm({ defaultRole }: { defaultRole?: Role }) {
         </p>
       ) : null}
 
-      {/* aria-describedby is global, aria-invalid is not supported on a group —
-          so the error is announced via role="alert" and linked, not flagged. */}
-      <fieldset
-        className="role-options"
-        aria-describedby={roleError ? 'signup-role-error' : undefined}
-      >
-        <legend>Which describes you?</legend>
-        {pathways.map((pathway) => (
-          <label className="role-option" key={pathway.value} htmlFor={`role-${pathway.value}`}>
-            <input
-              id={`role-${pathway.value}`}
-              type="radio"
-              name="role"
-              value={pathway.value}
-              defaultChecked={defaultRole === pathway.value}
-              required
-            />
-            <span>
-              <strong>{pathway.label}</strong>
-              <small>{pathway.hint}</small>
-            </span>
-          </label>
-        ))}
-        {roleError ? (
-          <p className="field-error" id="signup-role-error" role="alert">
-            {roleError}
+      {chosen ? (
+        <div className="role-locked">
+          <input type="hidden" name="role" value={chosen.value} />
+          <p>
+            <strong>{chosen.label}</strong>
+            <small>{chosen.hint}</small>
           </p>
-        ) : null}
-      </fieldset>
+          <Link href="/signup">Change</Link>
+        </div>
+      ) : (
+        /* aria-describedby is global, aria-invalid is not supported on a group —
+           so the error is announced via role="alert" and linked, not flagged. */
+        <fieldset
+          className="role-options"
+          aria-describedby={roleError ? 'signup-role-error' : undefined}
+        >
+          <legend>Which describes you?</legend>
+          {pathways.map((pathway) => (
+            <label className="role-option" key={pathway.value} htmlFor={`role-${pathway.value}`}>
+              <input
+                id={`role-${pathway.value}`}
+                type="radio"
+                name="role"
+                value={pathway.value}
+                required
+              />
+              <span>
+                <strong>{pathway.label}</strong>
+                <small>{pathway.hint}</small>
+              </span>
+            </label>
+          ))}
+          {roleError ? (
+            <p className="field-error" id="signup-role-error" role="alert">
+              {roleError}
+            </p>
+          ) : null}
+        </fieldset>
+      )}
 
       <div className="field">
         <label htmlFor="signup-name">Name</label>
