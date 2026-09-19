@@ -16,3 +16,5 @@ env:
     valueFrom: employer-identity-key
   - name: EMPLOYER_IDENTITY_CERT
     valueFrom: employer-identity-cert
+  - name: MONGODB_URI
+    valueFrom: mongodb-uri

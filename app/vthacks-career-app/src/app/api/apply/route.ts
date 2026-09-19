@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { auth } from '../../../auth';
+import { envelopeClaims, recordAudit } from '../../../lib/audit';
 import { signEnvelope } from '../../../lib/ans/envelope';
 import { APPLICANT_ANS_NAME, verifyProductionAgent } from '../../../lib/ans/production';
 import { failedTrustDimensions } from '../../../lib/ans/policy';
@@ -33,6 +34,8 @@ function claimedIdentity(body: ApplyBody): string {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({})) as ApplyBody;
+  const session = await auth().catch(() => null);
+  const userId = session?.user?.id ?? null;
   const verification = await verifyProductionAgent({
     agentId: body.agent_id,
     ansName: body.employer_ans_name,
@@ -48,6 +51,19 @@ export async function POST(request: Request) {
   }));
   const requested = Array.isArray(body.requested_fields) ? body.requested_fields : [];
   const releasable = requested.filter((field) => allowedFields.has(field));
+  const subject = verification.registry?.ans_name ?? claimedIdentity(body);
+  const auditBase = {
+    kind: 'apply' as const,
+    direction: 'applicant_to_employer' as const,
+    verifier: APPLICANT_ANS_NAME,
+    subject,
+    subject_registered: Boolean(verification.registry),
+    dimensions: verification.dimensions,
+    fields_requested: releasable,
+    human_approved: body.human_approved === true,
+    user_id: userId,
+    job_id: body.job?.job_id ?? null,
+  };
   // The explanation names the candidate's matched skills, so it only exists when
   // the candidate approved releasing `skills`. Otherwise it would leak them.
   const matchExplanation = releasable.includes('skills')
@@ -64,20 +80,23 @@ export async function POST(request: Request) {
       : 'Application blocked until the candidate approves the exact fields to release.';
     // Every refusal is recorded, including an "employer" with no ANS registration
     // at all: then the subject is whatever identity it was claimed under.
-    const persisted = await recordAgentVerificationSafely({
-      applicationId: body.application_id,
-      verifierAnsName: APPLICANT_ANS_NAME,
-      subjectAnsName: verification.registry?.ans_name ?? claimedIdentity(body),
-      subjectRole: 'employer',
-      purpose: 'job_application',
-      verdict: verification.verdict,
-      dimensions: verification.dimensions,
-      fieldsReleased: [],
-    });
+    const [persisted, auditId] = await Promise.all([
+      recordAgentVerificationSafely({
+        applicationId: body.application_id,
+        verifierAnsName: APPLICANT_ANS_NAME,
+        subjectAnsName: subject,
+        subjectRole: 'employer',
+        purpose: 'job_application',
+        verdict: verification.verdict,
+        dimensions: verification.dimensions,
+        fieldsReleased: [],
+      }),
+      recordAudit({ ...auditBase, verdict: 'refuse', outcome: 'refused', spoken_reason: spokenReason, fields_released: [] }),
+    ]);
     return NextResponse.json({
       status: 'refused',
       fields_released: [],
-      audit_id: randomUUID(),
+      audit_id: auditId,
       spoken_reason: spokenReason,
       persisted,
       verification: {
@@ -111,57 +130,77 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('Could not sign the application envelope', error);
-    return NextResponse.json({
-      status: 'refused',
+    const spokenReason = 'Application not sent. This agent cannot sign messages with its ANS identity right now.';
+    const auditId = await recordAudit({
+      ...auditBase,
+      verdict: 'refuse',
+      outcome: 'refused',
+      spoken_reason: spokenReason,
       fields_released: [],
-      audit_id: randomUUID(),
-      spoken_reason: 'Application not sent. This agent cannot sign messages with its ANS identity right now.',
-    }, { status: 500 });
+    });
+    return NextResponse.json({ status: 'refused', fields_released: [], audit_id: auditId, spoken_reason: spokenReason }, { status: 500 });
   }
-  const response = await fetch(verification.evidence.agentCard.endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jws }),
-    signal: AbortSignal.timeout(8000),
-  });
 
-  const matchPersisted = body.job?.job_id && matchExplanation ? await recordMatchExplanationSafely({
-    applicationId: body.application_id,
-    jobId: body.job.job_id,
-    direction: 'applicant_to_employer',
-    explanation: matchExplanation,
-  }) : false;
+  let response: Response | null = null;
+  let receipt: { status?: string; receipt_id?: string } = {};
+  try {
+    response = await fetch(verification.evidence.agentCard.endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jws }),
+      signal: AbortSignal.timeout(8000),
+    });
+    receipt = await response.json().catch(() => ({}));
+  } catch (error) {
+    console.error('Could not reach the employer agent', error);
+  }
+  const delivered = Boolean(response?.ok);
+  const spokenReason = delivered
+    ? `Application submitted to verified employer ${verification.evidence.agentCard.name}.`
+    : `The verified employer agent did not accept the application (${response ? `HTTP ${response.status}` : 'unreachable'}).`;
 
-  const persisted = await recordAgentVerificationSafely({
-    applicationId: body.application_id,
-    verifierAnsName: APPLICANT_ANS_NAME,
-    subjectAnsName: verification.registry.ans_name,
-    subjectRole: 'employer',
-    purpose: 'job_application',
-    verdict: verification.verdict,
-    dimensions: verification.dimensions,
-    fieldsReleased: releasable,
-  });
-
-  if (!response.ok) {
-    return NextResponse.json({
-      status: 'delivery_failed',
+  const [matchPersisted, persisted, auditId] = await Promise.all([
+    body.job?.job_id && matchExplanation
+      ? recordMatchExplanationSafely({
+          applicationId: body.application_id,
+          jobId: body.job.job_id,
+          direction: 'applicant_to_employer',
+          explanation: matchExplanation,
+        })
+      : Promise.resolve(false),
+    recordAgentVerificationSafely({
+      applicationId: body.application_id,
+      verifierAnsName: APPLICANT_ANS_NAME,
+      subjectAnsName: verification.registry.ans_name,
+      subjectRole: 'employer',
+      purpose: 'job_application',
+      verdict: verification.verdict,
+      dimensions: verification.dimensions,
+      fieldsReleased: releasable,
+    }),
+    recordAudit({
+      ...auditBase,
+      verdict: 'pass',
+      outcome: delivered ? 'submitted' : 'delivery_failed',
+      spoken_reason: spokenReason,
       fields_released: releasable,
-      audit_id: randomUUID(),
-      spoken_reason: `The verified employer endpoint received the approved fields but returned HTTP ${response.status}.`,
-      persisted,
-      match_persisted: matchPersisted,
-      match_explanation: matchExplanation,
-    }, { status: 502 });
-  }
+      envelope: envelopeClaims(jws),
+      counterparty_response: {
+        http_status: response?.status ?? 0,
+        status: receipt.status,
+        receipt_id: receipt.receipt_id,
+      },
+    }),
+  ]);
 
   return NextResponse.json({
-    status: 'submitted',
+    status: delivered ? 'submitted' : 'delivery_failed',
     fields_released: releasable,
-    audit_id: randomUUID(),
-    spoken_reason: `Application submitted to verified employer ${verification.evidence.agentCard.name}.`,
+    audit_id: auditId,
+    spoken_reason: spokenReason,
     persisted,
     match_persisted: matchPersisted,
     match_explanation: matchExplanation,
-  });
+    employer_receipt_id: receipt.receipt_id ?? null,
+  }, { status: delivered ? 200 : 502 });
 }
