@@ -2,7 +2,9 @@ import { ArrowRight, BriefcaseBusiness, FileCheck2, Mic, ShieldCheck } from 'luc
 import { redirect } from 'next/navigation';
 
 import { IntakeProgress } from '@/components/IntakeProgress';
+import { Reveal } from '@/components/Reveal';
 import { SignOutForm } from '@/components/SignOutForm';
+import { VoiceConsole } from '@/components/VoiceConsole';
 import { intakeGate } from '@/lib/intake';
 import { requireRole } from '@/lib/session';
 
@@ -14,10 +16,15 @@ const jobs = [
   ['Machine Learning Engineer', 'Canopy Systems', '78%'],
 ];
 
+const metrics = [
+  ['Discovered', '24'],
+  ['Reviewing', '8'],
+  ['Approved', '5'],
+  ['Responses', '3'],
+];
+
 /**
  * The dashboard IS the landing page, including while onboarding finishes.
- *
- * Two things are decided here.
  *
  * The COLLECT gate lives in this page rather than the applicant layout, because the
  * intake pages are themselves under /applicant: a layout-level redirect would fire on
@@ -37,7 +44,7 @@ export default async function ApplicantDashboard() {
   if (nextStep) redirect(nextStep);
 
   return (
-    <main>
+    <main id="main">
       <nav>
         <strong>Application Workspace</strong>
         <span>Overview</span>
@@ -50,48 +57,51 @@ export default async function ApplicantDashboard() {
       </nav>
 
       {needsAnalysis ? (
-        <section className="setup-band" aria-labelledby="setup-h">
+        <Reveal as="section" className="setup-band">
           <p className="eyebrow">SETTING UP YOUR WORKSPACE</p>
-          <h1 id="setup-h">Reading everything you gave me.</h1>
+          <h1>Reading everything you gave me.</h1>
           <p className="muted">
             One pass over every source at once, so a detail missing from one can be filled in by
             another. This is the actual work, as it happens — including the parts that do not go
             perfectly.
           </p>
           <IntakeProgress />
-        </section>
+        </Reveal>
       ) : (
-        <section className="hero">
-          <p className="eyebrow">APPLICATION COMMAND CENTER</p>
-          <h1>
-            Find the right role.
-            <br />
-            Stay in control.
-          </h1>
-          <p>
-            Evaluate opportunities, create evidence-backed materials, and approve every external
-            action.
-          </p>
-          <button className="primary">
-            Review best match <ArrowRight size={18} aria-hidden="true" />
-          </button>
-        </section>
+        <>
+          <Reveal as="section" className="hero">
+            <p className="eyebrow">APPLICATION COMMAND CENTER</p>
+            <h1>
+              Find the right role.
+              <br />
+              Stay in control.
+            </h1>
+            <p>
+              Evaluate opportunities, create evidence-backed materials, and approve every external
+              action.
+            </p>
+            <button className="primary">
+              Review best match <ArrowRight size={18} aria-hidden="true" />
+            </button>
+          </Reveal>
+
+          <Reveal index={1}>
+            <VoiceConsole />
+          </Reveal>
+        </>
       )}
+
       <section className="metrics">
-        {[
-          ['Discovered', '24'],
-          ['Reviewing', '8'],
-          ['Approved', '5'],
-          ['Responses', '3'],
-        ].map(([label, value]) => (
-          <article key={label}>
+        {metrics.map(([label, value], i) => (
+          <Reveal as="article" key={label} index={i + 2}>
             <span>{label}</span>
             <strong>{value}</strong>
-          </article>
+          </Reveal>
         ))}
       </section>
+
       <section className="grid">
-        <div className="panel">
+        <Reveal className="panel" onScroll>
           <header>
             <div>
               <small>MATCH QUEUE</small>
@@ -112,8 +122,9 @@ export default async function ApplicantDashboard() {
               <ArrowRight size={17} aria-hidden="true" />
             </article>
           ))}
-        </div>
-        <aside className="panel approval">
+        </Reveal>
+
+        <Reveal as="aside" className="panel approval" onScroll>
           <small>APPROVAL REQUIRED</small>
           <h2>Your materials are ready</h2>
           <p>Resume and cover letter are prepared for your strongest match.</p>
@@ -126,13 +137,14 @@ export default async function ApplicantDashboard() {
           <button className="primary">
             Review materials <ArrowRight size={18} aria-hidden="true" />
           </button>
-        </aside>
+        </Reveal>
       </section>
-      <footer>
+
+      <Reveal as="footer" onScroll>
         <ShieldCheck aria-hidden="true" />
         <strong>Human approval is always required.</strong>
         <span>The system recommends; you control every external action.</span>
-      </footer>
+      </Reveal>
     </main>
   );
 }

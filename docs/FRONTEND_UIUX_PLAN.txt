@@ -99,6 +99,13 @@ USE
   Lenis      3kb   smooth scroll feel, one line, already installed
   Motion     30kb  THE workhorse. React components, AnimatePresence, layout
                    animations, gestures. 35M weekly downloads. Start here.
+  anime.js   ~7kb  v4 IS INSTALLED (4.5.0). Used for the agent face: SVG
+                   draw-on, blink timer, elastic expression changes.
+                   *** v4 IS NOT v3. Named exports only: ***
+                     import { animate, stagger, svg, utils, createTimer }
+                     animate(el, {...})        NOT anime({targets: el})
+                     svg.createDrawable(path)  NOT anime.setDashoffset
+                     utils.stagger(140)        NOT anime.stagger(140)
   CSS        0kb   transitions + keyframes for anything simple. Cheapest wins.
 
 MAYBE (only if A-D are done)
@@ -121,29 +128,218 @@ LENIS CONFIG — gate it, don't just drop it in
   cursors. On this project that's not a footnote, it's the thesis.
 
 
-5. THE VIBE — lock these once, apply everywhere
+5. THE VIBE — LOCKED. Do not re-litigate.
 --------------------------------------------------------------------------------
-[ ] DARK, high contrast, one accent. Near-black bg, warm off-white text.
-    Rationale: low-vision users need contrast; dark reads as serious tooling
-    rather than a consumer app; and it matches GoDaddy's own deck aesthetic
-    (teal on near-black) which quietly flatters the ANS judges.
+MINIMALIST. Two base colours, two signal colours, one display face. That's all.
 
-[ ] COLOUR ROLES — semantic, not decorative
-      bg        near-black          #0A0F0F-ish
-      text      warm off-white
-      accent    teal/cyan           verified, active, trusted
-      danger    red                 refused, blocked, unverified
-      muted     grey                pending, idle
-    Two signal colours only. Verified vs refused IS the product.
+PALETTE (contrast-checked, real numbers)
+  --paper    #eef4ed   SURFACE. The background, everywhere.
+  --ink      #0b2545   TEXT. Body, headings, borders, icons.
+  --success  #3b6064   resume parsed, job sent, employer verified, task done
+  --failure  #8c2f39   parse failed, application rejected, verification refused
 
-[ ] TYPE — one family. Inter or Geist. Sizes: 14/16/20/32/56. Nothing else.
-[ ] SPACING — 8px grid. No exceptions.
-[ ] CONTRAST — 4.5:1 body, 3:1 large. Check every accent on every bg.
-[ ] RADIUS — pick one (8px or 12px) and never vary it.
-[ ] FOCUS RING — visible, 2px, accent colour, on EVERYTHING. Non-negotiable.
+  Measured against #eef4ed:
+    ink      13.77:1   AAA
+    success   6.18:1   AA
+    failure   7.28:1   AAA
+  All pass. This palette is accessible AS GIVEN — on a light surface.
 
-Lock these in a tokens file on the homepage. Every later page imports it and
-adds nothing new.
+*** WHY LIGHT AND NOT DARK ***
+  Both signal colours are dark, so on a #0b2545 background they collapse:
+    success on navy  2.23:1  FAIL
+    failure on navy  1.89:1  FAIL
+  Unusable, and on an accessibility app that's the one thing judges punish.
+  So: PAPER IS THE SURFACE, INK IS THE TEXT. It also suits Forum better —
+  a Roman-inscription serif wants paper, not a terminal.
+
+  IF you ever need a navy section (a hero band, a footer), use these tints:
+    success on navy  #7a9494  (4.76:1)
+    failure on navy  #b8888a  (5.08:1)
+  Don't use the base accents on navy. Ever.
+
+TYPE — Forum on EVERYTHING (decided), and the caveats
+  Every element on the page uses Forum. Inter has been removed.
+  *** FORUM SHIPS ONLY WEIGHT 400. THERE IS NO BOLD. ***
+  So hierarchy comes from SIZE, LETTER-SPACING and COLOUR, never font-weight.
+    - big headings: Forum, generous letter-spacing, full ink
+    - de-emphasis: same size, ink at 60% opacity — not a lighter weight
+  *** FORUM ALSO HAS NO ITALIC. *** The hero's bold+italic is SYNTHESIZED by
+  the browser (faux weight + oblique slant). It holds up at 56px. Do not use
+  synthesized bold/italic below ~32px — it turns to mush.
+  Because Forum is spindly at UI sizes, small text is nudged UP and tracked
+  wider (body 16, labels 12.5 at .18em, rows 14). Do not shrink these back.
+  Scale: 12.5 / 14 / 16 / 17 / 20 / 40 / 56.
+
+APPLIES TO EVERY PAGE (rolled out, do not diverge)
+  landing / signin / signup / applicant / employer all share:
+    - Forum on all text; hero h1 at clamp(56,8.5vw,92) bold+italic+0.7px stroke
+    - auth page h1 at 40px bold+italic+0.35px stroke (a title, not a statement)
+    - cards and inputs: transparent fill, 1px hairline, radius 0
+    - footer is a top rule with text, never a box
+    - Reveal stagger on load, onScroll reveal for anything below the fold
+  A new page adds NO new colours, fonts, radii or shadows. If it needs one,
+  the answer is no.
+
+SHAPE — enforced globally in one place now
+  Radius 0 on *, no exceptions. No white: the only colours in the file are the
+  four tokens plus alpha mixes of ink.
+  NO CARDS. Separation is whitespace first, a hairline second, a box never.
+  Workspace "panels" are sections with a rule and a heading. The auth form is
+  a bare column with underline-only inputs. Metrics are type between two rules.
+  globals.css is ONE system (551 lines) — do not append override passes to it,
+  edit the rule that is already there.
+
+THE REST
+  [ ] SPACING   8px grid, no exceptions
+  [ ] RADIUS    pick one (8px) and never vary it
+  [ ] BORDERS   1px ink at 12% opacity — minimalism means lines, not shadows
+  [ ] SHADOWS   basically none. If you need depth, use a border.
+  [ ] FOCUS     2px ink ring, visible on everything, never removed
+  [ ] MOTION    colour transitions between ink/success/failure carry meaning;
+                success and failure must ALSO differ by icon + text, never by
+                colour alone (colour-blind users)
+
+Lock all of this in one tokens file. Every later page imports it and adds
+nothing new. If a page needs a fifth colour, the answer is no.
+
+================================================================================
+TASK BOARD — tick as you go.  [x] done   [ ] todo   [-] cut
+Status as of the applicant-page styling pass.
+================================================================================
+
++-----+-----------------------------+--------------------------------+--------+------+
+| ST  | TASK                        | WHAT IT CHANGES ON SCREEN      | IMPACT | TIME |
++=====+=============================+================================+========+======+
+|     | PHASE F — FOUNDATION                                                          |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F1 Design tokens            | paper/ink everywhere, Forum    | CRIT   | 30m  |
+|     |    paper/ink/success/fail   | headings, hairline borders     |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F2 Forum on ALL text        | entire page is one serif face; | CRIT   | 25m  |
+|     |    Inter removed            | small sizes nudged up+tracked  |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F3 Lenis, reduced-motion    | scroll gains subtle weight;    | HIGH   | 30m  |
+|     |    gated + required CSS     | off entirely if user opts out  |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F7 Scroll-triggered reveals | lower sections rise in as you  | HIGH   | 15m  |
+|     |    (whileInView)            | scroll to them, once each      |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F4 Skip link + focus rings  | tab from top reveals "Skip to  | CRIT   | 15m  |
+|     |                             | content"; 2px ink ring         |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F5 Reveal component         | sections fade+rise in sequence | HIGH   | 20m  |
+|     |    (motion, stagger)        | on load                        |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [-] | F6 shadcn/ui init           | CUT — needs Tailwind, whose    | MED    |  --  |
+|     |                             | preflight would reset our CSS  |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE A — APPLICANT PAGE (the pilot)                                          |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A1 Apply tokens to page     | whole dashboard repainted      | CRIT   | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A2 Stagger hero/metrics/    | page assembles itself rather   | HIGH   | 15m  |
+|     |    panels on load           | than snapping in               |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A3 Row hover: indent +      | job rows feel alive under the  | MED    | 10m  |
+|     |    arrow slide              | cursor and the keyboard        |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A7 Sharp edges everywhere   | radius 0 on every element      | MED    | 10m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A8 One surface colour       | cards = page colour, separated | MED    | 10m  |
+|     |    no white anywhere        | by a hairline only             |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A9 Hero bold + italic       | synthesized, Forum has neither | MED    | 5m   |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | A4 Count-up on the 4 metric | 24 / 8 / 5 / 3 tick up from 0  | MED    | 20m  |
+|     |    numbers                  | when they enter view           |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | A5 Success/failure states   | "Verified" green, a rejected   | HIGH   | 25m  |
+|     |    with ICON + TEXT, not    | row red — each with its own    |        |      |
+|     |    colour alone             | icon so colour is not the msg  |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A6 Roll out to all pages    | landing/signin/signup/employer | CRIT   | 40m  |
+|     |                             | all match the applicant page   |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A10 Auth pages restyled     | sharp cards, Forum inputs,     | HIGH   | 20m  |
+|     |     forms + inputs          | 40px italic titles, rule       |        |      |
+|     |                             | dividers                       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A11 Footer = rule, not box  | one hairline above text; the   | MED    | 5m   |
+|     |                             | box is gone on every page      |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A12 Motion on landing +     | same stagger on load and       | HIGH   | 20m  |
+|     |     employer                | reveal on scroll               |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A13 Feature marquee         | 12 key features tick across    | MED    | 20m  |
+|     |     (pure CSS, seamless)    | full-bleed under the tagline   |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A14 Sticky nav              | bar pinned on every page       | MED    | 10m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A15 Agent face (anime.js v4)| cute reactive face under the   | HIGH   | 55m  |
+|     |     6 moods, draw-on, blink | wordmark, cycling a real       |        |      |
+|     |                             | application script             |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A16 globals.css rewritten   | 1195 -> 551 lines, one system, | HIGH   | 45m  |
+|     |     as ONE system           | no override stacking, no white |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A17 Panels de-carded        | workspace + auth are rules and | HIGH   | 20m  |
+|     |     everywhere              | space; no boxes anywhere       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A18 Architecture rail       | 9 stage cards scroll SIDEWAYS  | HIGH   | 50m  |
+|     |     horizontal-on-vertical  | as you scroll down; each names |        |      |
+|     |     scroll, 9 cards         | the sponsor tech it uses       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE S — VOICE ORB (signature object)                                        |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | S1 Orb, 5 visual states     | ink ring + 64 radial ticks on  | CRIT   | 50m  |
+|     |                             | the applicant page             |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | S2 Wire to real mic         | orb deforms to YOUR voice      | CRIT   | 25m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | S3 Wire to TTS output       | orb moves as the agent speaks  | HIGH   | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | S4 aria-live per state      | nothing visible; blind users   | CRIT   | 10m  |
+|     |                             | can finally perceive the orb   |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE H — HERO COMPONENTS                                                     |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | H1 Trust Card, 5 dims       | the component GoDaddy judges   | CRIT   | 40m  |
+|     |    stagger + count-up       | came to see                    |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | H2 Refusal stamp            | card flips to failure red, a   | CRIT   | 25m  |
+|     |                             | REFUSED seal stamps down       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | H3 Homepage: split layout   | HireWire + "Why HireWire?" on  | CRIT   | 35m  |
+|     |    brand left, paths right  | the left; student and          |        |      |
+|     |                             | recruiter perspectives right   |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | H4 Three scroll beats       | story told in one scroll       | MED    | 35m  |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE P — PRODUCT MOTION (cut from the bottom up)                             |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P1 Match cards + score ring | results reveal, not a table    | HIGH   | 25m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P2 Application dispatch     | you SEE an application sent    | MED    | 30m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P3 Attacks-blocked counter  | live drama during ANS demo     | MED    | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P4 Skill-gap bars draw      | Databricks chart feels meant   | LOW    | 15m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P5 Page transitions         | routes stop feeling like loads | LOW    | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE X — BEFORE FREEZE (do not skip)                                         |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | X1 Verify reduced-motion    | nothing, unless it is broken   | CRIT   | 10m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | X2 axe + Lighthouse, shot   | a number on a slide = proof    | HIGH   | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+
+  DONE 27 of 40  ·   1 cut  ·  spent ~10h35m ·  remaining P0 ~1h05m, all ~2h15m
+
+  NEVER CUT: S1, S4, H1, H2, X1, X3
+  DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4
 
 
 6. HOMEPAGE — the one we're designing first
@@ -151,11 +347,14 @@ adds nothing new.
 DO NOT build a 6-section marketing site. Judges see the landing for ~10 seconds
 and the demo starts inside the app. Budget accordingly.
 
-  Screen 1 (no scroll needed)
-    [ ] the voice orb, centred, breathing
-    [ ] one line: what it does, for whom
-    [ ] one button: "Talk to it" — and it actually starts listening
-    [ ] tiny line: "or press / to type" (proves voice isn't a gimmick)
+  Screen 1 — SPLIT, full height, no scroll needed  [BUILT]
+    [x] LEFT, centred: "HireWire" at up to 104px italic, the eyebrow, then
+        "Why HireWire?" with the two-paragraph answer under a hairline
+    [x] RIGHT: two perspectives, separated by hairlines, no cards —
+        FOR STUDENTS  "Apply with your voice."
+        FOR RECRUITERS "Meet people, not bots."
+        each with a body and an underlined CTA that widens its gap on hover
+    [ ] the voice orb still needs a home here (currently only on /applicant)
 
   One scroll, three beats (this is where Lenis earns its place)
     [ ] beat 1: it finds jobs against your skills AND coursework
@@ -194,6 +393,6 @@ DESCOPE ORDER if you fall behind: H, G, F, E, D. Never cut A, B, or C.
 [ ] full demo runs without touching the mouse
 [ ] no lorem ipsum, no "John Doe", no "Acme Corp" anywhere
 [ ] every animation fires from a real backend event, not a timer
-[ ] one accent colour, one font, one radius — grep for strays
-[ ] dark mode is the only mode (don't build light mode, no time, say so)
+[ ] two base + two signal colours only, Forum for display only, one radius — grep for strays
+[ ] paper surface everywhere — no dark mode, no second theme (say so if asked)
 ================================================================================
