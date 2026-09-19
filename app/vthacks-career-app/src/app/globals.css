@@ -252,6 +252,34 @@ main, [id] { scroll-margin-top: 100px; }
 }
 .path__cta:hover { border-color: var(--ink); gap: 15px; }
 
+/* --- Inverted band: the rail through the Why ---------------------------- */
+/* Redefining the four tokens in scope flips everything downstream — --line,
+   --muted and --wash are alpha mixes of --ink, so they recompute for free.
+   The signal colours are swapped for their navy-safe tints: #3b6064 and
+   #8c2f39 measure 2.23:1 and 1.89:1 on navy, which is unreadable. These are
+   4.76:1 and 5.08:1. */
+
+.rail, .why {
+  --paper: #0b2545;
+  --ink: #eef4ed;
+  --success: #7a9494;
+  --failure: #b8888a;
+  position: relative;
+  color: var(--ink);
+}
+
+/* Full-bleed backing, the same trick the nav uses. */
+.rail::before, .why::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(50% - 50vw);
+  background: #0b2545;
+  z-index: -1;
+}
+
+/* The rail's own top rule would double up against the band edge. */
+.why { border-top: 0; }
+
 /* --- Architecture rail: vertical scroll drives horizontal travel --------- */
 /* The section is N viewports tall; the inner panel pins and the track slides.
    Under reduced motion this whole mechanism is replaced by a plain stack — see
