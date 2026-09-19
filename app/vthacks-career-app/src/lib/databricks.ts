@@ -39,7 +39,9 @@ let cached: { token: string; expiresAt: number } | null = null;
 function host(): string {
   const value = process.env.DATABRICKS_HOST;
   if (!value) throw new Error('DATABRICKS_HOST is not set');
-  return value.replace(/\/+$/, '');
+  // Databricks Apps injects a bare hostname; local .env files usually carry https://.
+  const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  return withScheme.replace(/\/+$/, '');
 }
 
 function warehouseId(): string {
