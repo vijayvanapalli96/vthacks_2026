@@ -31,16 +31,19 @@
   font-size: 16px;
   line-height: 1.7;
   margin: 0 0 12px;
-  padding-bottom: 34px;
-  border-bottom: 1px solid var(--line);
 }
+
+/* The separator lives on the form, not on the intro copy, so a page without
+   intro copy still gets the rule. */
 
 /* --- Form: no card, underline-only fields -------------------------------- */
 
 .intake-form {
   background: transparent;
   border: 0;
-  padding: 0;
+  border-top: 1px solid var(--line);
+  padding: 34px 0 0;
+  margin-top: 22px;
   display: grid;
   gap: 30px;
 }
