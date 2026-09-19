@@ -1,5 +1,6 @@
 import { ArrowRight, BadgeCheck, BriefcaseBusiness, ShieldCheck, Users } from 'lucide-react';
 
+import { Reveal } from '@/components/Reveal';
 import { SignOutForm } from '@/components/SignOutForm';
 
 const openRoles = [
@@ -16,7 +17,7 @@ const verifiedApplicants = [
 
 export default function EmployerDashboard() {
   return (
-    <main>
+    <main id="main">
       <nav>
         <strong>Hiring Workspace</strong>
         <span>Roles</span>
@@ -25,7 +26,7 @@ export default function EmployerDashboard() {
         <SignOutForm />
       </nav>
 
-      <section className="hero">
+      <Reveal as="section" className="hero">
         <p className="eyebrow">HIRING COMMAND CENTER</p>
         <h1>
           Real applicants.
@@ -36,7 +37,7 @@ export default function EmployerDashboard() {
           Publish a role once and let your agent answer for it. Every inbound application carries a
           domain-anchored identity, so you review people instead of filtering bots.
         </p>
-      </section>
+      </Reveal>
 
       <section className="metrics">
         {[
@@ -44,16 +45,16 @@ export default function EmployerDashboard() {
           ['Applications', '63'],
           ['Verified', '58'],
           ['Refused', '5'],
-        ].map(([label, value]) => (
-          <article key={label}>
+        ].map(([label, value], i) => (
+          <Reveal as="article" key={label} index={i + 1}>
             <span>{label}</span>
             <strong>{value}</strong>
-          </article>
+          </Reveal>
         ))}
       </section>
 
       <section className="grid">
-        <div className="panel">
+        <Reveal className="panel" onScroll>
           <header>
             <div>
               <small>OPEN ROLES</small>
@@ -74,9 +75,9 @@ export default function EmployerDashboard() {
               <ArrowRight size={17} aria-hidden="true" />
             </article>
           ))}
-        </div>
+        </Reveal>
 
-        <aside className="panel approval">
+        <Reveal as="aside" className="panel approval" onScroll>
           <small>AGENT IDENTITY</small>
           <h2>Your agent is registered</h2>
           <p>
@@ -89,10 +90,10 @@ export default function EmployerDashboard() {
           <div>
             <ShieldCheck aria-hidden="true" /> Inbound applicants verified <span>On</span>
           </div>
-        </aside>
+        </Reveal>
       </section>
 
-      <section className="panel">
+      <Reveal as="section" className="panel" onScroll>
         <header>
           <div>
             <small>VERIFIED APPLICANTS</small>
@@ -106,20 +107,20 @@ export default function EmployerDashboard() {
               <h3>{name}</h3>
               <p>{role}</p>
             </div>
-            <span className="verified">
+            <span className={status === 'Verified' ? 'verified' : 'verified is-pending'}>
               <ShieldCheck size={15} aria-hidden="true" /> {status}
             </span>
             <strong>Review</strong>
             <ArrowRight size={17} aria-hidden="true" />
           </article>
         ))}
-      </section>
+      </Reveal>
 
-      <footer>
+      <Reveal as="footer" onScroll>
         <ShieldCheck aria-hidden="true" />
         <strong>No unverified agent reaches your inbox.</strong>
         <span>Every handshake is logged, including the ones we refused.</span>
-      </footer>
+      </Reveal>
     </main>
   );
 }

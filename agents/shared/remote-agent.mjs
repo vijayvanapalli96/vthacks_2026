@@ -71,5 +71,10 @@ export async function verifyRemoteAgent(input) {
     certificate: { valid: Boolean(identityCurrent && serverCurrent && domainValidated && cardMatches), dns_names: [agent.agentHost] },
     trust: { dimensions },
   };
-  return { ...verifyEmployer(evidence), evidence, agent };
+  // The fingerprints a signed envelope's certificate must match (signed-envelope.mjs).
+  const identityFingerprints = (event.attestations?.validIdentityCerts ?? [])
+    .filter(({ notAfter }) => Date.parse(notAfter ?? "") > Date.now())
+    .map(({ fingerprint }) => fingerprint)
+    .filter(Boolean);
+  return { ...verifyEmployer(evidence), evidence, agent, identityFingerprints };
 }

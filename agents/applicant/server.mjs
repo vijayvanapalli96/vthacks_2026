@@ -2,8 +2,10 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { verifyRemoteAgent } from "../shared/remote-agent.mjs";
+import { createReplayGuard, peekIssuer, verifyEnvelope } from "../shared/signed-envelope.mjs";
 
 const port = Number(process.env.PORT ?? 8788);
+const replayGuard = createReplayGuard();
 const card = JSON.parse(await readFile(new URL("./agent-card.json", import.meta.url), "utf8"));
 
 function send(response, status, value) {
@@ -18,16 +20,24 @@ createServer(async (request, response) => {
     let body = "";
     for await (const chunk of request) body += chunk;
     try {
-      const invitation = JSON.parse(body);
-      if (!invitation?.employer_ans_name || !invitation?.job_id || !invitation?.message) {
-        return send(response, 400, { status: "invalid_request" });
+      const jws = JSON.parse(body)?.jws;
+      if (!jws) {
+        return send(response, 403, { status: "refused", reason: "A signed invitation from an ANS employer agent is required." });
       }
-      const verification = await verifyRemoteAgent({
-        ansName: invitation.employer_ans_name,
-        expectedRole: "employer",
-      });
+      const issuer = peekIssuer(jws);
+      const verification = await verifyRemoteAgent({ ansName: issuer, expectedRole: "employer" });
       if (verification.verdict !== "pass") {
         return send(response, 403, { status: "refused", reason: verification.spoken_reason, verification });
+      }
+      // Proves the named employer sent this, to us, exactly once. Throws otherwise.
+      const invitation = verifyEnvelope(jws, {
+        expectedIssuer: issuer,
+        audience: card.name,
+        attestedFingerprints: verification.identityFingerprints,
+        replayGuard,
+      });
+      if (!invitation.job_id || !invitation.message) {
+        return send(response, 400, { status: "invalid_request" });
       }
       return send(response, 202, {
         status: "pending_candidate_approval",

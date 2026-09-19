@@ -22,3 +22,6 @@ playwright-report/
 # Auto-generated types (endpoint-specific, varies per developer)
 shared/appkit-types/serving.d.ts
 
+# saved-webpage dump kept only to extract an asset — not shipped
+public/collage/Databricks.html
+public/collage/Databricks_files/

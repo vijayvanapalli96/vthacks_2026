@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { signEnvelope } from '../../../lib/ans/envelope';
 import { APPLICANT_ANS_NAME, verifyProductionAgent } from '../../../lib/ans/production';
 import { failedTrustDimensions } from '../../../lib/ans/policy';
 import { explainMutualMatch } from '../../../lib/ans/match';
@@ -79,20 +80,38 @@ export async function POST(request: Request) {
 
   const candidate = body.candidate ?? {};
   const packet = Object.fromEntries(releasable.map((field) => [field, candidate[field]]));
+  // Signed with our ANS identity key and addressed to this employer only, so the
+  // employer can prove who sent it and reject a replay or a redirected copy.
+  let jws: string;
+  try {
+    jws = signEnvelope({
+      signer: 'APPLICANT',
+      issuer: APPLICANT_ANS_NAME,
+      audience: verification.evidence.agentCard.name,
+      payload: {
+        candidate: packet,
+        job: body.job ?? null,
+        match_explanation: matchExplanation,
+        verification: {
+          verdict: verification.verdict,
+          dimensions: verification.dimensions,
+          checked_at: verification.checked_at,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Could not sign the application envelope', error);
+    return NextResponse.json({
+      status: 'refused',
+      fields_released: [],
+      audit_id: randomUUID(),
+      spoken_reason: 'Application not sent. This agent cannot sign messages with its ANS identity right now.',
+    }, { status: 500 });
+  }
   const response = await fetch(verification.evidence.agentCard.endpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      applicant_agent: APPLICANT_ANS_NAME,
-      candidate: packet,
-      job: body.job ?? null,
-      match_explanation: matchExplanation,
-      verification: {
-        verdict: verification.verdict,
-        dimensions: verification.dimensions,
-        checked_at: verification.checked_at,
-      },
-    }),
+    body: JSON.stringify({ jws }),
     signal: AbortSignal.timeout(8000),
   });
 

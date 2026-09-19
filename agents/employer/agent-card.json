@@ -4,8 +4,19 @@
   "version": "1.0.0",
   "endpoint": "https://employer.hirewire.biz/a2a/apply",
   "capabilities": ["job_application.receive"],
+  "authentication": {
+    "scheme": "ans-signed-jws",
+    "typ": "hirewire-a2a+jws",
+    "alg": "ES256",
+    "request_body": "{\"jws\": \"<compact JWS>\"}",
+    "key": "sender's ANS identity key; the x5c certificate must match an identity-cert fingerprint attested in the ANS transparency log",
+    "required_claims": ["iss", "aud", "jti", "iat", "exp"],
+    "audience": "ans://v1.0.0.employer.hirewire.biz",
+    "max_age_seconds": 120,
+    "accepted_issuer_role": "applicant"
+  },
   "required_fields": ["full_name", "email", "resume_url"],
-  "optional_fields": ["cover_letter"],
+  "optional_fields": ["cover_letter", "skills"],
   "privacy": {
     "purpose": "Evaluate a candidate for a selected job opening",
     "retention_days": 30

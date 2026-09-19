@@ -27,6 +27,16 @@ resources:
             value: https://vthacks-career-app-7474648702108753.aws.databricksapps.com
           - name: AUTH_TRUST_HOST
             value: "true"
+          # ANS identity keys sign outbound A2A envelopes (src/lib/ans/envelope.ts).
+          # Receivers check the cert against the fingerprint ANS attests.
+          - name: APPLICANT_IDENTITY_KEY
+            value_from: applicant-identity-key
+          - name: APPLICANT_IDENTITY_CERT
+            value_from: applicant-identity-cert
+          - name: EMPLOYER_IDENTITY_KEY
+            value_from: employer-identity-key
+          - name: EMPLOYER_IDENTITY_CERT
+            value_from: employer-identity-cert
 
       # Start the app automatically on deploy.
       lifecycle:
@@ -45,6 +55,26 @@ resources:
           secret:
             scope: hirewire
             key: auth-secret
+            permission: READ
+        - name: applicant-identity-key
+          secret:
+            scope: hirewire
+            key: applicant-identity-key
+            permission: READ
+        - name: applicant-identity-cert
+          secret:
+            scope: hirewire
+            key: applicant-identity-cert
+            permission: READ
+        - name: employer-identity-key
+          secret:
+            scope: hirewire
+            key: employer-identity-key
+            permission: READ
+        - name: employer-identity-cert
+          secret:
+            scope: hirewire
+            key: employer-identity-cert
             permission: READ
 
 targets:
