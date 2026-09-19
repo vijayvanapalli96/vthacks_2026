@@ -29,35 +29,46 @@ export default function Home() {
         <Link href="/signup">Create account</Link>
       </nav>
 
-      <section className="split">
-        <Reveal className="split__brand">
-          <h1>Why HireWire?</h1>
+      {/* Screen one: the name, a single line, nothing else. */}
+      <Reveal as="section" className="opening">
+        <h1>HireWire</h1>
+        <p className="opening__tag">Both sides prove who they are.</p>
+        <p className="opening__scroll" aria-hidden="true">
+          Scroll
+        </p>
+      </Reveal>
 
-          <div className="split__why">
-            <p>
-              Applying to forty jobs costs a sighted student twelve hours of clicking. On a screen
-              reader it is closer to impossible. And a share of the postings that reach either of
-              you are not real at all.
-            </p>
-            <p>
-              Both sides of a hire should have to prove who they are before anything private
-              changes hands. Here, both sides do.
-            </p>
-          </div>
+      {/* Screen two: the question, answered. */}
+      <section className="why" aria-labelledby="why-h">
+        <Reveal className="why__q" onScroll>
+          <h2 id="why-h">Why HireWire?</h2>
         </Reveal>
+        <Reveal className="why__a" onScroll>
+          <p>
+            Applying to forty jobs costs a sighted student twelve hours of clicking. On a screen
+            reader it is closer to impossible. And a share of the postings that reach either of you
+            are not real at all.
+          </p>
+          <p>
+            Both sides of a hire should have to prove who they are before anything private changes
+            hands. Here, both sides do.
+          </p>
+        </Reveal>
+      </section>
 
-        <div className="split__paths">
-          {paths.map((p, i) => (
-            <Reveal as="article" className="path" key={p.eyebrow} index={i + 1}>
-              <p className="eyebrow">{p.eyebrow}</p>
+      <section className="paths" aria-label="Choose your pathway">
+        {paths.map((p) => (
+          <Reveal as="article" className="path" key={p.eyebrow} onScroll>
+            <p className="eyebrow">{p.eyebrow}</p>
+            <div>
               <h2>{p.title}</h2>
               <p className="path__body">{p.body}</p>
               <Link className="path__cta" href={p.href}>
                 {p.cta} <ArrowRight size={17} aria-hidden="true" />
               </Link>
-            </Reveal>
-          ))}
-        </div>
+            </div>
+          </Reveal>
+        ))}
       </section>
 
       <Reveal as="footer" onScroll>

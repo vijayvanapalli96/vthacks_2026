@@ -903,57 +903,119 @@ footer strong { font-weight: 400; }
 
 .is-pending { color: var(--muted); }
 
-/* --- Landing: brand left, two perspectives right ------------------------ */
-/* No cards. The right column is separated by hairlines and whitespace only,
-   which is the same move the metrics row made. */
 
-.split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 80px;
-  align-items: center;
+/* --- Landing: three scroll sections ------------------------------------- */
+/* 1. the name, full height   2. the question, answered   3. the two paths   */
+
+.opening {
   min-height: calc(100svh - 72px);
-  padding: 56px 0 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  padding: 40px 0 96px;
 }
 
-.split__brand h1 {
-  font-size: clamp(52px, 7.4vw, 92px);
-  max-width: 9ch;
+.opening h1 {
+  font-size: clamp(76px, 17vw, 260px);
   font-weight: 700;
   font-style: italic;
-  -webkit-text-stroke: 0.7px var(--ink);
-  letter-spacing: -0.02em;
-  line-height: 0.98;
-  margin: 0 0 14px;
+  -webkit-text-stroke: 1px var(--ink);
+  letter-spacing: -0.035em;
+  line-height: 0.86;
+  margin: 0;
 }
 
-.split__why { margin-top: 34px; padding-top: 30px; border-top: 1px solid var(--line); }
-
-.split__why p {
+.opening__tag {
+  font-size: clamp(17px, 2vw, 25px);
   color: var(--muted);
-  line-height: 1.7;
-  max-width: 46ch;
-  margin: 0 0 14px;
+  letter-spacing: 0.01em;
+  margin: 28px auto 0;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+  max-width: 34ch;
 }
-.split__why p:last-child { margin-bottom: 0; }
 
-.split__paths { display: grid; gap: 0; }
+.opening__scroll {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+  animation: scroll-hint 2.6s ease-in-out infinite;
+}
 
-.path { padding: 34px 0; border-top: 1px solid var(--line); }
-.path:last-child { border-bottom: 1px solid var(--line); }
+@keyframes scroll-hint {
+  0%, 100% { opacity: 0.45; transform: translate(-50%, 0); }
+  50% { opacity: 1; transform: translate(-50%, 5px); }
+}
+
+/* --- Why: question left, answer right ----------------------------------- */
+
+.why {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 72px;
+  padding: 120px 0;
+  border-top: 1px solid var(--line);
+}
+
+.why__q h2 {
+  font-size: clamp(38px, 5vw, 66px);
+  font-style: italic;
+  font-weight: 700;
+  -webkit-text-stroke: 0.4px var(--ink);
+  letter-spacing: -0.015em;
+  line-height: 1.02;
+  margin: 0;
+  max-width: 9ch;
+}
+
+.why__a p {
+  font-size: clamp(17px, 1.5vw, 21px);
+  color: var(--muted);
+  line-height: 1.72;
+  max-width: 56ch;
+  margin: 0 0 22px;
+}
+.why__a p:last-child { margin-bottom: 0; }
+
+/* --- Paths: two rows, eyebrow left, content right ----------------------- */
+
+.paths { border-top: 1px solid var(--line); }
+
+.path {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 72px;
+  padding: 72px 0;
+}
+.path + .path { border-top: 1px solid var(--line); }
+
+.path .eyebrow { margin: 10px 0 0; }
 
 .path h2 {
-  font-size: 30px;
+  font-size: clamp(30px, 3.4vw, 46px);
   font-style: italic;
-  letter-spacing: -0.005em;
-  margin: 9px 0 14px;
+  font-weight: 700;
+  -webkit-text-stroke: 0.3px var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.08;
+  margin: 0 0 20px;
 }
 
 .path__body {
   color: var(--muted);
-  line-height: 1.7;
-  max-width: 52ch;
-  margin: 0 0 20px;
+  line-height: 1.72;
+  font-size: 17px;
+  max-width: 56ch;
+  margin: 0 0 26px;
 }
 
 .path__cta {
@@ -962,19 +1024,21 @@ footer strong { font-weight: 400; }
   gap: 9px;
   color: var(--ink);
   text-decoration: none;
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 0.03em;
   border-bottom: 1px solid var(--line-strong);
-  padding-bottom: 4px;
+  padding-bottom: 5px;
   transition: border-color 0.25s ease, gap 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.path__cta:hover { border-color: var(--ink); gap: 14px; }
+.path__cta:hover { border-color: var(--ink); gap: 15px; }
 
 @media (prefers-reduced-motion: reduce) {
+  .opening__scroll { animation: none; }
   .path__cta:hover { gap: 9px; }
 }
 
 @media (max-width: 900px) {
-  .split { grid-template-columns: 1fr; gap: 44px; min-height: 0; align-items: start; }
-  .split__brand h1 { font-size: clamp(42px, 12vw, 68px); max-width: none; -webkit-text-stroke: 0.4px var(--ink); }
+  .why, .path { grid-template-columns: 1fr; gap: 24px; padding: 72px 0; }
+  .opening h1 { -webkit-text-stroke: 0.5px var(--ink); }
+  .why__q h2, .path h2 { max-width: none; }
 }
