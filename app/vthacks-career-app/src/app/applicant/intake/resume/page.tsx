@@ -14,7 +14,6 @@ export default function ResumeIntakePage() {
     <main>
       <nav>
         <strong>Application Workspace</strong>
-        <Link href="/applicant">Overview</Link>
         <Link href="/applicant/profile">Profile</Link>
       </nav>
 
