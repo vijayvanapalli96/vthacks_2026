@@ -32,7 +32,20 @@ import { randomUUID } from 'node:crypto';
 
 import { arrayLiteral, sql, type SqlParam } from '@/lib/databricks';
 import { detectGaps, emptyProfile, type ExtractedProfile } from '@/lib/extract/types';
-import { extractProfile } from '@/lib/extract';
+import {
+  extractLinkedInExport,
+  extractProfile,
+  providerLabel,
+  type LinkedInExportOutcome,
+} from '@/lib/extract';
+import {
+  canEnrich,
+  describeFindings,
+  enrichFromPublicWeb,
+  takeUnavailableReason,
+  isEmptyProfile,
+  WEB_CONFIDENCE_SCALE,
+} from '@/lib/enrich/linkedin-web';
 import { appendFacts, singleFact, toFacts } from '@/lib/profile-memory';
 import { getUpload, putUpload } from '@/lib/uploads';
 
@@ -41,6 +54,21 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const DOCS = 'workspace.vthacks_2026.intake_documents';
 
 export type IntakeKind = 'resume_pdf' | 'linkedin_url' | 'linkedin_export_pdf' | 'transcript_pdf';
+
+/**
+ * The `source` prefix each kind writes into profile_memory.
+ *
+ * This is the string a user sees next to a fact when they ask where it came from, so
+ * it names the ACTUAL origin. 'linkedin_export' is distinct from 'linkedin' on
+ * purpose: one is an archive LinkedIn generated for its owner, the other is a URL
+ * somebody typed, and the difference is the entire subject of docs/DATA_MODEL.md §4.
+ */
+const SOURCE_KINDS: Record<IntakeKind, string> = {
+  resume_pdf: 'resume',
+  transcript_pdf: 'transcript',
+  linkedin_export_pdf: 'linkedin_export',
+  linkedin_url: 'linkedin',
+};
 
 /* -------------------------------------------------------------- onboarding */
 
@@ -125,6 +153,112 @@ export async function pendingIntake(userId: string): Promise<PendingDocument[]> 
   }));
 }
 
+/** How many of this user's sources have been read. Distinguishes "skipped" from "done". */
+async function parsedCount(userId: string): Promise<number> {
+  const result = await sql(
+    `SELECT count(*) FROM ${DOCS} WHERE user_id = :user AND status = 'parsed'`,
+    [{ name: 'user', value: userId }],
+  );
+  return Number(result.rows[0]?.[0] ?? 0);
+}
+
+/**
+ * What the profile ALREADY holds, rebuilt into an ExtractedProfile.
+ *
+ * WHY A SECOND RUN NEEDS THIS. Analysis only reads documents still marked 'received',
+ * which is what keeps it idempotent — but it means a second pass sees an EMPTY
+ * profile in memory, because the documents that filled it are 'parsed' and are
+ * deliberately not re-read. Two things then go wrong, and both were measured:
+ *
+ *   - recomputeGaps decides from that empty profile, so it re-opens the nine
+ *     questions the LinkedIn export had already answered (6 open gaps became 15).
+ *   - web enrichment has no name, employer or school to seed with, so the one run
+ *     that most needs disambiguation is the one that gets none.
+ *
+ * Reading it back from the structured tables fixes both, and it is the right source:
+ * profiles/* is written by this module as a page-shaped copy of the same truth, with
+ * COALESCE already applied, so the values here are the ones that previously won.
+ *
+ * Only called when something has actually been parsed, and issued as ONE parallel
+ * burst — the warehouse is billed by the second while awake.
+ */
+async function knownProfile(userId: string): Promise<ExtractedProfile> {
+  const user = [{ name: 'user', value: userId }];
+  const [header, experience, education, skills, projects, courses, certifications] =
+    await Promise.all([
+      sql(
+        `SELECT full_name, email, phone, location, summary, linkedin_url, github_url, portfolio_url
+           FROM workspace.vthacks_2026.profiles WHERE user_id = :user LIMIT 1`,
+        user,
+      ),
+      sql(
+        `SELECT company, title, location, start_date, end_date
+           FROM workspace.vthacks_2026.profile_experience WHERE user_id = :user ORDER BY ordinal`,
+        user,
+      ),
+      sql(
+        `SELECT school, degree, field, start_date, end_date, gpa
+           FROM workspace.vthacks_2026.profile_education WHERE user_id = :user`,
+        user,
+      ),
+      sql(`SELECT skill FROM workspace.vthacks_2026.profile_skills WHERE user_id = :user`, user),
+      sql(
+        `SELECT name, description FROM workspace.vthacks_2026.profile_projects WHERE user_id = :user`,
+        user,
+      ),
+      sql(
+        `SELECT course_code, title FROM workspace.vthacks_2026.courses WHERE user_id = :user`,
+        user,
+      ),
+      sql(
+        `SELECT name FROM workspace.vthacks_2026.profile_certifications WHERE user_id = :user`,
+        user,
+      ),
+    ]);
+
+  const text = (value: string | null | undefined) => (value == null || value === '' ? undefined : value);
+  const row = header.rows[0] ?? [];
+  const links = [row[5], row[6], row[7]]
+    .filter((url): url is string => Boolean(url))
+    .map((url) => ({ label: undefined, url }));
+
+  return {
+    name: text(row[0]),
+    email: text(row[1]),
+    phone: text(row[2]),
+    location: text(row[3]),
+    summary: text(row[4]),
+    links,
+    experience: experience.rows.map((r) => ({
+      company: text(r[0]),
+      title: text(r[1]),
+      location: text(r[2]),
+      startDate: text(r[3]),
+      endDate: text(r[4]),
+      // Bullets are intentionally left empty: they are not used for gap detection or
+      // for de-duplication (which keys on company|title), and pulling an ARRAY<STRING>
+      // back through the Statement Execution API to ignore it is a waste of the wire.
+      bullets: [],
+    })),
+    education: education.rows.map((r) => ({
+      school: text(r[0]),
+      degree: text(r[1]),
+      field: text(r[2]),
+      startDate: text(r[3]),
+      endDate: text(r[4]),
+      gpa: text(r[5]),
+    })),
+    skills: skills.rows.map((r) => String(r[0] ?? '')).filter(Boolean),
+    projects: projects.rows.map((r) => ({
+      name: text(r[0]),
+      description: text(r[1]),
+      tech: [],
+    })),
+    courses: courses.rows.map((r) => ({ code: text(r[0]), title: text(r[1]) })),
+    certifications: certifications.rows.map((r) => String(r[0] ?? '')).filter(Boolean),
+  };
+}
+
 /* ------------------------------------------------------------------- gaps */
 
 /**
@@ -183,6 +317,15 @@ export const GAP_FIELDS: ReadonlyArray<{
  * An 'answered' gap is NEVER reopened. Someone who told the voice agent their
  * salary floor must not be asked again because a later resume upload happens not
  * to mention it.
+ *
+ * WHICH IS WHY EVERY FIELD GETS A ROW, answered ones included, even though an
+ * answered row is not a question and nothing reads it. Inserting only the OPEN ones
+ * left the answered fields with no row at all, so "never reopened" was only true for
+ * a field that had been open once: a second analysis pass — the "Try again" button,
+ * or an upload added later — recomputes against whatever is pending THAT time, finds
+ * nothing, and re-inserts all fifteen as open. Measured: 6 open gaps after one pass
+ * over a LinkedIn export, 15 after running it again, with nine of them already
+ * answered by the export. The row is the memory that the question was settled.
  */
 async function recomputeGaps(userId: string, profile: ExtractedProfile): Promise<number> {
   // An empty profile — every step skipped, or every parse failed — makes every
@@ -213,9 +356,13 @@ async function recomputeGaps(userId: string, profile: ExtractedProfile): Promise
       WHEN MATCHED AND t.status <> 'answered' AND s.desired = 'answered'
         THEN UPDATE SET status = 'answered', answer_source = 'document',
                         answered_at = current_timestamp(), updated_at = current_timestamp()
-      WHEN NOT MATCHED AND s.desired = 'open'
-        THEN INSERT (user_id, field_key, status, priority, question, updated_at)
-             VALUES (:user, s.field_key, 'open', s.priority, s.question, current_timestamp())`,
+      WHEN NOT MATCHED
+        THEN INSERT (user_id, field_key, status, priority, question,
+                     answer_source, answered_at, updated_at)
+             VALUES (:user, s.field_key, s.desired, s.priority, s.question,
+                     CASE WHEN s.desired = 'answered' THEN 'document' END,
+                     CASE WHEN s.desired = 'answered' THEN current_timestamp() END,
+                     current_timestamp())`,
     parameters,
   );
 
@@ -504,6 +651,28 @@ export function validateUpload(file: File | null): string | null {
   return null;
 }
 
+/**
+ * The LinkedIn data export is not a PDF, so it needs its own gate.
+ *
+ * *Settings → Get a copy of your data* hands over a ZIP of CSVs; "Save to PDF" on
+ * the profile page hands over a PDF; and people routinely unzip the archive and
+ * upload one sheet. All three are legitimate, so all three are accepted. Extension
+ * only — the real decision is made from the file's own magic bytes at parse time
+ * (looksLikeZip / looksLikePdf), because a browser's `file.type` for a .zip is
+ * anything from application/zip to application/x-zip-compressed to empty.
+ */
+export const EXPORT_EXTENSIONS = ['.zip', '.csv', '.pdf'] as const;
+
+export function validateExportUpload(file: File | null): string | null {
+  if (!file || file.size === 0) return 'Choose your LinkedIn export to upload.';
+  if (file.size > MAX_UPLOAD_BYTES) return 'That file is larger than 10 MB.';
+  const name = file.name.toLowerCase();
+  if (!EXPORT_EXTENSIONS.some((extension) => name.endsWith(extension))) {
+    return 'That needs to be the .zip LinkedIn emailed you, one of its .csv files, or your profile saved as a PDF.';
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ staging */
 
 /**
@@ -560,8 +729,13 @@ export async function stageDocument(args: {
 }): Promise<StageResult> {
   const { userId, kind, file } = args;
 
-  const invalid = validateUpload(file);
+  // The LinkedIn export is a ZIP or a CSV as often as it is a PDF, so the gate is
+  // per-kind. A resume is still PDF-only.
+  const invalid =
+    kind === 'linkedin_export_pdf' ? validateExportUpload(file) : validateUpload(file);
   if (invalid) return { ok: false, error: invalid };
+
+  const mimeType = file.type || guessMimeType(file.name);
 
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -570,7 +744,7 @@ export async function stageDocument(args: {
       kind,
       bytes,
       fileName: file.name,
-      mimeType: file.type || 'application/pdf',
+      mimeType,
     });
 
     // Already read these exact bytes. Staging it again would make analysis append
@@ -591,7 +765,7 @@ export async function stageDocument(args: {
       status: 'received',
       storagePath: stored.storagePath,
       fileName: file.name,
-      mimeType: file.type || 'application/pdf',
+      mimeType,
       byteSize: stored.byteSize,
       contentHash: stored.contentHash,
     });
@@ -601,12 +775,27 @@ export async function stageDocument(args: {
   }
 }
 
+/** Browsers omit file.type for .csv and disagree about .zip; the extension does not. */
+function guessMimeType(fileName: string): string {
+  const name = fileName.toLowerCase();
+  if (name.endsWith('.zip')) return 'application/zip';
+  if (name.endsWith('.csv')) return 'text/csv';
+  return 'application/pdf';
+}
+
 /**
  * Save a LinkedIn profile URL.
  *
- * NOTE FOR WHOEVER PICKS THIS UP: nothing parses this URL yet. We store it, show
- * it, and hand it on; the structured profile stays thin until something downstream
- * actually fetches the page. The gap fields it would fill are left open on purpose.
+ * Still no parse HERE — staging never calls a model. What changed is what happens
+ * to it afterwards: analyzeIntake() now treats a URL-only LinkedIn document as a
+ * seed for best-effort public-web enrichment (src/lib/enrich/linkedin-web.ts)
+ * rather than a dead end. The page is still never fetched. LinkedIn has no public
+ * profile API and blocks anonymous requests, so the enrichment looks at what the
+ * rest of the public web says about the person the resume already identified, and
+ * labels every fact it finds accordingly.
+ *
+ * The reliable path is the one next to it on the same page: kind
+ * 'linkedin_export_pdf', the archive the user owns.
  */
 export async function stageLinkedInUrl(userId: string, url: string): Promise<StageResult> {
   try {
@@ -682,6 +871,63 @@ export function mergeProfiles(profiles: ExtractedProfile[]): ExtractedProfile {
   };
 }
 
+/**
+ * Everything in `candidate` that `known` does not already contain.
+ *
+ * Needed because writeStructuredProfile() is called PER DOCUMENT with that
+ * document's own profile, and the child tables are keyed by source_document_id — so
+ * two sources that both mention the same internship produce two rows and the profile
+ * page shows the job twice. mergeProfiles() de-duplicates for the in-memory view;
+ * this de-duplicates for the write.
+ *
+ * It is also the teeth on "never overwrite a resume-derived value" for web
+ * enrichment: a search result that merely repeats what the resume said contributes
+ * nothing, so it appends nothing and the fact count stays honest about what was
+ * actually learned. Single-value fields are dropped whenever `known` has one at all
+ * — the resume wins outright, it is not compared.
+ */
+export function subtractProfile(
+  candidate: ExtractedProfile,
+  known: ExtractedProfile,
+): ExtractedProfile {
+  const seen = (values: string[]) => new Set(values.map((value) => value.trim().toLowerCase()));
+
+  const knownExperience = seen(
+    known.experience.map((entry) => `${entry.company ?? ''}|${entry.title ?? ''}`),
+  );
+  const knownEducation = seen(
+    known.education.map((entry) => `${entry.school ?? ''}|${entry.degree ?? ''}`),
+  );
+  const knownProjects = seen(known.projects.map((entry) => entry.name ?? ''));
+  const knownSkills = seen(known.skills);
+  const knownCerts = seen(known.certifications);
+  const knownLinks = seen(known.links.map((link) => link.url ?? link.label ?? ''));
+  const knownCourses = seen(known.courses.map((entry) => entry.code ?? entry.title ?? ''));
+
+  const fresh = (set: Set<string>, key: string) => !set.has(key.trim().toLowerCase());
+
+  return {
+    name: known.name ? undefined : candidate.name,
+    email: known.email ? undefined : candidate.email,
+    phone: known.phone ? undefined : candidate.phone,
+    location: known.location ? undefined : candidate.location,
+    summary: known.summary ? undefined : candidate.summary,
+    links: candidate.links.filter((link) => fresh(knownLinks, link.url ?? link.label ?? '')),
+    education: candidate.education.filter((entry) =>
+      fresh(knownEducation, `${entry.school ?? ''}|${entry.degree ?? ''}`),
+    ),
+    experience: candidate.experience.filter((entry) =>
+      fresh(knownExperience, `${entry.company ?? ''}|${entry.title ?? ''}`),
+    ),
+    projects: candidate.projects.filter((entry) => fresh(knownProjects, entry.name ?? '')),
+    skills: candidate.skills.filter((skill) => fresh(knownSkills, skill)),
+    courses: candidate.courses.filter((entry) =>
+      fresh(knownCourses, entry.code ?? entry.title ?? ''),
+    ),
+    certifications: candidate.certifications.filter((cert) => fresh(knownCerts, cert)),
+  };
+}
+
 function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -715,6 +961,20 @@ export type IntakeProgress =
     }
   | { type: 'complete'; factsAppended: number; openGaps: number; next: string; ms: number }
   | { type: 'error'; message: string };
+
+/**
+ * The two sentences every URL-only outcome has to contain, written once.
+ *
+ * They are constants because they are the POINT of this module's honesty: the first
+ * refuses to imply we read the page, the second turns the gap into something the
+ * user can act on. Copy-pasting them into five log branches is how one of them
+ * eventually drifts into a claim we cannot back.
+ */
+const NOT_READ =
+  'I did not read your LinkedIn page: LinkedIn has no public profile API and serves a login wall to anonymous requests, so the only honest options are the public web or a file you export yourself.';
+
+const EXPORT_FIX =
+  'To make this certain, go to LinkedIn → Settings → Data privacy → Get a copy of your data, then upload the archive on the LinkedIn step — that file is yours and it produces real roles, skills and schools.';
 
 export type AnalysisSummary = {
   factsAppended: number;
@@ -759,24 +1019,58 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
     let at = Date.now();
     yield step('collect', 'Checking what you gave me');
     const pending = await pendingIntake(userId);
-    const resumes = pending.filter((doc) => doc.kind !== 'linkedin_url');
+    // Most authoritative first, explicitly, because mergeProfiles() resolves every
+    // single-value conflict in exactly this order and uploaded_at does not encode
+    // authority — someone who goes back and adds their LinkedIn export after the
+    // resume must not have it outrank the resume just for arriving later.
+    //
+    //   resume            the document the user curated for employers
+    //   transcript        the registrar's own record of coursework
+    //   linkedin export   accurate, but a profile people maintain less carefully
+    //   (web enrichment)  appended last of all, below — inference, not a document
+    const AUTHORITY: IntakeKind[] = ['resume_pdf', 'transcript_pdf', 'linkedin_export_pdf'];
+    const documents = pending
+      .filter((doc) => doc.kind !== 'linkedin_url')
+      .sort((a, b) => AUTHORITY.indexOf(a.kind) - AUTHORITY.indexOf(b.kind));
     const links = pending.filter((doc) => doc.kind === 'linkedin_url');
+    const alreadyRead = await parsedCount(userId);
     yield settle(
       'collect',
       'Checking what you gave me',
       at,
       'ok',
-      pending.length === 0
-        ? 'Nothing new to read — you skipped both steps, so everything becomes a question instead.'
-        : `${resumes.length} document(s) and ${links.length} link(s) waiting.`,
+      [
+        pending.length > 0
+          ? `${documents.length} document(s) and ${links.length} link(s) waiting.`
+          : // "Nothing pending" has two causes and they are not the same sentence. It
+            // used to say "you skipped both steps" either way, which on a re-run told a
+            // user whose export we had just read that they had given us nothing.
+            alreadyRead > 0
+            ? 'Nothing new to read — everything you gave me has already been read, so this pass only re-checks what is still an open question.'
+            : 'Nothing new to read — you skipped both steps, so everything becomes a question instead.',
+        alreadyRead > 0
+          ? `${alreadyRead} source(s) were already read on an earlier pass; I load what they established rather than reading them again.`
+          : undefined,
+      ]
+        .filter(Boolean)
+        .join(' '),
     );
 
-    // Most authoritative first: a resume the user chose to upload beats a link we
-    // could not fetch. mergeProfiles resolves single-value conflicts in this order.
+    /**
+     * Most authoritative first. The BASELINE goes first of all: it is the union of
+     * everything earlier passes established, already resolved by the COALESCE in
+     * writeStructuredProfile, so it holds the values that previously won. Without it
+     * a second pass would see an empty profile, re-open questions its own documents
+     * had answered, and hand web enrichment nobody to disambiguate against.
+     */
     const extracted: ExtractedProfile[] = [];
+    if (alreadyRead > 0) extracted.push(await knownProfile(userId));
     let linkedinUrl: string | undefined;
+    // Sources actually READ on this pass, which is not extracted.length: that array
+    // also carries the baseline and the link-only contribution below.
+    let sourcesRead = 0;
 
-    for (const doc of resumes) {
+    for (const doc of documents) {
       const what = doc.fileName ?? 'your document';
       if (!doc.storagePath) {
         yield settle(`doc:${doc.documentId}`, `Reading ${what}`, Date.now(), 'warn', 'No stored file to read.');
@@ -796,36 +1090,75 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
           `${(bytes.byteLength / 1024).toFixed(0)} KB from the Unity Catalog volume.`,
         );
 
+        const isExport = doc.kind === 'linkedin_export_pdf';
         at = Date.now();
         yield step(
           `read:${doc.documentId}`,
           `Reading ${what}`,
-          'Extracting text, then asking the model for structured fields. This is the slow part.',
+          isExport
+            ? 'Your LinkedIn data export has a fixed shape, so this is parsed directly — no model, nothing to invent.'
+            : 'Extracting text, then asking the model for structured fields. This is the slow part.',
         );
-        const outcome = await extractProfile(bytes);
+        // Typed as the wider outcome so `outcome.export` is reachable without an `in`
+        // narrowing, which TypeScript cannot do through an optional property.
+        const outcome: LinkedInExportOutcome = isExport
+          ? await extractLinkedInExport(bytes, doc.fileName ?? undefined)
+          : await extractProfile(bytes);
+
+        // What the higher-authority documents already established, captured BEFORE
+        // this one joins the list. Used below so this document writes only its own
+        // new contribution: the child tables are keyed by source_document_id, so a
+        // resume and a LinkedIn export that both list the same internship would
+        // otherwise put it on the profile page twice.
+        const known = mergeProfiles(extracted);
         extracted.push(outcome.profile);
+        sourcesRead += 1;
+
+        // The export path can name exactly which sheets it understood, which is a far
+        // better answer than a count — "Positions, Skills, Education" tells the user
+        // both that we read their file and what it contained.
+        const exported = outcome.export;
         yield settle(
           `read:${doc.documentId}`,
           `Reading ${what}`,
           at,
-          outcome.warnings.length ? 'warn' : 'ok',
+          outcome.warnings.length || (exported && exported.sections.length === 0) ? 'warn' : 'ok',
           [
-            `${outcome.provider} · ${outcome.model}`,
+            `${providerLabel(outcome.provider)} · ${outcome.model}`,
+            exported?.sections.length
+              ? `Understood ${exported.sections.join(', ')}.`
+              : undefined,
             `${outcome.profile.skills.length} skills, ${outcome.profile.experience.length} roles, ${outcome.profile.education.length} schools, ${outcome.profile.courses.length} courses.`,
+            // Said out loud because a user who exported everything WILL wonder where
+            // their connections went, and "we chose not to keep other people's data"
+            // is a better answer than silence.
+            exported?.connectionsSeen
+              ? `Saw ${exported.connectionsSeen} connections and stored none of them — those are other people's details, not your profile.`
+              : undefined,
+            exported?.unrecognised.length
+              ? `Did not recognise ${exported.unrecognised.slice(0, 4).join(', ')}.`
+              : undefined,
             ...outcome.warnings,
-          ].join(' — '),
+          ]
+            .filter(Boolean)
+            .join(' — '),
         );
 
         at = Date.now();
         yield step(`save:${doc.documentId}`, `Filing what ${what} told me`);
-        await writeStructuredProfile(userId, doc.documentId, outcome.profile, {});
+        const contribution = subtractProfile(outcome.profile, known);
+        await writeStructuredProfile(userId, doc.documentId, contribution, {});
         const appended = await appendFacts(
-          toFacts(outcome.profile, {
+          toFacts(contribution, {
             userId,
             provider: outcome.provider,
             model: outcome.model,
             sourceRef: doc.documentId,
-            sourceKind: doc.kind === 'transcript_pdf' ? 'transcript' : 'resume',
+            sourceKind: SOURCE_KINDS[doc.kind],
+            // The export gets its own fact_key namespace so its contact.name cannot
+            // become the current value over the resume's just by being appended a
+            // second later — see the keyPrefix note in profile-memory.ts.
+            keyPrefix: isExport ? 'linkedin.' : undefined,
           }),
         );
         factsAppended += appended;
@@ -840,7 +1173,10 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
           `Filing what ${what} told me`,
           at,
           'ok',
-          `${appended} facts recorded, each with where it came from.`,
+          `${appended} facts recorded, each with where it came from.` +
+            (appended === 0
+              ? ' Everything it said was already on file from a more authoritative source, so nothing was duplicated.'
+              : ''),
         );
       } catch (error) {
         const message = (error as Error).message;
@@ -853,6 +1189,25 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
       }
     }
 
+    /**
+     * A LinkedIn URL on its own.
+     *
+     * THE URL IS SAVED FIRST AND UNCONDITIONALLY. It is the thing the user actually
+     * typed; nothing about enrichment is allowed to put it at risk.
+     *
+     * Then we try to learn something, WITHOUT touching linkedin.com. There is no
+     * public profile API and an anonymous request gets a login wall, so the attempt
+     * is aimed at the rest of the public web — and it is seeded with what the
+     * resume already established, because "Alex Nguyen" alone would enrich a
+     * stranger. Everything it produces is marked as inference: source 'web:gemini:…',
+     * confidence halved, appended under its own fact_key namespace, ordered last in
+     * the merge, and filtered against what the documents already said.
+     *
+     * Every failure mode — no key, no network, a refusal, the wrong person, nothing
+     * found — lands in the same honest branch, which names the export upload as the
+     * fix. That is an actionable gap rather than a dead end, and it is the line this
+     * whole change exists to replace.
+     */
     for (const doc of links) {
       linkedinUrl = doc.externalUrl ?? undefined;
       at = Date.now();
@@ -866,37 +1221,191 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
               kind: 'contact',
               key: 'contact.linkedin',
               value: linkedinUrl,
+              // 1.0 is right here and nowhere else in this block: the user typed it.
               confidence: 1,
               source: 'linkedin:user:typed',
               sourceRef: doc.documentId,
             }),
           ]);
         }
+        // Marked parsed HERE, before enrichment runs — not after.
+        //
+        // profile_memory is append-only and contact.linkedin has just landed, so if
+        // anything below failed with the document still 'received', the next run
+        // would append the URL fact a second time. Enrichment is an optional upgrade
+        // and must not be able to cost us idempotency; 'parsed' therefore means "the
+        // URL is recorded", and a failed enrichment is reported in the log rather
+        // than retried into a duplicate.
         await markDocument(doc.documentId, { status: 'parsed', provider: 'none' });
-        // Stated plainly rather than dressed up as a read. LinkedIn has no public
-        // profile API and blocks unauthenticated fetches, so claiming to have read
-        // the page would be a lie the profile page would immediately contradict.
+
+        // A saved LinkedIn URL IS a link, so the merged profile has to know about it
+        // before gap detection runs. Without this the very first pass saved the URL
+        // and then queued "Do you have a GitHub or portfolio link?" for the voice
+        // agent to ask — which a second pass silently corrected, because
+        // knownProfile() reads profiles.linkedin_url back. Answering it on the pass
+        // that saved it is the honest ordering.
+        if (linkedinUrl) {
+          extracted.push({ ...emptyProfile(), links: [{ label: 'LinkedIn', url: linkedinUrl }] });
+        }
+
         yield settle(
           'linkedin',
           'Recording your LinkedIn',
           at,
-          'warn',
-          'Saved and attached to your profile. I have not read the page: LinkedIn has no public profile API and blocks anonymous fetches, so an agent has to collect it separately.',
+          'ok',
+          'Saved and attached to your profile.',
         );
+
+        // --- best-effort enrichment, clearly labelled as such ------------------
+        const known = mergeProfiles(extracted);
+        at = Date.now();
+
+        if (!linkedinUrl) {
+          // Nothing to seed with. Should not happen, but a silent skip would be the
+          // same defect as the log line this replaces.
+          yield settle(
+            'linkedin:web',
+            'Looking for anything public about you',
+            at,
+            'skip',
+            'No URL was stored on that document, so there was nothing to search from.',
+          );
+        } else if (!canEnrich()) {
+          yield settle(
+            'linkedin:web',
+            'Looking for anything public about you',
+            at,
+            'skip',
+            `${NOT_READ} Nor did I search for you: GOOGLE_GENERATIVE_AI_API_KEY is not configured, so the public-web enrichment had no way to run. ${EXPORT_FIX}`,
+          );
+        } else {
+          yield step(
+            'linkedin:web',
+            'Looking for anything public about you',
+            'Searching the public web — not LinkedIn itself, which blocks anonymous requests. Seeded with your name, employer and school so I do not describe someone else.',
+          );
+
+          const enriched = await enrichFromPublicWeb({
+            linkedinUrl,
+            name: known.name,
+            location: known.location,
+            employers: known.experience
+              .map((entry) => entry.company)
+              .filter((company): company is string => Boolean(company))
+              .slice(0, 4),
+            schools: known.education
+              .map((entry) => entry.school)
+              .filter((school): school is string => Boolean(school))
+              .slice(0, 3),
+          });
+
+          // Only what the documents did not already say. A search result that merely
+          // repeats the resume teaches us nothing and must not append a second,
+          // lower-confidence copy of it — so "found something" and "found something
+          // NEW" are different questions, and this is the second one.
+          const novel = enriched ? subtractProfile(enriched.profile, known) : null;
+
+          // "The search found nothing" and "the search never ran" are different
+          // facts, and reporting the second as the first claims work we did not do.
+          const unavailable = enriched ? null : takeUnavailableReason();
+
+          if (unavailable) {
+            yield settle(
+              'linkedin:web',
+              'Looking for anything public about you',
+              at,
+              'warn',
+              `${NOT_READ} I could not even run the search: ${unavailable}. That is a configuration or billing problem on our side, not a statement about you. ${EXPORT_FIX}`,
+            );
+          } else if (!enriched) {
+            yield settle(
+              'linkedin:web',
+              'Looking for anything public about you',
+              at,
+              'warn',
+              `${NOT_READ} A public web search turned up nothing I could confidently tie to you — the model either found no pages about you or would not vouch that they were about the right person, and I would rather record nothing than guess. ${EXPORT_FIX}`,
+            );
+          } else if (!novel || isEmptyProfile(novel)) {
+            yield settle(
+              'linkedin:web',
+              'Looking for anything public about you',
+              at,
+              'warn',
+              `${NOT_READ} A public web search did find pages about you (${enriched.evidence}), but everything on them was already on file from the documents you gave me, so I recorded nothing new rather than a second, less certain copy. ${EXPORT_FIX}`,
+            );
+          } else {
+            // Ordered LAST, after every document, so mergeProfiles can never let an
+            // inferred value beat one the user handed us.
+            extracted.push(novel);
+            await writeStructuredProfile(userId, doc.documentId, novel, { linkedinUrl });
+            const appended = await appendFacts(
+              toFacts(novel, {
+                userId,
+                provider: 'gemini',
+                model: enriched.model,
+                sourceRef: doc.documentId,
+                // Distinct from 'resume' on purpose: this is what the UI shows when
+                // someone asks why we believe a thing.
+                sourceKind: 'web',
+                keyPrefix: 'web.',
+                confidenceScale: WEB_CONFIDENCE_SCALE,
+              }),
+            );
+            factsAppended += appended;
+
+            yield settle(
+              'linkedin:web',
+              'Looking for anything public about you',
+              at,
+              // 'warn', not 'ok'. Rendered with a "!" so a reader cannot mistake
+              // inference for a document we read.
+              'warn',
+              [
+                NOT_READ,
+                `Instead I searched the public web and found ${describeFindings(novel)}, recorded as ${appended} new fact(s).`,
+                `Why I believe it is you: ${enriched.evidence}.`,
+                enriched.sources.length
+                  ? `Sources: ${enriched.sources.slice(0, 3).join(', ')}${enriched.sources.length > 3 ? ` and ${enriched.sources.length - 3} more` : ''}.`
+                  : 'No grounding sources were reported, which makes this weaker still.',
+                `This is inference from search results, not a document you handed me, so it is stored at ${Math.round(WEB_CONFIDENCE_SCALE * 100)}% of normal confidence, under its own web.* keys, and can never override your resume.`,
+                EXPORT_FIX,
+                ...enriched.warnings,
+              ].join(' '),
+            );
+          }
+        }
       } catch (error) {
-        yield settle('linkedin', 'Recording your LinkedIn', at, 'warn', (error as Error).message);
+        const message = (error as Error).message;
+        // Settle BOTH lines. Whichever phase was in flight, the log must not be left
+        // with a spinner that never resolves — that is how the processing page used
+        // to hang silently.
+        yield settle('linkedin', 'Recording your LinkedIn', at, 'warn', message);
+        yield settle(
+          'linkedin:web',
+          'Looking for anything public about you',
+          at,
+          'warn',
+          `That did not finish: ${message} ${EXPORT_FIX}`,
+        );
       }
     }
 
     at = Date.now();
     yield step('combine', 'Combining every source into one profile');
     const merged = mergeProfiles(extracted);
+    // Counted separately from the baseline, because "3 sources" when two of them are
+    // last pass's work read back out of Delta would overstate what just happened.
+    const freshSources = sourcesRead;
     yield settle(
       'combine',
       'Combining every source into one profile',
       at,
       'ok',
-      `Union of ${extracted.length || 'no'} source(s): ${merged.skills.length} skills, ${merged.experience.length} roles, ${merged.education.length} schools, ${merged.courses.length} courses. A gap in one source is filled by another before I decide what to ask you.`,
+      [
+        `Union of ${freshSources || 'no'} new source(s)${alreadyRead > 0 ? ' plus what your profile already held' : ''}:`,
+        `${merged.skills.length} skills, ${merged.experience.length} roles, ${merged.education.length} schools, ${merged.courses.length} courses.`,
+        'A gap in one source is filled by another before I decide what to ask you.',
+      ].join(' '),
     );
 
     at = Date.now();

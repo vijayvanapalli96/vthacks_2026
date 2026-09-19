@@ -17,6 +17,12 @@
 import { pdfToText, PdfParseError } from './pdf';
 import { extractWithDatabricks, DATABRICKS_MODEL } from './databricks';
 import { extractWithGemini, hasGemini } from './gemini';
+import {
+  LINKEDIN_EXPORT_MODEL,
+  looksLikePdf,
+  parseLinkedInExport,
+  type LinkedInExportResult,
+} from './linkedin-export';
 import { hasDatabricks } from '@/lib/databricks';
 import { detectGaps, type ExtractProvider, type ExtractionResult, type ProfileGap } from './types';
 
@@ -133,13 +139,72 @@ function finish(
   };
 }
 
+const PROVIDER_LABELS: Record<ExtractProvider, string> = {
+  databricks: 'Databricks ai_query',
+  gemini: 'Gemini',
+  // Not a model, and the label must not imply one — this path is a CSV parser.
+  'linkedin-export': 'LinkedIn export parser (no model call)',
+};
+
 export function providerLabel(provider: ExtractProvider): string {
-  return provider === 'databricks' ? 'Databricks ai_query' : 'Gemini';
+  return PROVIDER_LABELS[provider];
 }
 
 export function providerModel(provider: ExtractProvider): string {
-  return provider === 'databricks' ? DATABRICKS_MODEL : 'gemini-2.5-flash';
+  if (provider === 'databricks') return DATABRICKS_MODEL;
+  if (provider === 'gemini') return 'gemini-2.5-flash';
+  return LINKEDIN_EXPORT_MODEL;
+}
+
+/* --------------------------------------------------- LinkedIn data export ---- */
+
+/**
+ * Extract from a LinkedIn data export, whatever form the user handed over.
+ *
+ * Two shapes arrive from *Settings → Get a copy of your data*, and they want
+ * different machinery:
+ *
+ *   ZIP / CSV   a fixed schema. Parsed by code, no model, nothing to hallucinate.
+ *   PDF         the "Save to PDF" render of the profile page. That is a layout
+ *               problem, so it goes through the same provider ladder as a resume.
+ *
+ * Returning the same ExtractOutcome as extractProfile() keeps the caller's loop in
+ * intake.ts one loop rather than two.
+ */
+export type LinkedInExportOutcome = ExtractOutcome & {
+  /** Present on the CSV/ZIP path: which sections were understood. */
+  export?: LinkedInExportResult;
+};
+
+export async function extractLinkedInExport(
+  bytes: Uint8Array,
+  fileName?: string,
+  deps: ExtractDeps = defaultDeps,
+): Promise<LinkedInExportOutcome> {
+  if (looksLikePdf(bytes)) {
+    return extractProfile(bytes, deps);
+  }
+
+  const parsed = parseLinkedInExport(bytes, fileName);
+  return {
+    profile: parsed.profile,
+    provider: 'linkedin-export',
+    model: LINKEDIN_EXPORT_MODEL,
+    warnings: parsed.warnings,
+    gaps: detectGaps(parsed.profile),
+    textLength: 0,
+    totalPages: 0,
+    export: parsed,
+  };
 }
 
 // Re-export the schema, types and gap helpers so callers import from one place.
 export * from './types';
+export {
+  LINKEDIN_EXPORT_MODEL,
+  LinkedInExportError,
+  looksLikePdf,
+  looksLikeZip,
+  parseLinkedInExport,
+  type LinkedInExportResult,
+} from './linkedin-export';

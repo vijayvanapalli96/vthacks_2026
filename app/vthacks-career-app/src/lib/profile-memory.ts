@@ -72,10 +72,32 @@ export function toFacts(
     sourceRef: string;
     sourceKind?: string;
     observedAt?: string;
+    /**
+     * Namespace for every fact_key this call produces, e.g. 'web.' → 'web.contact.name'.
+     *
+     * WHY THIS IS NOT COSMETIC. profile_current is "latest row per (user_id,
+     * fact_key)", so two sources writing the same key means the one that ran last
+     * wins — regardless of confidence. Without a namespace, a low-confidence
+     * web-search guess appended after the resume in the same analysis pass would
+     * silently become the current value of contact.name. Namespacing makes the two
+     * observations coexist instead of one overwriting the other, which is what
+     * append-only was for. The authoritative single-value merge happens in
+     * mergeProfiles() and in the COALESCE on profiles, not here.
+     */
+    keyPrefix?: string;
+    /**
+     * Multiplier on every confidence below, for sources that are inference rather
+     * than transcription. Web enrichment passes 0.5, so its most certain fact lands
+     * under 0.5 and sorts beneath every document-derived one. Never used to push a
+     * value UP: a source cannot become more certain than the field type allows.
+     */
+    confidenceScale?: number;
   },
 ): ProfileFact[] {
   const observedAt = meta.observedAt ?? new Date().toISOString();
   const source = `${meta.sourceKind ?? 'resume'}:${meta.provider}:${meta.model}`;
+  const prefix = meta.keyPrefix ?? '';
+  const scale = Math.min(meta.confidenceScale ?? 1, 1);
   const facts: ProfileFact[] = [];
 
   const push = (kind: FactKind, key: string, value: string | undefined, confidence: number) => {
@@ -84,9 +106,11 @@ export function toFacts(
       factId: randomUUID(),
       userId: meta.userId,
       kind,
-      key,
+      key: `${prefix}${key}`,
       value,
-      confidence,
+      // Rounded because this number is rendered next to the fact: 0.42 is a
+      // confidence, 0.42499999999999993 is a bug the user gets to look at.
+      confidence: Math.round(confidence * scale * 100) / 100,
       source,
       sourceRef: meta.sourceRef,
       observedAt,

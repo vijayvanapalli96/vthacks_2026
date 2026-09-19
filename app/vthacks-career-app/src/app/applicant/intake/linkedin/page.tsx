@@ -28,8 +28,10 @@ export default function LinkedInIntakePage() {
         <p className="eyebrow">STEP TWO</p>
         <h1>Add your LinkedIn.</h1>
         <p className="muted">
-          It goes on your profile and travels with anything I send on your behalf. This is the last
-          thing I ask for — next I read everything at once.
+          The URL goes on your profile and travels with anything I send on your behalf. I cannot
+          read the page itself — LinkedIn has no public profile API and blocks anonymous requests —
+          so if you want your roles and skills from there, hand me the data export underneath. This
+          is the last thing I ask for; next I read everything at once.
         </p>
 
         <LinkedInIntakeForm />
