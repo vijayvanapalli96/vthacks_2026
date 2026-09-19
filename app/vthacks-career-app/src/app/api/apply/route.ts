@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { APPLICANT_ANS_NAME, verifyProductionAgent } from '../../../lib/ans/production';
 import { failedTrustDimensions } from '../../../lib/ans/policy';
-import { recordAgentVerificationSafely } from '../../../lib/ans/store';
+import { explainMutualMatch } from '../../../lib/ans/match';
+import { recordAgentVerificationSafely, recordMatchExplanationSafely } from '../../../lib/ans/store';
 
 export const dynamic = 'force-dynamic';
 
-const allowedFields = new Set(['full_name', 'email', 'resume_url', 'cover_letter']);
+const allowedFields = new Set(['full_name', 'email', 'resume_url', 'cover_letter', 'skills']);
 
 type ApplyBody = {
   agent_id?: string;
@@ -16,6 +17,13 @@ type ApplyBody = {
   human_approved?: boolean;
   candidate?: Record<string, unknown>;
   requested_fields?: string[];
+  job?: {
+    job_id?: string;
+    title?: string;
+    company?: string;
+    required_skills?: string[];
+    preferred_skills?: string[];
+  };
 };
 
 export async function POST(request: Request) {
@@ -35,6 +43,11 @@ export async function POST(request: Request) {
   }));
   const requested = Array.isArray(body.requested_fields) ? body.requested_fields : [];
   const releasable = requested.filter((field) => allowedFields.has(field));
+  const matchExplanation = explainMutualMatch({
+    candidateSkills: body.candidate?.skills,
+    requiredSkills: body.job?.required_skills,
+    preferredSkills: body.job?.preferred_skills,
+  });
 
   if (verification.verdict !== 'pass' || body.human_approved !== true || !verification.evidence) {
     const spokenReason = verification.verdict !== 'pass'
@@ -72,6 +85,8 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       applicant_agent: APPLICANT_ANS_NAME,
       candidate: packet,
+      job: body.job ?? null,
+      match_explanation: matchExplanation,
       verification: {
         verdict: verification.verdict,
         dimensions: verification.dimensions,
@@ -80,6 +95,13 @@ export async function POST(request: Request) {
     }),
     signal: AbortSignal.timeout(8000),
   });
+
+  const matchPersisted = body.job?.job_id ? await recordMatchExplanationSafely({
+    applicationId: body.application_id,
+    jobId: body.job.job_id,
+    direction: 'applicant_to_employer',
+    explanation: matchExplanation,
+  }) : false;
 
   const persisted = await recordAgentVerificationSafely({
     applicationId: body.application_id,
@@ -99,6 +121,8 @@ export async function POST(request: Request) {
       audit_id: randomUUID(),
       spoken_reason: `The verified employer endpoint received the approved fields but returned HTTP ${response.status}.`,
       persisted,
+      match_persisted: matchPersisted,
+      match_explanation: matchExplanation,
     }, { status: 502 });
   }
 
@@ -108,5 +132,7 @@ export async function POST(request: Request) {
     audit_id: randomUUID(),
     spoken_reason: `Application submitted to verified employer ${verification.evidence.agentCard.name}.`,
     persisted,
+    match_persisted: matchPersisted,
+    match_explanation: matchExplanation,
   });
 }

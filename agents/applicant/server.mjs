@@ -33,6 +33,7 @@ createServer(async (request, response) => {
         status: "pending_candidate_approval",
         receipt_id: randomUUID(),
         employer_verification: verification,
+        employer_explanation: invitation.match_explanation ?? null,
       });
     } catch (error) {
       return send(response, 403, { status: "refused", reason: error instanceof Error ? error.message : "Employer verification failed." });

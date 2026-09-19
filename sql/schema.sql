@@ -220,6 +220,24 @@ CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.candidate_discovery_profiles (
 ) USING DELTA
 COMMENT 'Opt-in, non-PII student profiles used for verified employer discovery.';
 
+-- agent_match_explanations — why an agent considered a candidate and a job a fit,
+--   computed only from candidate-approved skills and employer-published requirements.
+--   Append-only; every row carries its reasons.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.agent_match_explanations (
+  match_id                STRING        NOT NULL,
+  application_id          STRING,
+  job_id                  STRING        NOT NULL,
+  direction               STRING        NOT NULL COMMENT 'applicant_to_employer | employer_to_applicant',
+  score                   DOUBLE        NOT NULL COMMENT '0..100',
+  verdict                 STRING        NOT NULL COMMENT 'strong | potential | weak',
+  matched_skills          ARRAY<STRING>,
+  missing_required_skills ARRAY<STRING>,
+  reasons_json            STRING        NOT NULL COMMENT 'JSON array of reason strings',
+  evidence_basis          STRING        NOT NULL,
+  created_at              TIMESTAMP     NOT NULL
+) USING DELTA
+COMMENT 'Deterministic, explainable skill-match verdicts exchanged between ANS agents.';
+
 -- agent_verifications — the ANS / Trust Index record. The strategy doc flags the
 --   absence of this table as an explicit GAP; the Trust Card UI reads it.
 --   A refusal MUST have pii_fields_released empty. If it ever isn't, that is the

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from '../databricks';
 import type { TrustDimension } from './policy';
+import type { MatchExplanation } from './match';
 
 type VerificationRecord = {
   applicationId?: string;
@@ -87,4 +88,45 @@ export async function saveJobAgentLink(input: {
       { name: 'endpoint', value: input.endpoint },
     ],
   );
+}
+
+export async function recordMatchExplanation(input: {
+  applicationId?: string;
+  jobId: string;
+  direction: 'applicant_to_employer' | 'employer_to_applicant';
+  explanation: MatchExplanation;
+}) {
+  await sql(
+    `INSERT INTO workspace.vthacks_2026.agent_match_explanations (
+       match_id, application_id, job_id, direction, score, verdict,
+       matched_skills, missing_required_skills, reasons_json, evidence_basis, created_at
+     ) VALUES (
+       :match_id, :application_id, :job_id, :direction, :score, :verdict,
+       from_json(:matched_skills, 'ARRAY<STRING>'),
+       from_json(:missing_required_skills, 'ARRAY<STRING>'),
+       :reasons_json, :evidence_basis, current_timestamp()
+     )`,
+    [
+      { name: 'match_id', value: randomUUID() },
+      { name: 'application_id', value: input.applicationId ?? null },
+      { name: 'job_id', value: input.jobId },
+      { name: 'direction', value: input.direction },
+      { name: 'score', value: String(input.explanation.score), type: 'DOUBLE' },
+      { name: 'verdict', value: input.explanation.verdict },
+      { name: 'matched_skills', value: JSON.stringify(input.explanation.matched_skills) },
+      { name: 'missing_required_skills', value: JSON.stringify(input.explanation.missing_required_skills) },
+      { name: 'reasons_json', value: JSON.stringify(input.explanation.reasons) },
+      { name: 'evidence_basis', value: input.explanation.evidence_basis },
+    ],
+  );
+}
+
+export async function recordMatchExplanationSafely(input: Parameters<typeof recordMatchExplanation>[0]) {
+  try {
+    await recordMatchExplanation(input);
+    return true;
+  } catch (error) {
+    console.error('Could not persist agent match explanation', error);
+    return false;
+  }
 }

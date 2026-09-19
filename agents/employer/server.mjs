@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { verifyRemoteAgent } from "../shared/remote-agent.mjs";
+import { explainMutualMatch } from "../shared/mutual-match.mjs";
 
 const port = Number(process.env.PORT ?? 8787);
 const card = JSON.parse(await readFile(new URL("./agent-card.json", import.meta.url), "utf8"));
@@ -28,7 +29,18 @@ createServer(async (request, response) => {
       if (verification.verdict !== "pass") {
         return send(response, 403, { status: "refused", reason: verification.spoken_reason, verification });
       }
-      return send(response, 202, { status: "accepted", receipt_id: randomUUID(), applicant_verification: verification });
+      const employerMatch = explainMutualMatch({
+        candidateSkills: packet.candidate?.skills,
+        requiredSkills: packet.job?.required_skills,
+        preferredSkills: packet.job?.preferred_skills,
+      });
+      return send(response, 202, {
+        status: "accepted",
+        receipt_id: randomUUID(),
+        applicant_verification: verification,
+        applicant_explanation: packet.match_explanation ?? null,
+        employer_explanation: employerMatch,
+      });
     } catch (error) {
       return send(response, 403, { status: "refused", reason: error instanceof Error ? error.message : "Applicant verification failed." });
     }
