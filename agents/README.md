@@ -4,7 +4,7 @@ This directory implements the locally runnable portion of Vijay's P0 lane in
 `docs/TASK_DIVISION.md`:
 
 - versioned ANS-style applicant and employer identities;
-- a public employer agent card;
+- public employer and applicant agent cards with exact ANS registry discovery;
 - five explained Trust Index dimensions scored as integers from 0 to 100;
 - certificate/domain and HTTPS policy checks;
 - human approval and a strict PII allowlist before an A2A POST;
@@ -25,6 +25,7 @@ npm test
 npm run demo
 npm run demo -- --refuse
 npm run start:employer
+npm run start:applicant
 ```
 
 The employer service exposes:
@@ -32,6 +33,11 @@ The employer service exposes:
 - `GET /.well-known/agent-card.json`
 - `GET /health`
 - `POST /a2a/apply`
+
+The employer independently resolves and verifies the claimed applicant ANS
+identity before accepting an application. The applicant service exposes the same
+discovery endpoints and accepts verified recruiting invitations for candidate
+approval; it never publishes resume or contact data in its agent card.
 
 ## API contracts
 

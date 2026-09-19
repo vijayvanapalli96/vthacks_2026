@@ -22,7 +22,9 @@ const execFileAsync = promisify(execFile);
 export type SqlParam = {
   name: string;
   value: string | null;
-  type?: 'STRING' | 'TIMESTAMP' | 'INT' | 'BOOLEAN' | 'DOUBLE' | 'BIGINT';
+  // Union of both sides of the merge. BIGINT is required by intake: byte_size is a
+  // BIGINT column and Databricks rejects an INT parameter against it.
+  type?: 'STRING' | 'TIMESTAMP' | 'INT' | 'BIGINT' | 'DOUBLE' | 'BOOLEAN';
 };
 
 /** Thrown for anything Databricks-shaped, so callers can tell it from a parse bug. */
@@ -47,7 +49,12 @@ let cached: { token: string; expiresAt: number } | null = null;
 function host(): string {
   const value = process.env.DATABRICKS_HOST;
   if (!value) throw new DatabricksError('DATABRICKS_HOST is not set');
-  return value.replace(/\/+$/, '');
+  // Databricks Apps injects a bare hostname; local .env files usually carry https://.
+  // Keeping main's fix — without it the Files API URL in uploads.ts is malformed in
+  // production — and keeping DatabricksError so callers can still tell a config
+  // problem from a parse bug.
+  const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  return withScheme.replace(/\/+$/, '');
 }
 
 /** The workspace origin, for callers that need a non-SQL endpoint (the Files API). */
