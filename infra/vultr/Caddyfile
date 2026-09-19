@@ -1,4 +1,9 @@
 employer.hirewire.biz {
-	tls /certs/server.crt.pem /certs/server.key
+	tls /certs/employer.fullchain.pem /certs/employer.key
 	reverse_proxy employer:8787
+}
+
+applicant.hirewire.biz {
+	tls /certs/applicant.fullchain.pem /certs/applicant.key
+	reverse_proxy applicant:8788
 }

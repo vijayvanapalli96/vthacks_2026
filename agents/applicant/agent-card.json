@@ -1,0 +1,12 @@
+{
+  "name": "ans://v1.0.0.applicant.hirewire.biz",
+  "display_name": "Hirewire Applicant Agent",
+  "version": "1.0.0",
+  "endpoint": "https://applicant.hirewire.biz/a2a/apply",
+  "capabilities": ["candidate.contact.receive"],
+  "required_fields": ["employer_ans_name", "job_id", "message"],
+  "privacy": {
+    "purpose": "Deliver a verified recruiting invitation to an opted-in candidate",
+    "retention_days": 30
+  }
+}

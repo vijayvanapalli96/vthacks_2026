@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start:employer": "node employer/server.mjs",
+    "start:applicant": "node applicant/server.mjs",
     "demo": "node applicant/demo.mjs",
     "test": "node --test"
   }
