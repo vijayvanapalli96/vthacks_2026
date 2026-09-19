@@ -1,29 +1,68 @@
 flowchart LR
-    USER[Candidate] <--> VOICE[ElevenLabs Conversational Agent]
-    USER --> UI[Accessible Web Application]
-    VOICE -->|Client navigation tools| UI
-    VOICE -->|Webhook data tools| API
-    UI --> API[Application API]
+    subgraph INPUTS[Candidate and Data Sources]
+        USER[Candidate]
+        JOBS[Job URL, Text, PDF,<br/>Greenhouse or Lever]
+        GMAIL[Gmail API]
+        VOICE[ElevenLabs<br/>Voice Navigation]
+    end
 
-    API --> TIGER[(Tiger Data Postgres)]
-    API --> FILES[Governed Resume and Document Storage]
-    API --> GEMINI[Gemini API]
+    subgraph APPLICATION[Databricks App]
+        UI[Accessible React and AppKit UI]
+        API[Application API]
+        APPROVAL[Human Approval Gate]
+        ALERT[Positive-response Gate]
+        UI <--> API
+        API --> APPROVAL
+        API --> ALERT
+    end
 
-    MANUAL[Job URL, Text, PDF, or Email] --> INGEST[Databricks Ingestion and Scoring]
-    ATS[Greenhouse and Lever Public Job APIs] --> INGEST
-    INGEST --> TIGER
-    INGEST --> LAKE[(Delta Event and Analytics Tables)]
+    USER <--> UI
+    VOICE <--> UI
+    JOBS --> API
+    GMAIL --> API
 
-    GMAIL[Gmail API] --> MAILWORKER[Mailbox Sync Worker]
-    MAILWORKER --> GEMINI
-    GEMINI --> DECISION[Positive-response Gate]
-    DECISION --> TIGER
-    DECISION -->|High confidence| ALERT[Accessible Alert Event]
-    ALERT --> UI
-    ALERT --> VOICE
+    subgraph TIGER[Tiger Data - Operational System of Record]
+        CORE[(PostgreSQL Tables<br/>Candidates, Jobs and Applications)]
+        EVENTS[(Timescale Hypertables<br/>Application, Email and Voice Events)]
+        AGG[Continuous Aggregates<br/>Live Funnel Metrics]
+        EVENTS --> AGG
+    end
 
-    TIGER --> DASH[Real-time Application Dashboard]
-    LAKE --> DASH
+    API -->|TLS PostgreSQL<br/>transactional reads and writes| CORE
+    API -->|Append timestamped events| EVENTS
+    ALERT -->|High-confidence notification| VOICE
 
-    PRESAGE[Presage SDK - Optional] --> COACH[Private Interview Coaching]
-    COACH --> TIGER
+    subgraph DATABRICKS[Databricks Data and AI Platform]
+        WORKFLOW[Ingestion and Scoring Workflow]
+        GEMINI[Gemini<br/>Extract, Match and Classify]
+        FILES[(Unity Catalog Volume<br/>Resumes and Generated Documents)]
+        DELTA[(Delta Tables<br/>AI and Evaluation History)]
+        FED[PostgreSQL Lakehouse Federation]
+        FOREIGN[(tiger_live Foreign Catalog<br/>Read-only Live Data)]
+        SQL[Serverless SQL Warehouse]
+
+        WORKFLOW --> GEMINI
+        WORKFLOW --> DELTA
+        FED --> FOREIGN
+        FOREIGN --> SQL
+        DELTA --> SQL
+    end
+
+    API -->|Store documents| FILES
+    API -->|Trigger AI evaluation| WORKFLOW
+    GEMINI -->|Validated results| API
+    CORE -->|PostgreSQL protocol| FED
+    EVENTS -->|PostgreSQL protocol| FED
+    AGG -->|PostgreSQL protocol| FED
+    SQL -->|Typed analytics queries| UI
+
+    CDC[Optional Later<br/>Lakeflow PostgreSQL CDC]
+    EVENTS -.-> CDC
+    CDC -.-> DELTA
+
+    classDef tiger fill:#fff3dc,stroke:#d97706,color:#3b2200;
+    classDef dbx fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b;
+    classDef external fill:#f8fafc,stroke:#64748b,color:#0f172a;
+    class CORE,EVENTS,AGG tiger;
+    class FED,FOREIGN,WORKFLOW,GEMINI,DELTA,FILES,SQL dbx;
+    class JOBS,GMAIL,CDC external;
