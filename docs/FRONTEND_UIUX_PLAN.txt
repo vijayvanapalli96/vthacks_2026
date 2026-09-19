@@ -259,6 +259,9 @@ Status as of the applicant-page styling pass.
 | [x] | A12 Motion on landing +     | same stagger on load and       | HIGH   | 20m  |
 |     |     employer                | reveal on scroll               |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A13 Feature marquee         | 12 key features tick across    | MED    | 20m  |
+|     |     (pure CSS, seamless)    | full-bleed under the tagline   |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
 |     | PHASE S — VOICE ORB (signature object)                                        |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [x] | S1 Orb, 5 visual states     | ink ring + 64 radial ticks on  | CRIT   | 50m  |
@@ -306,7 +309,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 20 of 34  ·   1 cut  ·  spent ~6h30m  ·  remaining P0 ~1h05m, all ~2h35m
+  DONE 22 of 35  ·   1 cut  ·  spent ~7h25m  ·  remaining P0 ~1h05m, all ~2h15m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4

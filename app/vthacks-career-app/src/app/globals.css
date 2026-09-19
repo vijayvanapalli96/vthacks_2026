@@ -1043,3 +1043,59 @@ footer strong { font-weight: 400; }
   .opening h1 { -webkit-text-stroke: 0.5px var(--ink); }
   .why__q h2, .path h2 { max-width: none; }
 }
+
+/* --- Feature marquee ---------------------------------------------------- */
+/* Two identical runs on one track, slid by exactly half the track width, so
+   the loop is seamless with no JS. */
+
+.marquee {
+  width: 100vw;
+  margin: 52px 0 0;
+  margin-left: calc(50% - 50vw);
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 16px 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
+}
+
+.marquee__track {
+  display: flex;
+  width: max-content;
+  animation: marquee 48s linear infinite;
+}
+
+.marquee:hover .marquee__track { animation-play-state: paused; }
+
+.marquee__run {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.marquee__run li {
+  white-space: nowrap;
+  padding: 0 28px;
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border-right: 1px solid var(--line);
+  line-height: 1.4;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee { -webkit-mask-image: none; mask-image: none; }
+  .marquee__track { animation: none; width: 100%; }
+  .marquee__run { flex-wrap: wrap; justify-content: center; }
+  .marquee__run[aria-hidden='true'] { display: none; }
+  .marquee__run li { border-right: 0; padding: 5px 16px; }
+}
