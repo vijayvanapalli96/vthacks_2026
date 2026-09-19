@@ -788,33 +788,58 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 .rail .stage__points li::before { background: color-mix(in srgb, #eef4ed 40%, transparent); }
 .rail__title { border-bottom-color: color-mix(in srgb, #eef4ed 18%, transparent); }
 
-/* --- Stage collages ----------------------------------------------------- */
-/* Stroke-only, currentColor, so they invert with the band at no cost. */
+/* --- Stage collages: three overlapping polaroids ------------------------ */
 
-.art {
+.collage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 14px 0 6px;
+  min-height: 190px;
+}
+
+.polaroid {
+  --tilt: 0deg;
+  margin: 0;
+  padding: 9px 9px 0;
+  background: #eef4ed;
+  border: 1px solid color-mix(in srgb, #0b2545 14%, transparent);
+  box-shadow: 0 6px 22px color-mix(in srgb, #0b2545 22%, transparent);
+  transform: rotate(var(--tilt));
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  width: 38%;
+  flex-shrink: 0;
+}
+.polaroid:nth-child(1) { margin-right: -7%; z-index: 1; }
+.polaroid:nth-child(2) { z-index: 3; width: 42%; }
+.polaroid:nth-child(3) { margin-left: -7%; z-index: 2; }
+
+.polaroid__img {
   display: block;
-  width: 100%;
-  height: auto;
-  margin-top: 6px;
-  color: var(--ink);
-  overflow: visible;
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: color-mix(in srgb, #0b2545 8%, #eef4ed);
 }
+.polaroid__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-.art__frame { fill: none; stroke: currentColor; stroke-width: 1.4; opacity: 0.85; }
-.art__line { fill: none; stroke: currentColor; stroke-width: 1.4; opacity: 0.34; }
-.art__accent {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.95;
-}
-.art__num {
-  fill: currentColor;
-  font-family: var(--font-display), Georgia, serif;
-  font-size: 30px;
+.polaroid figcaption {
+  padding: 8px 2px 9px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: color-mix(in srgb, #0b2545 62%, transparent);
   font-style: italic;
 }
 
-.stage:hover .art { opacity: 1; }
+/* Fan out a little on hover — they are photographs, let them behave like a pile. */
+.stage:hover .polaroid:nth-child(1) { transform: rotate(calc(var(--tilt) - 3deg)) translate(-6px, -4px); }
+.stage:hover .polaroid:nth-child(2) { transform: rotate(var(--tilt)) translateY(-8px); }
+.stage:hover .polaroid:nth-child(3) { transform: rotate(calc(var(--tilt) + 3deg)) translate(6px, -4px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .stage:hover .polaroid:nth-child(1),
+  .stage:hover .polaroid:nth-child(2),
+  .stage:hover .polaroid:nth-child(3) { transform: rotate(var(--tilt)); }
+}
