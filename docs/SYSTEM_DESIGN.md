@@ -32,7 +32,7 @@ The system is designed for a hackathon prototype. It prioritizes a coherent user
 | Component | Responsibility |
 |---|---|
 | Databricks Apps | Host the React web application and backend API. |
-| Databricks Lakeflow Jobs | Run scheduled job ingestion, normalization, scoring, and reconciliation workflows. |
+| Databricks Lakeflow Jobs | Run recurring job ingestion, normalization, scoring, and reconciliation workflows. |
 | Databricks Unity Catalog and Volumes | Govern resumes, generated documents, and analytical datasets. |
 | Tiger Data | Store transactional application state, time-series events, and real-time aggregates. |
 | Gemini API | Parse resumes and jobs, explain matches, generate grounded application materials, and classify employer emails. |
@@ -167,7 +167,7 @@ Continuous aggregates can power:
 Databricks provides:
 
 - Job ingestion and normalization workflows
-- Batch or scheduled match-score computation
+- Batch or recurring match-score computation
 - Governed storage for resumes and generated documents
 - Append-oriented analytics history in Delta tables
 - Model and prompt evaluation datasets
@@ -283,7 +283,7 @@ Example structured result:
   "direction": "positive",
   "confidence": 0.96,
   "evidence": [
-    "We would like to schedule a technical interview"
+    "We would like to arrange a technical interview"
   ],
   "suggested_action": "Select an interview time"
 }
@@ -352,7 +352,7 @@ The backend supplies dynamic notification context:
 - Required next action
 - Application dashboard URL
 
-The initial agent can navigate, search, inform, summarize, save a job with confirmation, and start interview practice. It cannot reply to recruiters, schedule an interview, submit an application, or make another sensitive state change without the required confirmation flow.
+The initial agent can navigate, search, inform, summarize, save a job with confirmation, and start interview practice. It cannot reply to recruiters, book an interview, submit an application, or make another sensitive state change without the required confirmation flow.
 
 Example opening:
 
@@ -479,35 +479,29 @@ DISCOVERED
 - Keep a timestamped audit record of every automated decision and external action.
 - Do not log full resumes, OAuth tokens, or complete email bodies in general application logs.
 
-## 10. Product Modules and Feature Roadmap
+## 10. Product Features
 
-Delivery phases:
-
-- **P0 — 12-hour build:** one complete, reliable workflow suitable for demonstration.
-- **P1 — product completion:** expand the workflow after the vertical slice is stable.
-- **P2 — platform expansion:** advanced automation, plugins, research, and longitudinal analytics.
-
-| Feature | P0 — 12-hour build | P1 — product completion | P2 — platform expansion |
-|---|---|---|---|
-| Auto-Pipeline | Resume plus pasted job or one ATS URL produces an evaluation, one PDF, and a tracker record. | Add retries, saved configurations, additional document variants, and richer status transitions. | Run many configured pipelines with scheduling and per-source policies. |
-| A-H Evaluation | Role summary, deterministic match score, requirement evidence, work-authorization blocker, posting-legitimacy warnings, and interview questions. | Add level strategy, compensation research, personalization strategy, and richer STAR+Reflection preparation. | Add calibrated weighting models, historical outcome learning, and organization-specific evaluation policies. |
-| Interview Story Bank | Extract a small set of candidate stories from the resume and one interview session. | Maintain 5–10 reusable STAR+Reflection stories with tagging, revision, and question coverage. | Rank and adapt stories using outcome history while retaining candidate approval. |
-| Negotiation Scripts | Not included in P0. | Generate salary, geographic-discount, and competing-offer scripts from approved facts. | Add scenario comparison, negotiation history, and offer-specific strategy. |
-| ATS PDF Generation | Generate one ATS-safe resume from a reviewed HTML template through Playwright. | Add Space Grotesk and DM Sans presentation variants, template validation, and keyword-diff review. | Add template marketplace, version comparison, and batch regeneration. |
-| Cover Letter Generator | Generate one evidence-backed draft with an approval gate. | Add why/problems/approach/tone prompts, automatic evaluation drafts, and A4 Playwright export. | Add organization-specific templates and experiment tracking. |
-| Application Email Drafts | Not included in P0 unless core work finishes early. | Produce subject, body, attachment checklist, fit evidence, and candidate contact block without sending. | Add reusable outreach sequences and contact-specific variations. |
-| Portal Scanner | Support manual input plus one Greenhouse or Lever connector. | Add Greenhouse, Lever, Ashby, and Wellfound connectors with a curated company registry. | Expand to 100+ configured employers with connector health reporting. |
-| Funded Company Discovery | Not included in P0. | Add review-first discovery from one structured public funding feed. | Add source diagnostics, freshness scoring, and configurable company-watch workflows. |
-| Batch Processing | Process one job synchronously. | Add small queued batches through Lakeflow Jobs. | Add parallel workers, CLI adapters, rate controls, retries, and resumable runs. |
-| Dashboard TUI | Use the accessible web dashboard in P0. | Add a read-only terminal pipeline browser. | Add filtering, sorting, bulk review, and operational health controls. |
-| Human-in-the-Loop | Mandatory approval before submission or external communication. | Add approval history, change diffs, and reusable decision policies. | Add organization or team approval workflows without removing candidate control. |
-| Pipeline Integrity | Enforce unique source IDs, normalized statuses, idempotent writes, and event history. | Add reconciliation jobs and connector health checks. | Add anomaly detection, repair workflows, and integrity reporting. |
-| Interview Suite | Start one ElevenLabs job-specific practice session and store its transcript. | Add preparation plans, feedback, debriefs, story-bank updates, and company red-flag review. | Add longitudinal coaching and improvement analytics. |
-| Offer Stage | Not included in P0. | Add clause extraction, lawyer-question lists, and desired/advertised/actual salary gaps. | Add version comparison, negotiation outcome tracking, and jurisdiction-specific review disclaimers. |
-| Follow-ups and Replies | Classify one Gmail response and update the tracker. | Add follow-up cadence calculation and user-approved reminders. | Add multi-channel reply tracking and configurable cadence policies. |
-| Pattern Analysis | Show basic funnel counts and response time. | Add rejection-pattern and per-channel advance-rate analysis. | Add repost and ghost-job detection, cohort analysis, and longitudinal recommendations. |
-| Plugin System | Keep integrations explicitly configured in code. | Define a stable connector interface and secret contract. | Add opt-in Gmail, Notion, Apify, and community plugins disabled by default. |
-| Beyond the CV | Generate a brief company and role summary from supplied sources. | Add deeper company research, hiring-contact discovery, and short outreach drafts. | Add source-ranking, change monitoring, and research packs without automatic outreach. |
+| Feature | Proposed capability | Primary components |
+|---|---|---|
+| Auto-Pipeline | A pasted URL, description, or supported ATS record produces a normalized job, complete evaluation, reviewed PDF, and tracker entry. | Connector service, Gemini, document service, Tiger Data |
+| A-H Evaluation | Produce a role summary, weighted requirements with provenance, candidate evidence, level strategy, compensation research, personalization guidance, STAR+Reflection preparation, posting-legitimacy checks, and work-authorization blockers. | Deterministic scoring service, Gemini, research adapters, Tiger Data |
+| Interview Story Bank | Maintain 5–10 reusable STAR+Reflection stories extracted from approved candidate material and interview debriefs, tagged by competency and question coverage. | Gemini, Tiger Data, ElevenLabs transcripts |
+| Negotiation Scripts | Generate salary frameworks, geographic-discount responses, competing-offer leverage, and scenario-specific talking points from approved facts. | Gemini, compensation data adapter, approval UI |
+| ATS PDF Generation | Produce keyword-aligned, ATS-safe resumes using Space Grotesk and DM Sans templates rendered from HTML through Playwright. | Document service, HTML templates, Playwright |
+| Cover Letter Generator | Mirror relevant job language, collect why/problems/approach/tone input, create an evidence-backed draft, require in-app approval, and export A4 PDF through the document pipeline. | Gemini, research adapters, approval UI, Playwright |
+| Application Email Drafts | Create recruiter, referral, and cold-application email drafts with subject, attachment checklist, evidence-backed fit points, and candidate contact details. The system never sends them automatically. | Gemini, candidate profile, draft review UI |
+| Portal Scanner | Query a curated registry of 100+ employer portals and custom searches across Ashby, Greenhouse, Lever, and Wellfound. | Connector registry, ingestion workers, Databricks, Tiger Data |
+| Funded Company Discovery | Surface recently funded companies from structured public feeds with source, freshness, and diagnostic details without changing user data. | Funding-feed adapters, review UI, Tiger Data |
+| Batch Processing | Evaluate multiple jobs through parallel, rate-limited, retryable workers with resumable job state and CLI adapters. | Lakeflow Jobs, worker queue, CLI adapters, Tiger Data |
+| Dashboard TUI | Provide a terminal interface for browsing, filtering, sorting, and reviewing the application pipeline. | CLI, Application API |
+| Human-in-the-Loop | Require candidate review before submission, outreach, interview booking, negotiation, or offer decisions. Preserve approval history and content diffs. | Approval service, audit events, accessible UI |
+| Pipeline Integrity | Merge duplicate records, normalize statuses, reconcile sources, run connector health checks, and surface repair actions. | Unique constraints, reconciliation jobs, health service |
+| Interview Suite | Provide structured preparation plans, ElevenLabs practice sessions, feedback, debriefs, story-bank updates, and company red-flag analysis. | ElevenLabs, Gemini, Tiger Data, Presage optional |
+| Offer Stage | Walk through contract clauses, generate questions for a qualified lawyer, and compare desired, advertised, and actual compensation. | Document parser, Gemini, compensation analyzer |
+| Follow-ups and Replies | Calculate follow-up cadence, create user-approved reminders, classify employer replies, and update the application tracker. | Gmail, reminder service, Gemini, Tiger Data |
+| Pattern Analysis | Analyze rejection themes, advance rates by ATS channel, lifetime funnel performance, reposts, and likely ghost jobs. | Tiger Data continuous aggregates, Databricks analytics |
+| Plugin System | Support opt-in Gmail, Notion, Apify, and community integrations through a stable connector interface; all plugins are disabled by default. | Plugin registry, secret manager, connector SDK |
+| Beyond the CV | Research company strategy, recent activity, engineering culture, hiring contacts, and candidate positioning; draft short contact-specific outreach without sending it. | Research adapters, Gemini, contact review UI |
 
 ### 10.1 Evaluation contract
 
@@ -530,9 +524,7 @@ Supported importance sources are `explicit_job_description`, `document_structure
 
 The system may discover, analyze, draft, rank, and recommend. It does not independently submit applications, send outreach, accept interview times, negotiate, or accept offers. Those actions require an accessible review screen and explicit candidate approval.
 
-## 11. Twelve-Hour Execution Plan
-
-### 11.1 Team ownership
+## 11. Team Ownership
 
 | Developer | Primary ownership | Deliverables |
 |---|---|---|
@@ -541,34 +533,9 @@ The system may discover, analyze, draft, rank, and recommend. It does not indepe
 | Developer 3 | Tiger Data and Application API | Schema, migrations, CRUD API, application-event hypertable, continuous aggregate, approval rules, and dashboard queries. |
 | Developer 4 | Connectors, Databricks, and deployment | Greenhouse or Lever connector, Gmail polling or event simulator, Lakeflow workflow, environment configuration, and deployment. |
 
-### 11.2 Schedule
+Shared contracts for identifiers, API payloads, evaluation schemas, event types, and environment variables are versioned in the repository. Changes to shared contracts require review from every affected owner.
 
-| Time | Team objective | Exit condition |
-|---|---|---|
-| Hour 0–1 | Freeze API contracts, schemas, identifiers, environment variables, and acceptance tests. | Every developer can build against committed interfaces. |
-| Hours 1–4 | Build frontend, AI pipeline, database/API, and connectors in parallel. | Each workstream passes a local smoke test. |
-| Hours 4–6 | Integrate resume → job → evaluation → tracker. | One job completes the full pipeline without manual database edits. |
-| Hours 6–8 | Add ElevenLabs navigation, resume PDF, cover-letter draft, and accessible confirmation. | Voice can search, open, explain, and save a job; documents render successfully. |
-| Hours 8–9 | Add Gmail classification or the deterministic recruiter-response simulator. | A positive response updates the application and creates a voice-ready alert. |
-| Hours 9–10 | Add Tiger Data aggregate, funnel view, loading/error states, and accessibility checks. | The dashboard changes after new events and remains usable by keyboard. |
-| Hours 10–11 | Deploy, connect the domain, test secrets, and run the acceptance scenario. | The public deployment completes the end-to-end workflow twice. |
-| Hours 11–12 | Freeze features, fix critical defects, seed demo data, document setup, and record a backup demo. | Repository, deployment, and presentation are ready. |
-
-Integration checkpoints occur at hours 4, 6, 8, and 10. Schema or API changes after hour 6 require agreement from the affected owners.
-
-### 11.3 Cut order if behind schedule
-
-Cut work in this order while preserving the vertical slice:
-
-1. Presage interview signals
-2. Live Gmail OAuth, replaced with a recruiter-response simulator
-3. Custom PDF typography and secondary document variants
-4. Cover-letter angle prompts
-5. Second ATS connector
-
-Do not cut Tiger Data persistence, Gemini evaluation, ElevenLabs navigation, accessible confirmation, or the application tracker.
-
-## 12. Twelve-Hour Acceptance Scope
+## 12. Core Acceptance Scope
 
 Build the following vertical slice:
 
