@@ -299,9 +299,21 @@ main, [id] { scroll-margin-top: 100px; }
   font-weight: 700;
   -webkit-text-stroke: 0.3px var(--ink);
   letter-spacing: -0.015em;
-  padding: 34px 0 26px;
+  padding: 30px 0 22px;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.rail__title span {
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  -webkit-text-stroke: 0;
+  color: var(--muted);
 }
 
 .rail__track {
@@ -352,10 +364,20 @@ main, [id] { scroll-margin-top: 100px; }
 }
 
 .stage__n {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
   font-size: 13px;
   letter-spacing: 0.22em;
   color: var(--muted);
-  margin: 0 0 12px;
+  margin: 0 0 14px;
+}
+.stage__n span {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding-left: 14px;
+  border-left: 1px solid currentColor;
 }
 
 .stage__lede { color: var(--ink); font-size: 17px; line-height: 1.6; margin: 0 0 22px; }

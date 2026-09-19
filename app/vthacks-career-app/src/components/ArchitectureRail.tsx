@@ -6,115 +6,131 @@ import { useEffect, useRef, useState } from 'react';
 
 type Stage = {
   n: string;
+  group?: string;
   title: string;
   lede: string;
   points: string[];
   stack: [string, string][];
 };
 
-/** Every claim here is something the system actually does. Nothing aspirational
- *  goes on this rail — a judge will ask, and a caught exaggeration costs more
- *  than a gap. */
+/** Straight from the build notes, with owners, ticket IDs and status stripped.
+ *  Every claim is something the system does — a judge will ask. */
 const STAGES: Stage[] = [
   {
     n: '01',
+    group: 'Understand the student',
     title: 'Profile agent',
     lede: 'Reads the resume PDF and LinkedIn export, and writes facts it can defend.',
     points: [
-      'Append-only memory — every fact carries its source and a confidence',
-      'Nothing is ever overwritten; current state is a view over history',
-      'Reports what is still missing, in the order worth asking',
+      'Append-only facts, each with its source and a confidence',
+      'Nothing is ever overwritten — current state is a view over history',
+      'Lists what is still missing, in the order worth asking',
     ],
     stack: [
       ['Gemini', 'multimodal PDF understanding — the file goes in, not scraped text'],
-      ['Databricks', 'profile_memory + profile_current view'],
+      ['Databricks', 'append-only profile memory and the current-state view'],
     ],
   },
   {
     n: '02',
+    group: 'Understand the student',
     title: 'Voice agent',
     lede: 'One agent owns the whole conversation. There is no separate router.',
     points: [
-      'Speech-to-text, turn-taking, barge-in, reasoning and voice in one loop',
-      'Server tools are webhooks to our own endpoints — voice and UI call the same API',
-      'Two personas: a calm assistant, and an interviewer for practice',
-      'Speaks a refusal verbatim from spoken_reason, never paraphrased',
+      'Speech-to-text, turn-taking and barge-in, reasoning and voice, end to end',
+      'Server tools are webhooks to our own endpoints: search_jobs, match, explain_match, tailor, verify_employer, apply, status',
+      'Two personas as two agents — a calm assistant, and an interviewer for practice',
+      'Asks for the profile gaps in order, and confirms goals by reading them back',
+      'Speaks the refusal verbatim from spoken_reason, never paraphrased',
+      'Client tools drive the screen: open a job, show the trust card, open the dashboard',
     ],
-    stack: [['ElevenLabs Agents', 'end-to-end conversation, server tools, two voices']],
+    stack: [['ElevenLabs Agents', 'the entire conversation — voice and UI call the same endpoints']],
   },
   {
     n: '03',
+    group: 'Find and fit the work',
     title: 'Job sourcing agent',
-    lede: 'A zero-token scan of public job boards. No scraping, no browser.',
+    lede: 'A zero-token scan of open, no-login public job boards. No scraping, no browser.',
     points: [
-      'Reads Greenhouse, Lever and Ashby board APIs directly',
+      'Reads Greenhouse, Lever and Ashby board APIs, with ~95 more providers available',
       "Finds a company's board from its name or domain before scanning",
-      'Canonical URL key — a posting is stored once and never rewritten',
-      'Liveness check drops closed roles; a repost detector catches re-listings',
+      'Canonical URL key, so each posting is stored once and never rewritten',
+      'Liveness check drops closed postings before they cost a match',
+      'Repost detector flags the same role re-listed under a new URL',
       'Seniority classifier keeps intern and entry-level roles for students',
     ],
     stack: [
-      ['Databricks', 'job_snapshots, MERGE INTO write-once ingestion'],
-      ['career-ops (MIT)', '99 provider modules, url-key, liveness, repost detection'],
+      ['Databricks', 'write-once ingestion into job_snapshots'],
+      ['career-ops (MIT)', 'provider modules, URL keys, liveness and repost detection'],
     ],
   },
   {
     n: '04',
+    group: 'Find and fit the work',
     title: 'Match agent',
-    lede: 'Ranks by embedding, then explains every fit it claims.',
+    lede: 'Ranks with embeddings, then explains every fit it claims.',
     points: [
-      'Zero-LLM skill gap per job: on the resume, supported elsewhere, or missing',
-      'Requirements tagged by evidence — stated, implied, or inferred',
+      'Zero-LLM skill gap per job: already on the resume, supported elsewhere on it, or missing',
+      'Every requirement tagged by evidence — stated in the posting, implied by its structure, or inferred',
       'An inferred requirement can never be a hard blocker',
-      'Five scores roll into one verdict; 4.0 is the apply line',
-      'Posting-legitimacy check pairs with ANS: is the job real, is the employer real',
+      'Five scores roll into one verdict: CV match, goals fit, comp, culture, red flags — 4.0 is the apply line',
+      'Posting-legitimacy check flags ghost jobs: is the job real, is the employer real',
       'Coursework lever — which course unlocks the most postings',
     ],
     stack: [
-      ['Databricks', 'ai_query embeddings (gte-large-en, 1024-dim), cosine match in SQL'],
+      ['Databricks', 'ai_query embeddings and fit scoring in plain SQL'],
+      ['career-ops (MIT)', 'skill extraction and gap classification'],
     ],
   },
   {
     n: '05',
+    group: 'Find and fit the work',
     title: 'Tailor agent',
     lede: 'Builds the packet for one chosen job, and refuses to invent anything.',
     points: [
-      'Resume, cover letter and outreach email in a single call',
+      'Tailored resume, cover letter and outreach email in one call',
       'Fact gate: every claim checked against the profile before it is shown',
-      'The tailoring plan comes from the match gaps, not generic keywords',
+      'The tailoring plan comes from the match gaps, not from generic keywords',
       'Reuses a prior tailored resume when a new posting is near-identical',
+      'Print stylesheet for the downloadable copy',
     ],
-    stack: [['Databricks', 'one ai_query call returning structured JSON']],
+    stack: [
+      ['Databricks', 'one ai_query call returning the whole packet as structured JSON'],
+      ['career-ops (MIT)', 'fact verification and letter generation'],
+    ],
   },
   {
     n: '06',
+    group: 'Prove who is on the other side',
     title: 'Applicant agent',
     lede: 'Proves who it is talking to before anything private moves.',
     points: [
-      "Resolves the employer's agent from the job's own domain",
+      "Finds the employer's agent from the job's own domain",
       'Checks the identity certificate against that domain',
       'Trust Index across five dimensions, each carrying a reason',
-      'Applies the student policy, then waits for a human to approve',
-      'Releases only approved fields — or refuses and says why out loud',
+      "Applies the student's policy, then waits for human approval",
+      'Releases only approved fields — or refuses, and says why out loud',
     ],
-    stack: [['GoDaddy ANS', 'domain-anchored agent identity, certificates, Trust Index']],
+    stack: [['GoDaddy ANS', 'domain-anchored agent identity, certificates and Trust Index']],
   },
   {
     n: '07',
+    group: 'Prove who is on the other side',
     title: 'Employer agent',
-    lede: 'Verification runs both ways. The flood stops at the door.',
+    lede: 'Verification runs both ways. The fake-applicant flood stops at the door.',
     points: [
       'Publishes its agent card at a public, reachable endpoint',
       'Verifies the applicant agent back before accepting anything',
-      'Returns its own explanation of the match',
+      'Accepts the application and returns its own match explanation',
     ],
     stack: [
-      ['GoDaddy ANS', 'the second registered agent, bidirectional verification'],
+      ['GoDaddy ANS', 'the second registered agent, verifying in both directions'],
       ['Vultr', 'public HTTPS host — ANS has to be able to reach it'],
     ],
   },
   {
     n: '08',
+    group: 'Prove who is on the other side',
     title: 'Audit and attack console',
     lede: 'Every verdict, and exactly which fields went to whom.',
     points: [
@@ -122,10 +138,11 @@ const STAGES: Stage[] = [
       'Live forged, replayed and swapped attacks against a hostile agent',
       'A blocked counter that climbs while you watch',
     ],
-    stack: [['MongoDB Atlas', 'immutable a2a_audit log of every verdict and field release']],
+    stack: [['MongoDB Atlas', 'immutable audit log of every verdict and field release']],
   },
   {
     n: '09',
+    group: 'Know what is working',
     title: 'Funnel analytics',
     lede: 'The first honest measurement of a job search.',
     points: [
@@ -133,7 +150,20 @@ const STAGES: Stage[] = [
       'Rolling callback rate by company, role and skill',
       'Callback rate against days-since-posting — apply late, hear back less',
     ],
-    stack: [['TigerData', 'application_events hypertable, continuous aggregates']],
+    stack: [['TigerData', 'application events hypertable and continuous aggregates']],
+  },
+  {
+    n: '10',
+    group: 'Every stage, always',
+    title: 'The guarantees',
+    lede: 'Four rules the system holds to, not aspirations.',
+    points: [
+      'No personal data moves before identity, certificate, trust and policy all pass',
+      'A refusal always releases zero fields',
+      'Every score carries a reason, and no claim is invented',
+      'Voice and UI call the same endpoints, and a human clicks apply',
+    ],
+    stack: [],
   },
 ];
 
@@ -168,6 +198,7 @@ export function ArchitectureRail() {
       <section className="rail rail--static" aria-labelledby="rail-h">
         <h2 id="rail-h" className="rail__title">
           How it works
+          <span>student speaks or types → agents act → verified apply, or an out-loud refusal</span>
         </h2>
         <div className="rail__stack">
           {STAGES.map((s) => (
@@ -188,6 +219,7 @@ export function ArchitectureRail() {
       <div className="rail__pin">
         <h2 id="rail-h" className="rail__title">
           How it works
+          <span>student speaks or types → agents act → verified apply, or an out-loud refusal</span>
         </h2>
         <motion.div className="rail__track" ref={trackRef} style={{ x }}>
           {STAGES.map((s) => (
@@ -207,17 +239,21 @@ function Card({ stage }: { stage: Stage }) {
           readers and tab order follow the DOM; only the paint order changes. */}
       <div className="stage__caption">
         <h3>{stage.title}</h3>
-        <p>{stage.stack.map(([who]) => who).join(' · ')}</p>
+        <p>{stage.stack.length ? stage.stack.map(([who]) => who).join(' · ') : stage.group}</p>
       </div>
 
       <div className="stage__card">
-        <p className="stage__n">{stage.n}</p>
+        <p className="stage__n">
+          {stage.n}
+          {stage.group ? <span>{stage.group}</span> : null}
+        </p>
         <p className="stage__lede">{stage.lede}</p>
         <ul className="stage__points">
           {stage.points.map((pt) => (
             <li key={pt}>{pt}</li>
           ))}
         </ul>
+        {stage.stack.length ? (
         <dl className="stage__stack">
           {stage.stack.map(([who, what]) => (
             <div key={who}>
@@ -226,6 +262,7 @@ function Card({ stage }: { stage: Stage }) {
             </div>
           ))}
         </dl>
+        ) : null}
       </div>
     </article>
   );
