@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type Stage = {
   n: string;
@@ -138,15 +138,29 @@ const STAGES: Stage[] = [
 
 export function ArchitectureRail() {
   const sectionRef = useRef<HTMLElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
+
+  // Cards are a fixed width, so the travel has to be measured rather than
+  // derived from a fraction. Re-measured on resize so it stays flush.
+  const [travel, setTravel] = useState(0);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const measure = () => setTravel(Math.max(0, track.scrollWidth - track.clientWidth));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(track);
+    return () => ro.disconnect();
+  }, []);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ['start start', 'end end'],
   });
 
-  // Travel the full track width minus one viewport, so the last card lands flush.
-  const x = useTransform(scrollYProgress, [0, 1], ['0%', `-${((STAGES.length - 1) / STAGES.length) * 100}%`]);
+  const x = useTransform(scrollYProgress, [0, 1], [0, -travel]);
 
   if (reduced) {
     return (
@@ -174,7 +188,7 @@ export function ArchitectureRail() {
         <h2 id="rail-h" className="rail__title">
           How it works
         </h2>
-        <motion.div className="rail__track" style={{ x }}>
+        <motion.div className="rail__track" ref={trackRef} style={{ x }}>
           {STAGES.map((s) => (
             <Card key={s.n} stage={s} />
           ))}
