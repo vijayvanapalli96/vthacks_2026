@@ -19,11 +19,6 @@ export default function LinkedInIntakePage() {
       </nav>
 
       <div className="intake-shell">
-        <ol className="intake-steps">
-          <li className="is-done">1. Resume</li>
-          <li aria-current="step">2. LinkedIn</li>
-          <li>3. Reading</li>
-        </ol>
 
         <p className="eyebrow">STEP TWO</p>
         <h1>Add your LinkedIn.</h1>

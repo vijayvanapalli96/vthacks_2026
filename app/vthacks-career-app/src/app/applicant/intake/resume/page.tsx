@@ -19,11 +19,6 @@ export default function ResumeIntakePage() {
       </nav>
 
       <div className="intake-shell">
-        <ol className="intake-steps">
-          <li aria-current="step">1. Resume</li>
-          <li>2. LinkedIn</li>
-          <li>3. Reading</li>
-        </ol>
 
         <p className="eyebrow">STEP ONE</p>
         <h1>Start with your resume.</h1>
