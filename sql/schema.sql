@@ -413,3 +413,106 @@ CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_gaps (
   CONSTRAINT profile_gaps_pk PRIMARY KEY (user_id, field_key)
 ) USING DELTA
 COMMENT 'What we still need to ask. Drives the ElevenLabs question queue.';
+
+
+-- SECTION 5 — LIVE. The job discovery pipeline (scripts/scan/).
+--   Applied to workspace.vthacks_2026 on 2026-09-19. Plan:
+--   docs/JOB_PIPELINE_PLAN.md. Writer: scripts/scan/scan-us-jobs.mjs, every
+--   5 minutes, one row per posting.
+--
+--   NOTE ON APPLYING THIS FILE: do NOT write a helper that splits it on ';'.
+--   A semicolon inside a COMMENT string splits a statement in two and
+--   half-applies the schema. (No COMMENT string in this file contains one, and
+--   keeping it that way is cheaper than a correct parser.)
+-- ---------------------------------------------------------------------------
+
+-- job_snapshots gains three columns. The scanner stores EVERY posting it
+-- fetches: US-ness and freshness are COLUMNS, not a discard. A dropped row
+-- cannot be re-examined when the filter turns out to have been wrong, and the US
+-- filter being subtly wrong is the most likely silent failure in this lane.
+-- The table already exists and other lanes read it, so this is ALTER, never a
+-- re-CREATE.
+--
+-- THE ONLY NON-IDEMPOTENT STATEMENT IN THIS FILE. `ADD COLUMNS IF NOT EXISTS`
+-- and `ADD COLUMN IF NOT EXISTS` were both tried against this warehouse on
+-- 2026-09-19 and BOTH are parse errors ([PARSE_SYNTAX_ERROR] at 'EXISTS') — the
+-- clause the Delta docs suggest is not accepted here. Re-running this statement
+-- therefore fails with FIELDS_ALREADY_EXIST. That is a loud, harmless failure;
+-- check first with DESCRIBE TABLE workspace.vthacks_2026.job_snapshots and skip
+-- it if is_us is already there.
+ALTER TABLE workspace.vthacks_2026.job_snapshots ADD COLUMNS (
+  is_us               BOOLEAN   COMMENT 'Verdict of scripts/scan/lib/location-us.mjs. Heuristic over a display string plus a Workday URL path segment, not a gazetteer.',
+  posted_at           TIMESTAMP COMMENT 'When the employer published the posting. NULL when the source exposes no date, which is why freshness is a filter and not a claim.',
+  location_confidence STRING    COMMENT 'display = the posting named a place we recognise. url_hint = the location string named none and the URL path did. unknown = no geography was read, so is_us rests on a weak signal such as a bare Remote.'
+);
+
+-- open_us_jobs — "US roles open right now" as a query rather than a discard.
+-- 3 days matches the scanner constant FRESHNESS_DAYS. Postings with no
+-- posted_at are excluded here on purpose: without a date we cannot claim a
+-- posting is open, and the row still exists in job_snapshots for anyone who
+-- wants to reason about it.
+CREATE OR REPLACE VIEW workspace.vthacks_2026.open_us_jobs AS
+SELECT * FROM workspace.vthacks_2026.job_snapshots
+WHERE is_us AND posted_at >= current_timestamp() - INTERVAL 3 DAYS;
+
+-- job_boards — the seed list AND its health. Scheduling state lives with the
+--   thing being scheduled, so a restart does not lose the rotation. Seeded from
+--   scripts/scan/boards.json via `npm run boards:seed`, which never resets the
+--   rotation or health columns of a board it already knows.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.job_boards (
+  board_id             STRING NOT NULL COMMENT 'provider:slug, e.g. greenhouse:stripe',
+  provider             STRING NOT NULL COMMENT 'greenhouse | ashby | lever | workday | icims',
+  company_name         STRING          COMMENT 'Real employer name. No placeholders.',
+  board_slug           STRING,
+  api_url              STRING          COMMENT 'Pinned public JSON endpoint. Pinned rather than detected so a marketing site redesign cannot break the scan.',
+  careers_url          STRING          COMMENT 'Human-facing board, for the UI and for debugging',
+  country_hint         STRING,
+  enabled              BOOLEAN,
+  last_scanned_at      TIMESTAMP       COMMENT 'Drives the rotating slice. NULLS FIRST, so a new board is scanned next.',
+  last_ok_at           TIMESTAMP,
+  consecutive_failures INT,
+  backoff_until        TIMESTAMP       COMMENT 'Boards break. Without a backoff we re-hit a dead board every 5 minutes forever.',
+  CONSTRAINT job_boards_pk PRIMARY KEY (board_id)
+) USING DELTA
+COMMENT 'Employer job boards to scan, with their rotation and health state.';
+
+-- scan_runs — one row per tick. The observability story, the "is the pipeline
+--   alive?" answer for the dashboard, AND the uniqueness assertion.
+--   postings_us / postings_fresh / postings_undated matter more than they look:
+--   they are how we tell "the US filter is working" from "the US filter is
+--   eating everything".
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.scan_runs (
+  run_id           STRING    NOT NULL,
+  started_at       TIMESTAMP NOT NULL,
+  finished_at      TIMESTAMP,
+  boards_attempted INT,
+  boards_ok        INT,
+  boards_failed    INT,
+  postings_seen    INT       COMMENT 'Everything the providers returned, before in-memory de-duplication',
+  postings_new     INT       COMMENT 'Rows the MERGE actually inserted',
+  postings_us      INT,
+  postings_fresh   INT,
+  postings_undated INT,
+  total_rows       BIGINT    COMMENT 'count(*) over job_snapshots at the end of the tick',
+  distinct_job_ids BIGINT    COMMENT 'count(DISTINCT job_id) over the same. MUST equal total_rows. UC PRIMARY KEY is informational and Delta enforces nothing, so uniqueness is produced by the writer and verified here, every run.',
+  error_message    STRING    COMMENT 'Board failures, and a loud message if the assertion above ever fires',
+  CONSTRAINT scan_runs_pk PRIMARY KEY (run_id)
+) USING DELTA
+COMMENT 'One row per 5-minute scan tick, including the uniqueness assertion.';
+
+-- scan_locks — the single-writer lock. NOT in the original plan document, and
+--   needed for its own section 3.1 point 3 to be true: two concurrent MERGEs
+--   against job_snapshots can both evaluate "not matched" for one job_id and
+--   both insert, because Delta's optimistic concurrency does not serialise
+--   them. A 5-minute cron with ~90s ticks overlaps as soon as one tick runs
+--   long, and a lock file on one machine cannot see a tick running on another.
+--   A tick that cannot take the lock EXITS. Locks expire so a crashed tick
+--   cannot wedge the pipeline (see scripts/scan/lib/lock.mjs).
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.scan_locks (
+  lock_name   STRING    NOT NULL COMMENT 'us-scan',
+  holder      STRING    NOT NULL COMMENT 'Per-tick UUID. Ownership is confirmed by reading this back after the acquire.',
+  acquired_at TIMESTAMP NOT NULL,
+  expires_at  TIMESTAMP NOT NULL COMMENT 'A later tick may steal an expired lock',
+  CONSTRAINT scan_locks_pk PRIMARY KEY (lock_name)
+) USING DELTA
+COMMENT 'Single-writer lock for the job scan tick. One row per lock name.';
