@@ -825,3 +825,60 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
   background: currentColor;
   opacity: 0.6;
 }
+
+/* ---------------------------------------------------------------------------
+   Verified-apply entry points on the applicant dashboard. Links that look like
+   buttons keep link semantics (they navigate), so they stay <a>.
+   --------------------------------------------------------------------------- */
+
+a.primary,
+a.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: auto;
+  text-decoration: none;
+}
+
+.handshake {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px;
+  margin-bottom: 20px;
+}
+
+.handshake h2 {
+  margin-top: 6px;
+}
+
+.handshake p {
+  margin: 8px 0 0;
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.handshake-actions {
+  display: flex;
+  gap: 10px;
+  flex: none;
+}
+
+.handshake-actions .primary {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .handshake {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .handshake-actions {
+    flex-wrap: wrap;
+  }
+}

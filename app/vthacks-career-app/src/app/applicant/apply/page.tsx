@@ -9,8 +9,15 @@ import './apply.css';
 
 export const metadata = { title: 'Verify and apply · HireWire' };
 
-export default async function ApplyPage() {
+export default async function ApplyPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireRole('applicant');
+  // Job cards and the dashboard link here with ?host=<employer agent host>.
+  const { host } = await searchParams;
+  const initialHost = typeof host === 'string' && /^[a-z0-9.-]{3,253}$/i.test(host) ? host.toLowerCase() : undefined;
 
   return (
     <main>
@@ -30,7 +37,7 @@ export default async function ApplyPage() {
           your agent refuses and says why.
         </p>
       </section>
-      <TrustApply name={user.name ?? ''} email={user.email ?? ''} />
+      <TrustApply name={user.name ?? ''} email={user.email ?? ''} initialHost={initialHost} />
       <footer>
         <ShieldCheck aria-hidden="true" />
         <strong>A refusal always releases zero fields.</strong>

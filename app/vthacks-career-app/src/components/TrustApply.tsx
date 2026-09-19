@@ -71,9 +71,10 @@ function speak(text: string) {
   window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
-export function TrustApply({ name, email }: { name: string; email: string }) {
-  const [host, setHost] = useState(targets[0].host);
-  const [customHost, setCustomHost] = useState('');
+export function TrustApply({ name, email, initialHost }: { name: string; email: string; initialHost?: string }) {
+  const preset = initialHost && !targets.some((option) => option.host === initialHost) ? initialHost : undefined;
+  const [host, setHost] = useState(preset ? 'custom' : (initialHost ?? targets[0].host));
+  const [customHost, setCustomHost] = useState(preset ?? '');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [speakAloud, setSpeakAloud] = useState(false);
   const [skills, setSkills] = useState('Python, SQL, TypeScript');
