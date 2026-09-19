@@ -320,28 +320,43 @@ main, [id] { scroll-margin-top: 100px; }
    band rather than filling it. */
 .stage {
   flex: 0 0 clamp(340px, 34vw, 660px);
-  height: min(64vh, 600px);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* The card is the bordered box; the caption sits outside and below it. */
+.stage__card {
+  order: 1;
+  height: min(60vh, 560px);
   border: 1px solid var(--line);
-  padding: 40px 38px;
+  padding: 38px 36px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   transition: border-color 0.25s ease;
 }
-.stage:hover { border-color: var(--ink); }
+.stage:hover .stage__card { border-color: var(--ink); }
+
+.stage__caption { order: 2; }
+.stage__caption h3 {
+  font-size: clamp(24px, 2vw, 32px);
+  font-style: italic;
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+.stage__caption p {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
 
 .stage__n {
   font-size: 13px;
   letter-spacing: 0.22em;
   color: var(--muted);
   margin: 0 0 12px;
-}
-
-.stage h3 {
-  font-size: clamp(26px, 2.2vw, 34px);
-  font-style: italic;
-  letter-spacing: -0.01em;
-  margin: 0 0 10px;
 }
 
 .stage__lede { color: var(--ink); font-size: 17px; line-height: 1.6; margin: 0 0 24px; }
@@ -386,9 +401,13 @@ main, [id] { scroll-margin-top: 100px; }
 .rail--static .rail__title { padding-top: 0; }
 .rail__stack { display: grid; gap: 0; }
 .rail--static .rail__stack { gap: 20px; }
-.rail--static .stage { flex: none; height: auto; padding: 34px 32px; overflow: visible; }
+.rail--static .stage { flex: none; }
+.rail--static .stage__card { height: auto; padding: 32px 30px; overflow: visible; }
 
-@media (max-width: 760px) { .stage { flex: 0 0 84vw; height: min(70vh, 560px); padding: 30px 26px; } }
+@media (max-width: 760px) {
+  .stage { flex: 0 0 84vw; }
+  .stage__card { height: min(64vh, 520px); padding: 28px 24px; }
+}
 
 /* --- Feature marquee ---------------------------------------------------- */
 
@@ -766,6 +785,7 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 .rail, .rail *, .why, .why * { color: #eef4ed; }
 
 .rail .stage__n,
+.rail .stage__caption p,
 .rail .stage__points li,
 .rail .stage__stack dd,
 .why__a p {
@@ -776,8 +796,8 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
    these. Paper, not the success tint, which reads blue against navy. */
 .rail .stage__stack dt { color: #eef4ed; }
 
-.rail .stage { border-color: color-mix(in srgb, #eef4ed 16%, transparent); }
-.rail .stage:hover { border-color: #eef4ed; }
+.rail .stage__card { border-color: color-mix(in srgb, #eef4ed 16%, transparent); }
+.rail .stage:hover .stage__card { border-color: #eef4ed; }
 .rail .stage__stack { border-top-color: color-mix(in srgb, #eef4ed 28%, transparent); }
 .rail .stage__points li::before { background: color-mix(in srgb, #eef4ed 40%, transparent); }
 .rail__title { border-bottom-color: color-mix(in srgb, #eef4ed 18%, transparent); }

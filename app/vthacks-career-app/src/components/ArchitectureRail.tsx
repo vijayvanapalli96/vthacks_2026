@@ -201,22 +201,31 @@ export function ArchitectureRail() {
 function Card({ stage }: { stage: Stage }) {
   return (
     <article className="stage">
-      <p className="stage__n">{stage.n}</p>
-      <h3>{stage.title}</h3>
-      <p className="stage__lede">{stage.lede}</p>
-      <ul className="stage__points">
-        {stage.points.map((p) => (
-          <li key={p}>{p}</li>
-        ))}
-      </ul>
-      <dl className="stage__stack">
-        {stage.stack.map(([who, what]) => (
-          <div key={who}>
-            <dt>{who}</dt>
-            <dd>{what}</dd>
-          </div>
-        ))}
-      </dl>
+      {/* The caption is FIRST in the DOM so the heading labels the card that
+          follows it, and is moved below visually with flex order. Screen
+          readers and tab order follow the DOM; only the paint order changes. */}
+      <div className="stage__caption">
+        <h3>{stage.title}</h3>
+        <p>{stage.stack.map(([who]) => who).join(' · ')}</p>
+      </div>
+
+      <div className="stage__card">
+        <p className="stage__n">{stage.n}</p>
+        <p className="stage__lede">{stage.lede}</p>
+        <ul className="stage__points">
+          {stage.points.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+        <dl className="stage__stack">
+          {stage.stack.map(([who, what]) => (
+            <div key={who}>
+              <dt>{who}</dt>
+              <dd>{what}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </article>
   );
 }
