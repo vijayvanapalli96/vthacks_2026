@@ -8,14 +8,28 @@ const port = Number(process.env.PORT ?? 8788);
 const replayGuard = createReplayGuard();
 const card = JSON.parse(await readFile(new URL("./agent-card.json", import.meta.url), "utf8"));
 
-function send(response, status, value) {
-  response.writeHead(status, { "content-type": "application/json", "access-control-allow-origin": "*" });
+// Public metadata (index, card, health) may be read from any origin. The A2A
+// endpoint is server-to-server, so it grants no CORS access at all.
+function send(response, status, value, { publicRead = false } = {}) {
+  const headers = { "content-type": "application/json" };
+  if (publicRead) headers["access-control-allow-origin"] = "*";
+  response.writeHead(status, headers);
   response.end(JSON.stringify(value));
 }
 
+const index = {
+  status: "ok",
+  agent: card.name,
+  display_name: card.display_name,
+  agent_card: "/.well-known/agent-card.json",
+  a2a_endpoint: card.endpoint,
+  health: "/health",
+};
+
 createServer(async (request, response) => {
-  if (request.method === "GET" && request.url === "/.well-known/agent-card.json") return send(response, 200, card);
-  if (request.method === "GET" && request.url === "/health") return send(response, 200, { status: "ok" });
+  if (request.method === "GET" && request.url === "/") return send(response, 200, index, { publicRead: true });
+  if (request.method === "GET" && request.url === "/.well-known/agent-card.json") return send(response, 200, card, { publicRead: true });
+  if (request.method === "GET" && request.url === "/health") return send(response, 200, { status: "ok" }, { publicRead: true });
   if (request.method === "POST" && request.url === "/a2a/apply") {
     let body = "";
     for await (const chunk of request) body += chunk;
