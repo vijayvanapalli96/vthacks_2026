@@ -49,18 +49,33 @@ mobile · multi-user collaboration · resume WYSIWYG editor · Presage.
 
 ---
 
-## Epic 1 — Identity & access ("signup / login — maybe Databricks")
+## Epic 1 — Identity & access — **two pathways: applicant and employer**
 
-We do **not** build auth. Databricks Apps already puts an SSO'd user in front of
-the app, so we read the identity it hands us. ~20 minutes, and it is a truthful
-"we used Databricks for auth" answer in Q&A.
+**Superseded decision.** This epic originally said "we do not build auth — read
+the Databricks Apps SSO identity." That is wrong for this product: SSO cannot
+tell an applicant from an employer, and employer users are *external* to our
+Databricks workspace entirely. Agent-to-agent needs both sides to be real,
+signed-in principals, so we build auth: Auth.js v5, email/password + Google, with
+a role on the account.
 
 | ID | Feature | Tier | Owner | Est |
 |---|---|---|---|---|
-| F1.1 | Derive `user_id` from Databricks Apps forwarded identity headers (`X-Forwarded-Email` / `X-Forwarded-Preferred-Username`) | **P0** | Nidhi | 20 m |
-| F1.2 | Upsert `users` row on first authenticated request | **P0** | Nidhi | 15 m |
-| F1.3 | Dev fallback identity so `npm run dev` works without Databricks in front | **P0** | Nidhi | 10 m |
-| F1.4 | Sign-in landing screen that explains what the agent will and will not do with PII | P1 | Nidhi | 30 m |
+| F1.1 | Auth.js v5 (`next-auth@beta`) — Credentials + Google providers, JWT sessions, `trustHost: true` for Databricks Apps | **P0** | Nidhi | 1 h |
+| F1.2 | `Role = applicant \| employer` on the account, chosen at signup; carried in the JWT and the session | **P0** | Nidhi | 30 m |
+| F1.3 | Two route groups — `/applicant/*` and `/employer/*` — guarded at the layout by `requireRole()`. Wrong role redirects to your own dashboard, not an error page. | **P0** | Nidhi | 30 m |
+| F1.4 | `/choose-role` — Google gives us no role, so new Google accounts land here before anything else | **P0** | Nidhi | 20 m |
+| F1.5 | User store behind a stable interface (`findUserByEmail`, `createUser`, `setUserRole`, `verifyPassword`). Dev: JSON file. **Swap to `workspace.vthacks_2026.users` is a one-file change** — the Databricks Apps filesystem is ephemeral, so this must happen before the real demo. | **P0** | Nidhi → Tarang | 45 m |
+| F1.6 | Public landing with the two pathways stated plainly ("I'm looking for a role" / "I'm hiring") | **P0** | Nidhi | 30 m |
+| F1.7 | Sign-in screen copy that states what the agent will and will not do with PII | P1 | Nidhi | 30 m |
+
+**Cost of this change:** ~+3 h on Nidhi's lane versus the 20-minute SSO plan, and
+the employer dashboard becomes a real surface we have to design rather than a
+service Vijay curls. Pull it out of Nidhi's P1 list (see `TASK_DIVISION.md`); the
+`cmdk` palette and the designed empty states are the first casualties.
+
+**What we give up:** the free "we used Databricks for auth" line in Q&A. Worth it
+— "both sides of the handshake are authenticated principals" is a much better
+answer for the track we are actually trying to win.
 
 ---
 

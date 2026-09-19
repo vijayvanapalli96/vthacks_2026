@@ -72,6 +72,12 @@ High-value lifts — check here before writing anything from scratch:
   function-calling tool routing. Keep that split clean — it's how judges from both
   companies each hear a reason their tech was chosen.
 - **Voice** ElevenLabs Agents, two personas (calm assistant / interviewer).
+- **Auth** Auth.js v5 (`next-auth@beta`), email/password + Google, JWT sessions.
+  Every account carries `role: 'applicant' | 'employer'`, and the app has two
+  guarded pathways under `/applicant/*` and `/employer/*`. We do **not** use
+  Databricks Apps SSO for this: it cannot distinguish the two roles, and employer
+  users are external to the workspace. Guards live in the route-group layouts via
+  `requireRole()` — there is deliberately no middleware.
 - **Identity** GoDaddy ANS — `ans://v1.0.0.applicant.<domain>` and
   `ans://v1.0.0.employer.<domain>`.
 
@@ -162,8 +168,8 @@ These are correctness, not style. Breaking one breaks the pitch.
 ## Out of scope — decided, not up for rediscussion at 4 AM
 
 Playwright / ATS form automation (replaced by A2A) · Solana (no honest fit) ·
-custom auth (Databricks Apps SSO gives us identity for free) · payments · mobile ·
-multi-user · resume WYSIWYG · Presage.
+payments · mobile · resume WYSIWYG · Presage · Gmail ingestion (the
+`email_classifications` table exists; we are not filling it in 15 hours).
 
 ## Working agreements
 
@@ -174,5 +180,11 @@ multi-user · resume WYSIWYG · Presage.
 - The descope switches in `TASK_DIVISION.md` are **pre-authorized**. Hit a red
   checkpoint, flip the switch, tell the team in one sentence, keep moving.
 - Nothing is added to P0 after T-12. Nothing is typed after T-3.
-- Commit small and often on `main`. With 15 hours and three people, a clean
-  branching strategy costs more than it saves.
+- **Never commit directly to `main`.** Every change goes on a branch and lands
+  through a PR — `feat/<thing>`, `fix/<thing>`, `docs/<thing>`. Keep branches
+  small and short-lived so review is seconds, not minutes; with 15 hours the
+  point of the PR is a second pair of eyes, not ceremony.
+- Rebase onto `main` before pushing (`git pull --rebase`); teammates are pushing
+  constantly and a merge bubble per branch will make the history unreadable.
+- Run `npm run typecheck && npm run lint && npm run build` before you open a PR.
+  A red branch costs a teammate more time than it saved you.
