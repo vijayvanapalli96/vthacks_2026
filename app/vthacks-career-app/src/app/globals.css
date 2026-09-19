@@ -597,3 +597,41 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
+
+/* --- Metrics are text, not cards ---------------------------------------- */
+/* Four boxed numbers next to three other boxes was too much chrome. The row
+   is now plain type, held together by one rule instead of four borders. */
+
+.metrics {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 4px 0 28px;
+  margin-bottom: 28px;
+  gap: 0;
+}
+
+.metrics article {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 24px 0 0;
+  transition: none;
+}
+
+.metrics article:hover {
+  background: transparent !important;
+  border: 0 !important;
+  transform: none;
+}
+
+.metrics article span {
+  font-size: 12.5px;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.metrics strong {
+  font-size: 44px;
+  line-height: 1;
+  color: var(--ink);
+}
