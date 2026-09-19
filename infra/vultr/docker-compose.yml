@@ -1,0 +1,28 @@
+services:
+  employer:
+    build:
+      context: ./agents
+      dockerfile: employer/Dockerfile
+    environment:
+      EMPLOYER_ANS_NAME: ans://v1.0.0.employer.hirewire.biz
+      EMPLOYER_ENDPOINT_URL: https://employer.hirewire.biz/a2a/apply
+      PORT: "8787"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10-alpine
+    depends_on:
+      - employer
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

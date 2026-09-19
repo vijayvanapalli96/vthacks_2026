@@ -1,0 +1,21 @@
+{
+  "agentCard": {
+    "name": "ans://v1.0.0.employer.example.com",
+    "endpoint": "https://employer.example.com/a2a/apply",
+    "version": "1.0.0",
+    "required_fields": ["full_name", "email", "resume_url"]
+  },
+  "certificate": {
+    "valid": true,
+    "dns_names": ["employer.example.com"]
+  },
+  "trust": {
+    "dimensions": [
+      { "name": "integrity", "score": 91, "reason": "The published card and endpoint metadata are consistent." },
+      { "name": "identity", "score": 95, "reason": "A valid identity certificate binds the service to its ANS domain." },
+      { "name": "solvency", "score": 82, "reason": "The demo registry reports an active organization record." },
+      { "name": "behavior", "score": 88, "reason": "No abusive or deceptive activity appears in the demo history." },
+      { "name": "safety", "score": 90, "reason": "The endpoint uses HTTPS and requests only declared application fields." }
+    ]
+  }
+}

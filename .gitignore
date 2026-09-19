@@ -26,6 +26,7 @@ build/
 # local generated artifacts
 work/
 outputs/
+agents/audit/*.jsonl
 
 # os
 .DS_Store
