@@ -1099,3 +1099,35 @@ footer strong { font-weight: 400; }
   .marquee__run[aria-hidden='true'] { display: none; }
   .marquee__run li { border-right: 0; padding: 5px 16px; }
 }
+
+/* --- Sticky nav --------------------------------------------------------- */
+/* Stays put through the whole scroll. The rule underneath is the nav's own
+   border, so it reads as one continuous line across the viewport. */
+
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--paper);
+}
+
+/* Full-bleed backing so content scrolling underneath never shows past the
+   page gutters, while the nav's own contents stay on the layout grid. */
+nav::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(50% - 50vw);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  z-index: -1;
+}
+
+/* The nav draws the line now, so it doesn't need its own. */
+nav { border-bottom: 0; }
+
+/* Anchor jumps and skip-link targets must clear the sticky bar. */
+main, [id] { scroll-margin-top: 88px; }
+
+/* The opening screen already subtracts the nav height, so nothing to change
+   there — but the marquee is full-bleed and must sit under the nav, not over. */
+.marquee { position: relative; z-index: 1; }
