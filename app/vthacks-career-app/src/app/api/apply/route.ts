@@ -6,6 +6,7 @@ import { APPLICANT_ANS_NAME, verifyProductionAgent } from '../../../lib/ans/prod
 import { failedTrustDimensions } from '../../../lib/ans/policy';
 import { explainMutualMatch } from '../../../lib/ans/match';
 import { recordAgentVerificationSafely, recordMatchExplanationSafely } from '../../../lib/ans/store';
+import { getJob } from '../../../lib/jobs';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,9 +34,22 @@ function claimedIdentity(body: ApplyBody): string {
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  if (session.user.role !== 'applicant') return NextResponse.json({ error: 'Applicant role required.' }, { status: 403 });
+
   const body = await request.json().catch(() => ({})) as ApplyBody;
-  const session = await auth().catch(() => null);
-  const userId = session?.user?.id ?? null;
+  if (!body.job?.job_id) return NextResponse.json({ error: 'job.job_id is required.' }, { status: 400 });
+  const canonicalJob = await getJob(body.job.job_id);
+  if (!canonicalJob) return NextResponse.json({ error: 'The selected job could not be found.' }, { status: 404 });
+  const job = {
+    job_id: canonicalJob.job_id,
+    title: canonicalJob.job_title,
+    company: canonicalJob.company_name,
+    required_skills: canonicalJob.demo ? ['Python', 'SQL'] : undefined,
+    preferred_skills: canonicalJob.demo ? ['TypeScript'] : undefined,
+  };
+  const userId = session.user.id ?? null;
   const verification = await verifyProductionAgent({
     agentId: body.agent_id,
     ansName: body.employer_ans_name,
@@ -62,15 +76,15 @@ export async function POST(request: Request) {
     fields_requested: releasable,
     human_approved: body.human_approved === true,
     user_id: userId,
-    job_id: body.job?.job_id ?? null,
+    job_id: job.job_id,
   };
   // The explanation names the candidate's matched skills, so it only exists when
   // the candidate approved releasing `skills`. Otherwise it would leak them.
   const matchExplanation = releasable.includes('skills')
     ? explainMutualMatch({
         candidateSkills: body.candidate?.skills,
-        requiredSkills: body.job?.required_skills,
-        preferredSkills: body.job?.preferred_skills,
+        requiredSkills: job.required_skills,
+        preferredSkills: job.preferred_skills,
       })
     : null;
 
@@ -119,7 +133,7 @@ export async function POST(request: Request) {
       audience: verification.evidence.agentCard.name,
       payload: {
         candidate: packet,
-        job: body.job ?? null,
+        job,
         match_explanation: matchExplanation,
         verification: {
           verdict: verification.verdict,
@@ -160,10 +174,10 @@ export async function POST(request: Request) {
     : `The verified employer agent did not accept the application (${response ? `HTTP ${response.status}` : 'unreachable'}).`;
 
   const [matchPersisted, persisted, auditId] = await Promise.all([
-    body.job?.job_id && matchExplanation
+    matchExplanation
       ? recordMatchExplanationSafely({
           applicationId: body.application_id,
-          jobId: body.job.job_id,
+          jobId: job.job_id,
           direction: 'applicant_to_employer',
           explanation: matchExplanation,
         })

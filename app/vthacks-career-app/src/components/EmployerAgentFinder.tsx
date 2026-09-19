@@ -122,7 +122,10 @@ export function EmployerAgentFinder({
             <ShieldCheck aria-hidden="true" /> Verified agent found
           </h3>
           <AgentBadge party="employer" state="verified" ansName={phase.ansName} reason={phase.reason} size="sm" />
-          <Link className="primary" href={`/applicant/apply?host=${encodeURIComponent(phase.host)}`}>
+          <Link
+            className="primary"
+            href={`/applicant/apply?host=${encodeURIComponent(phase.host)}&job=${encodeURIComponent(jobId)}`}
+          >
             Review trust and choose what to send <ArrowRight size={18} aria-hidden="true" />
           </Link>
         </div>

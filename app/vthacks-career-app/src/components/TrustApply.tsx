@@ -52,13 +52,12 @@ const targets = [
   },
 ];
 
-// A demo role for the Hirewire agent until job_snapshots has real postings.
-const demoJob = {
-  job_id: 'hirewire-demo-swe-intern',
-  title: 'Software Engineering Intern',
-  company: 'Hirewire demo employer',
-  required_skills: ['Python', 'SQL'],
-  preferred_skills: ['TypeScript'],
+type ApplyJob = {
+  job_id: string;
+  title: string;
+  company: string;
+  required_skills?: string[];
+  preferred_skills?: string[];
 };
 
 const fieldLabels: Record<string, string> = {
@@ -74,7 +73,17 @@ function speak(text: string) {
   window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
-export function TrustApply({ name, email, initialHost }: { name: string; email: string; initialHost?: string }) {
+export function TrustApply({
+  name,
+  email,
+  initialHost,
+  job,
+}: {
+  name: string;
+  email: string;
+  initialHost?: string;
+  job: ApplyJob;
+}) {
   const preset = initialHost && !targets.some((option) => option.host === initialHost) ? initialHost : undefined;
   const [host, setHost] = useState(preset ? 'custom' : (initialHost ?? targets[0].host));
   const [customHost, setCustomHost] = useState(preset ?? '');
@@ -147,7 +156,7 @@ export function TrustApply({ name, email, initialHost }: { name: string; email: 
             resume_url: resumeUrl || undefined,
             skills: skills.split(',').map((skill) => skill.trim()).filter(Boolean),
           },
-          job: demoJob,
+          job,
         }),
       });
       const result = (await response.json()) as ApplyResult;

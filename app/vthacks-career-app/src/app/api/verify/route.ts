@@ -16,8 +16,13 @@ export async function POST(request: Request) {
     application_id?: string;
     purpose?: 'job_application' | 'recruiting_invitation';
   };
-  const session = await auth().catch(() => null);
   const expectedRole = body.expected_role ?? 'employer';
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  const requiredRole = expectedRole === 'employer' ? 'applicant' : 'employer';
+  if (session.user.role !== requiredRole) {
+    return NextResponse.json({ error: `${requiredRole === 'applicant' ? 'Applicant' : 'Employer'} role required.` }, { status: 403 });
+  }
   const verifierAnsName = expectedRole === 'employer' ? APPLICANT_ANS_NAME : EMPLOYER_ANS_NAME;
   const purpose = body.purpose ?? (expectedRole === 'employer' ? 'job_application' : 'recruiting_invitation');
   const auditBase = {
@@ -25,7 +30,7 @@ export async function POST(request: Request) {
     direction: expectedRole === 'employer' ? 'applicant_to_employer' as const : 'employer_to_applicant' as const,
     verifier: verifierAnsName,
     fields_released: [],
-    user_id: session?.user?.id ?? null,
+    user_id: session.user.id ?? null,
   };
   try {
     const result = await verifyProductionAgent({
