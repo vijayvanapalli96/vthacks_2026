@@ -45,32 +45,44 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "agents/applicant/agent-card.json") 
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/remote-agent.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/trust-policy.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/mutual-match.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
+Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/signed-envelope.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
 Copy-Item -LiteralPath $requiredFiles[0] -Destination (Join-Path $stagingRoot "certs/employer.leaf.pem")
 Copy-Item -LiteralPath $requiredFiles[1] -Destination (Join-Path $stagingRoot "certs/employer.key")
 Copy-Item -LiteralPath $requiredFiles[2] -Destination (Join-Path $stagingRoot "certs/applicant.leaf.pem")
 Copy-Item -LiteralPath $requiredFiles[3] -Destination (Join-Path $stagingRoot "certs/applicant.key")
 
-$intermediatePath = Join-Path $stagingRoot "certs/godaddy-dv-r1v1.pem"
-Invoke-WebRequest -Uri "https://certs.godaddy.com/repository/gd_tls_issuing_dv-r1v1.crt.pem" -OutFile $intermediatePath
-$intermediateText = Get-Content -Raw -LiteralPath $intermediatePath
-$intermediateBase64 = $intermediateText -replace '-----BEGIN CERTIFICATE-----', ''
-$intermediateBase64 = $intermediateBase64 -replace '-----END CERTIFICATE-----', ''
-$intermediateBase64 = $intermediateBase64 -replace '\s', ''
-$intermediateDer = [Convert]::FromBase64String([string]$intermediateBase64)
-$intermediateCertificate = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList @(,$intermediateDer)
+# The ANS leaf chains to "GoDaddy TLS Root CA - R1", which Node's bundled root
+# store (and so the Databricks app and both agents) does not trust yet. GoDaddy's
+# DV bundle adds R1 cross-signed by "Go Daddy Root Certificate Authority - G2",
+# which Node does trust. Serve leaf + intermediate + cross-signed R1; the
+# self-signed G2 root at the end of the bundle is left out, as clients hold it.
+$bundlePath = Join-Path $stagingRoot "certs/godaddy-dv-r1-g2-bundle.pem"
+Invoke-WebRequest -Uri "https://certs.godaddy.com/repository/gd_bundle_dv-r1-g2.crt.pem" -OutFile $bundlePath
+$bundleText = Get-Content -Raw -LiteralPath $bundlePath
+$bundlePems = [regex]::Matches($bundleText, '-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----') | ForEach-Object { $_.Value }
+if ($bundlePems.Count -lt 2) { throw "The GoDaddy DV bundle did not contain the expected certificates." }
+
 $sha256 = [System.Security.Cryptography.SHA256]::Create()
-$certificateBytes = [byte[]]$intermediateCertificate.RawData
-$actualFingerprint = ([BitConverter]::ToString($sha256.ComputeHash($certificateBytes))).Replace('-', '')
-$expectedFingerprint = "7A43BC7747D0633FBD90FF900C9242417C027DBDCA05AF72DA9A70E3518DBE2E"
-if ($actualFingerprint -ne $expectedFingerprint) {
-  throw "The downloaded GoDaddy intermediate certificate fingerprint did not match the official repository."
+function Get-PemFingerprint([string]$pem) {
+  $base64 = ($pem -replace '-----(BEGIN|END) CERTIFICATE-----', '') -replace '\s', ''
+  $der = [Convert]::FromBase64String($base64)
+  ([BitConverter]::ToString($sha256.ComputeHash($der))).Replace('-', '')
 }
-$intermediatePem = $intermediateText
+$pinned = @(
+  @{ Name = "GoDaddy TLS Intermediate CA DV - R1v1"; Fingerprint = "7A43BC7747D0633FBD90FF900C9242417C027DBDCA05AF72DA9A70E3518DBE2E" },
+  @{ Name = "GoDaddy TLS Root CA - R1 (cross-signed by G2)"; Fingerprint = "7BCB0F2F2D1031A6AF8D61BAA835D2835A3B8BCC26D94A3B048B1655FB81298C" }
+)
+for ($i = 0; $i -lt $pinned.Count; $i++) {
+  if ((Get-PemFingerprint $bundlePems[$i]) -ne $pinned[$i].Fingerprint) {
+    throw "The downloaded $($pinned[$i].Name) fingerprint did not match the pinned value."
+  }
+}
+$chainPem = $bundlePems[0].Trim() + "`n" + $bundlePems[1].Trim() + "`n"
 foreach ($kind in "employer", "applicant") {
   $leafPem = Get-Content -Raw -LiteralPath (Join-Path $stagingRoot "certs/$kind.leaf.pem")
   [System.IO.File]::WriteAllText(
     (Join-Path $stagingRoot "certs/$kind.fullchain.pem"),
-    $leafPem.TrimEnd() + "`n" + $intermediatePem.Trim() + "`n"
+    $leafPem.TrimEnd() + "`n" + $chainPem
   )
 }
 

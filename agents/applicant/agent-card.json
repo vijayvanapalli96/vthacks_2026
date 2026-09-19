@@ -4,7 +4,18 @@
   "version": "1.0.0",
   "endpoint": "https://applicant.hirewire.biz/a2a/apply",
   "capabilities": ["candidate.contact.receive"],
-  "required_fields": ["employer_ans_name", "job_id", "message"],
+  "authentication": {
+    "scheme": "ans-signed-jws",
+    "typ": "hirewire-a2a+jws",
+    "alg": "ES256",
+    "request_body": "{\"jws\": \"<compact JWS>\"}",
+    "key": "sender's ANS identity key; the x5c certificate must match an identity-cert fingerprint attested in the ANS transparency log",
+    "required_claims": ["iss", "aud", "jti", "iat", "exp"],
+    "audience": "ans://v1.0.0.applicant.hirewire.biz",
+    "max_age_seconds": 120,
+    "accepted_issuer_role": "employer"
+  },
+  "required_fields": ["job_id", "message"],
   "privacy": {
     "purpose": "Deliver a verified recruiting invitation to an opted-in candidate",
     "retention_days": 30
