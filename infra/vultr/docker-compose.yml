@@ -9,10 +9,19 @@ services:
       PORT: "8787"
     restart: unless-stopped
 
+  applicant:
+    build:
+      context: ./agents
+      dockerfile: applicant/Dockerfile
+    environment:
+      PORT: "8788"
+    restart: unless-stopped
+
   caddy:
     image: caddy:2.10-alpine
     depends_on:
       - employer
+      - applicant
     ports:
       - "80:80"
       - "443:443"

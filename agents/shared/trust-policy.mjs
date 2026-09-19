@@ -28,11 +28,11 @@ export function verifyEmployer({ agentCard, certificate, trust, policy = DEFAULT
   try {
     endpoint = new URL(agentCard?.endpoint);
   } catch {
-    failures.push("The employer endpoint is not a valid URL.");
+    failures.push("The agent endpoint is not a valid URL.");
   }
 
-  if (!agentDomain) failures.push("The employer does not have a versioned ANS name.");
-  if (endpoint?.protocol !== "https:") failures.push("The employer endpoint is not HTTPS.");
+  if (!agentDomain) failures.push("The agent does not have a versioned ANS name.");
+  if (endpoint?.protocol !== "https:") failures.push("The agent endpoint is not HTTPS.");
   if (endpoint && agentDomain && !hostnameMatchesDomain(endpoint.hostname, agentDomain)) {
     failures.push("The endpoint hostname does not match the ANS domain.");
   }

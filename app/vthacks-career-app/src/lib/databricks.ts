@@ -22,8 +22,18 @@ const execFileAsync = promisify(execFile);
 export type SqlParam = {
   name: string;
   value: string | null;
-  type?: 'STRING' | 'TIMESTAMP' | 'INT' | 'BOOLEAN';
+  // Union of both sides of the merge. BIGINT is required by intake: byte_size is a
+  // BIGINT column and Databricks rejects an INT parameter against it.
+  type?: 'STRING' | 'TIMESTAMP' | 'INT' | 'BIGINT' | 'DOUBLE' | 'BOOLEAN';
 };
+
+/** Thrown for anything Databricks-shaped, so callers can tell it from a parse bug. */
+export class DatabricksError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DatabricksError';
+  }
+}
 
 export type SqlResult = {
   columns: string[];
@@ -38,8 +48,29 @@ let cached: { token: string; expiresAt: number } | null = null;
 
 function host(): string {
   const value = process.env.DATABRICKS_HOST;
-  if (!value) throw new Error('DATABRICKS_HOST is not set');
-  return value.replace(/\/+$/, '');
+  if (!value) throw new DatabricksError('DATABRICKS_HOST is not set');
+  // Databricks Apps injects a bare hostname; local .env files usually carry https://.
+  // Keeping main's fix — without it the Files API URL in uploads.ts is malformed in
+  // production — and keeping DatabricksError so callers can still tell a config
+  // problem from a parse bug.
+  const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  return withScheme.replace(/\/+$/, '');
+}
+
+/** The workspace origin, for callers that need a non-SQL endpoint (the Files API). */
+export function databricksHost(): string {
+  return host();
+}
+
+/**
+ * Is there any chance a Databricks call will work?
+ *
+ * Host and warehouse are required. A credential is NOT checked here because the
+ * CLI-token path (local dev) leaves no environment variable to look at — the only
+ * way to know it works is to try.
+ */
+export function hasDatabricks(): boolean {
+  return Boolean(process.env.DATABRICKS_HOST && process.env.DATABRICKS_WAREHOUSE_ID);
 }
 
 function warehouseId(): string {
@@ -80,7 +111,7 @@ async function tokenFromClientCredentials(
   };
 }
 
-async function bearerToken(): Promise<string> {
+export async function bearerToken(): Promise<string> {
   if (process.env.DATABRICKS_TOKEN) return process.env.DATABRICKS_TOKEN;
 
   // 60s of slack so a long query never runs off the end of its own token.
@@ -155,9 +186,14 @@ export async function sql(statement: string, parameters: SqlParam[] = []): Promi
 
   const state = response.status?.state;
   if (state !== 'SUCCEEDED') {
-    throw new Error(
+    throw new DatabricksError(
       `Databricks statement ${state ?? 'unknown'}: ${response.status?.error?.message ?? 'no error message'}`,
     );
   }
   return shape(response);
+}
+
+/** First cell of the first row, or undefined. Saves the rows[0]?.[0] dance. */
+export function firstCell(result: SqlResult): string | undefined {
+  return result.rows[0]?.[0] ?? undefined;
 }

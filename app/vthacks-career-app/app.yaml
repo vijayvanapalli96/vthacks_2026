@@ -2,3 +2,17 @@ command: ['npm', 'run', 'start']
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
+  - name: AUTH_SECRET
+    valueFrom: auth-secret
+  - name: AUTH_URL
+    value: https://vthacks-career-app-7474648702108753.aws.databricksapps.com
+  - name: AUTH_TRUST_HOST
+    value: "true"
+  - name: APPLICANT_IDENTITY_KEY
+    valueFrom: applicant-identity-key
+  - name: APPLICANT_IDENTITY_CERT
+    valueFrom: applicant-identity-cert
+  - name: EMPLOYER_IDENTITY_KEY
+    valueFrom: employer-identity-key
+  - name: EMPLOYER_IDENTITY_CERT
+    valueFrom: employer-identity-cert
