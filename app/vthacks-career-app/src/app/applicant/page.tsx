@@ -1,5 +1,6 @@
 import { ArrowRight, BriefcaseBusiness, FileCheck2, Mic, ShieldCheck } from 'lucide-react';
 
+import { Reveal } from '@/components/Reveal';
 import { SignOutForm } from '@/components/SignOutForm';
 
 const jobs = [
@@ -8,9 +9,16 @@ const jobs = [
   ['Machine Learning Engineer', 'Canopy Systems', '78%'],
 ];
 
+const metrics = [
+  ['Discovered', '24'],
+  ['Reviewing', '8'],
+  ['Approved', '5'],
+  ['Responses', '3'],
+];
+
 export default function ApplicantDashboard() {
   return (
-    <main>
+    <main id="main">
       <nav>
         <strong>Application Workspace</strong>
         <span>Overview</span>
@@ -21,7 +29,8 @@ export default function ApplicantDashboard() {
         </button>
         <SignOutForm />
       </nav>
-      <section className="hero">
+
+      <Reveal as="section" className="hero">
         <p className="eyebrow">APPLICATION COMMAND CENTER</p>
         <h1>
           Find the right role.
@@ -35,22 +44,19 @@ export default function ApplicantDashboard() {
         <button className="primary">
           Review best match <ArrowRight size={18} aria-hidden="true" />
         </button>
-      </section>
+      </Reveal>
+
       <section className="metrics">
-        {[
-          ['Discovered', '24'],
-          ['Reviewing', '8'],
-          ['Approved', '5'],
-          ['Responses', '3'],
-        ].map(([label, value]) => (
-          <article key={label}>
+        {metrics.map(([label, value], i) => (
+          <Reveal as="article" key={label} index={i + 1}>
             <span>{label}</span>
             <strong>{value}</strong>
-          </article>
+          </Reveal>
         ))}
       </section>
+
       <section className="grid">
-        <div className="panel">
+        <Reveal className="panel" index={5}>
           <header>
             <div>
               <small>MATCH QUEUE</small>
@@ -71,8 +77,9 @@ export default function ApplicantDashboard() {
               <ArrowRight size={17} aria-hidden="true" />
             </article>
           ))}
-        </div>
-        <aside className="panel approval">
+        </Reveal>
+
+        <Reveal as="aside" className="panel approval" index={6}>
           <small>APPROVAL REQUIRED</small>
           <h2>Your materials are ready</h2>
           <p>Resume and cover letter are prepared for your strongest match.</p>
@@ -85,13 +92,14 @@ export default function ApplicantDashboard() {
           <button className="primary">
             Review materials <ArrowRight size={18} aria-hidden="true" />
           </button>
-        </aside>
+        </Reveal>
       </section>
-      <footer>
+
+      <Reveal as="footer" index={7}>
         <ShieldCheck aria-hidden="true" />
         <strong>Human approval is always required.</strong>
         <span>The system recommends; you control every external action.</span>
-      </footer>
+      </Reveal>
     </main>
   );
 }

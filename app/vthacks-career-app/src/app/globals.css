@@ -353,3 +353,164 @@ nav a:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===========================================================================
+   DESIGN SYSTEM — locked. See docs/FRONTEND_UIUX_PLAN.txt §5.
+   Appended last so it wins the cascade over the earlier green palette.
+
+   Two base colours, two signal colours, one display face.
+   Contrast measured on --paper: ink 13.77:1, success 6.18:1, failure 7.28:1.
+   The signal colours FAIL on a navy surface (2.23 / 1.89) — that is why the
+   surface is light. Do not invert this.
+   =========================================================================== */
+
+:root {
+  --paper: #eef4ed;
+  --ink: #0b2545;
+  --success: #3b6064;
+  --failure: #8c2f39;
+
+  --surface: #f7faf7;
+  --line: color-mix(in srgb, var(--ink) 12%, transparent);
+  --line-strong: color-mix(in srgb, var(--ink) 22%, transparent);
+  --muted: color-mix(in srgb, var(--ink) 62%, transparent);
+
+  /* the old palette still referenced by the original dashboard rules */
+  --green: var(--success);
+  --danger: var(--failure);
+  --accent: var(--success);
+
+  --radius: 8px;
+  --step: 8px;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Type -------------------------------------------------------------- */
+/* Forum for display only. No bold exists, so emphasis is size + tracking. */
+
+h1, h2, h3, nav strong, .metrics strong {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+}
+
+h1 { font-size: clamp(40px, 6vw, 56px); line-height: 1.04; letter-spacing: -0.01em; }
+h2 { font-size: 20px; letter-spacing: 0.005em; }
+h3 { font-size: 16px; }
+nav strong { font-size: 20px; letter-spacing: 0.02em; }
+
+.eyebrow, small {
+  font-family: var(--font-body), Inter, sans-serif;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+.hero > p:not(.eyebrow), .approval > p, .job p, .muted, footer span, .metrics article {
+  color: var(--muted);
+}
+
+/* --- Surfaces: hairlines, never shadows -------------------------------- */
+
+.metrics article, .panel, .pathway {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: none;
+  transition: border-color 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.metrics article:hover, .pathway:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+}
+
+.metrics strong { font-size: 40px; color: var(--ink); letter-spacing: -0.01em; }
+.panel header, .job, .approval > div { border-color: var(--line); }
+nav { border-color: var(--line); }
+
+/* --- Buttons ------------------------------------------------------------ */
+
+.primary {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--radius);
+  font-weight: 600;
+  transition: background 0.25s ease, transform 0.15s ease;
+}
+.primary:hover { background: var(--success); }
+.primary:active { transform: translateY(1px); }
+
+nav button {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-weight: 500;
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+nav button:hover { background: var(--surface); border-color: var(--ink); }
+
+nav a { color: var(--ink); font-weight: 500; }
+
+/* --- Signal colours: never colour alone --------------------------------- */
+/* Success and failure must also differ by icon and text for colour-blind
+   users. The colour is reinforcement, not the message. */
+
+.verified, .approval > div span { color: var(--success); font-weight: 600; }
+.is-success { color: var(--success); }
+.is-failure { color: var(--failure); }
+
+footer {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+}
+
+/* --- Rows --------------------------------------------------------------- */
+
+.job { transition: background 0.2s ease, padding-left 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
+.job:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); padding-left: 28px; }
+.job:hover svg:last-child { transform: translateX(3px); }
+.job svg:last-child { transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* --- Focus: load-bearing, the demo is driven from the keyboard ---------- */
+
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  z-index: 100;
+  text-decoration: none;
+}
+.skip-link:focus { left: 16px; }
+
+/* --- Reduced motion: flatten everything --------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .job:hover { padding-left: 22px; }
+  .metrics article:hover, .pathway:hover { transform: none; }
+}

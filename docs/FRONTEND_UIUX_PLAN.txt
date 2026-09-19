@@ -173,6 +173,104 @@ THE REST
 Lock all of this in one tokens file. Every later page imports it and adds
 nothing new. If a page needs a fifth colour, the answer is no.
 
+================================================================================
+TASK BOARD — tick as you go.  [x] done   [ ] todo   [-] cut
+Status as of the applicant-page styling pass.
+================================================================================
+
++-----+-----------------------------+--------------------------------+--------+------+
+| ST  | TASK                        | WHAT IT CHANGES ON SCREEN      | IMPACT | TIME |
++=====+=============================+================================+========+======+
+|     | PHASE F — FOUNDATION                                                          |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F1 Design tokens            | paper/ink everywhere, Forum    | CRIT   | 30m  |
+|     |    paper/ink/success/fail   | headings, hairline borders     |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F2 Forum + Inter fonts      | headings turn serif; body      | CRIT   | 15m  |
+|     |    (Forum has NO bold)      | stays Inter and readable       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F3 Lenis, reduced-motion    | scroll gains subtle weight;    | HIGH   | 20m  |
+|     |    gated                    | off entirely if user opts out  |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F4 Skip link + focus rings  | tab from top reveals "Skip to  | CRIT   | 15m  |
+|     |                             | content"; 2px ink ring         |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F5 Reveal component         | sections fade+rise in sequence | HIGH   | 20m  |
+|     |    (motion, stagger)        | on load                        |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | F6 shadcn/ui init           | consistent button/card/dialog  | MED    | 20m  |
+|     |                             | primitives, ARIA for free      |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE A — APPLICANT PAGE (the pilot)                                          |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A1 Apply tokens to page     | whole dashboard repainted      | CRIT   | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A2 Stagger hero/metrics/    | page assembles itself rather   | HIGH   | 15m  |
+|     |    panels on load           | than snapping in               |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | A3 Row hover: indent +      | job rows feel alive under the  | MED    | 10m  |
+|     |    arrow slide              | cursor and the keyboard        |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | A4 Count-up on the 4 metric | 24 / 8 / 5 / 3 tick up from 0  | MED    | 20m  |
+|     |    numbers                  | when they enter view           |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | A5 Success/failure states   | "Verified" green, a rejected   | HIGH   | 25m  |
+|     |    with ICON + TEXT, not    | row red — each with its own    |        |      |
+|     |    colour alone             | icon so colour is not the msg  |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | A6 Decide: roll out to all  | signin/signup/employer/landing | CRIT   | 30m  |
+|     |    other pages              | all match                      |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE S — VOICE ORB (signature object)                                        |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | S1 Orb, 5 visual states     | a living object centre-screen  | CRIT   | 45m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | S2 Wire to real mic         | orb deforms to YOUR voice      | CRIT   | 30m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | S3 Wire to TTS output       | orb moves as the agent speaks  | HIGH   | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | S4 aria-live per state      | nothing visible; blind users   | CRIT   | 15m  |
+|     |                             | can finally perceive the orb   |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE H — HERO COMPONENTS                                                     |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | H1 Trust Card, 5 dims       | the component GoDaddy judges   | CRIT   | 40m  |
+|     |    stagger + count-up       | came to see                    |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | H2 Refusal stamp            | card flips to failure red, a   | CRIT   | 25m  |
+|     |                             | REFUSED seal stamps down       |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | H3 Homepage screen 1        | the front door judges see      | CRIT   | 30m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | H4 Three scroll beats       | story told in one scroll       | MED    | 35m  |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE P — PRODUCT MOTION (cut from the bottom up)                             |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P1 Match cards + score ring | results reveal, not a table    | HIGH   | 25m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P2 Application dispatch     | you SEE an application sent    | MED    | 30m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P3 Attacks-blocked counter  | live drama during ANS demo     | MED    | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P4 Skill-gap bars draw      | Databricks chart feels meant   | LOW    | 15m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | P5 Page transitions         | routes stop feeling like loads | LOW    | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+|     | PHASE X — BEFORE FREEZE (do not skip)                                         |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | X1 Verify reduced-motion    | nothing, unless it is broken   | CRIT   | 10m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | X2 axe + Lighthouse, shot   | a number on a slide = proof    | HIGH   | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+| [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
++-----+-----------------------------+--------------------------------+--------+------+
+
+  DONE 7 of 27   ·   spent ~2h05m   ·   remaining P0 ~4h20m, everything ~6h15m
+
+  NEVER CUT: S1, S4, H1, H2, X1, X3
+  DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4
+
+
 6. HOMEPAGE — the one we're designing first
 --------------------------------------------------------------------------------
 DO NOT build a 6-section marketing site. Judges see the landing for ~10 seconds
