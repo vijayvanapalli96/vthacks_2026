@@ -1,0 +1,61 @@
+name: Build and deploy Databricks App
+
+on:
+  pull_request:
+    paths:
+      - 'app/vthacks-career-app/**'
+      - '.github/workflows/databricks-app.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/vthacks-career-app/**'
+      - '.github/workflows/databricks-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: databricks-app-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/vthacks-career-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/vthacks-career-app/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: app/vthacks-career-app
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+      - name: Validate bundle
+        run: databricks bundle validate --strict --target default
+      - name: Deploy bundle
+        run: databricks bundle deploy --target default --auto-approve
+      - name: Start or restart app
+        run: databricks bundle run app --target default
+      - name: Show deployment summary
+        run: databricks bundle summary --target default
