@@ -1,36 +1,61 @@
-import { ArrowRight, BriefcaseBusiness, FileCheck2, Mic, ShieldCheck } from 'lucide-react';
-
-const jobs = [
-  ['Data & AI Engineer', 'Northstar Labs', '92%'],
-  ['Product Data Analyst', 'Brightworks', '86%'],
-  ['Machine Learning Engineer', 'Canopy Systems', '78%'],
-];
+import { ArrowRight, BriefcaseBusiness, ShieldCheck, UserRoundSearch } from 'lucide-react';
+import Link from 'next/link';
 
 export default function Home() {
   return (
     <main>
-      <nav><strong>Application Workspace</strong><span>Overview</span><span>Jobs</span><span>Materials</span><button><Mic size={17} /> Voice navigation</button></nav>
+      <nav>
+        <strong>HireWire</strong>
+        <Link href="/signin">Sign in</Link>
+        <Link href="/signup">Create account</Link>
+      </nav>
+
       <section className="hero">
-        <p className="eyebrow">APPLICATION COMMAND CENTER</p>
-        <h1>Find the right role.<br />Stay in control.</h1>
-        <p>Evaluate opportunities, create evidence-backed materials, and approve every external action.</p>
-        <button className="primary">Review best match <ArrowRight size={18} /></button>
+        <p className="eyebrow">VERIFIED AGENT-TO-AGENT HIRING</p>
+        <h1>
+          Both sides
+          <br />
+          prove who they are.
+        </h1>
+        <p>
+          An applicant&rsquo;s agent finds roles, tailors the materials, and checks that an employer
+          is real before releasing anything. An employer&rsquo;s agent checks that the applicant is a
+          real, domain-anchored person. Nobody&rsquo;s documents move until both sides verify.
+        </p>
       </section>
-      <section className="metrics">
-        {[['Discovered','24'],['Reviewing','8'],['Approved','5'],['Responses','3']].map(([label,value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}
+
+      <section className="pathways">
+        <article className="pathway">
+          <UserRoundSearch aria-hidden="true" />
+          <h2>I&rsquo;m looking for a role</h2>
+          <p>
+            Upload a resume or skip it and talk instead. Your agent matches you against real
+            postings, drafts your materials, and refuses out loud if an employer can&rsquo;t prove
+            who it is.
+          </p>
+          <Link className="primary" href="/signup?role=applicant">
+            Get started as an applicant <ArrowRight size={18} aria-hidden="true" />
+          </Link>
+        </article>
+
+        <article className="pathway">
+          <BriefcaseBusiness aria-hidden="true" />
+          <h2>I&rsquo;m hiring</h2>
+          <p>
+            Publish roles your agent can answer for. Every inbound application arrives from an agent
+            with a verifiable identity, so the fake-applicant flood stops at the door.
+          </p>
+          <Link className="primary" href="/signup?role=employer">
+            Get started as an employer <ArrowRight size={18} aria-hidden="true" />
+          </Link>
+        </article>
       </section>
-      <section className="grid">
-        <div className="panel">
-          <header><div><small>MATCH QUEUE</small><h2>Jobs worth your attention</h2></div><BriefcaseBusiness /></header>
-          {jobs.map(([role,company,match]) => <article className="job" key={role}><div><h3>{role}</h3><p>{company}</p></div><span className="verified"><ShieldCheck size={15} /> Verified</span><strong>{match}</strong><ArrowRight size={17} /></article>)}
-        </div>
-        <aside className="panel approval">
-          <small>APPROVAL REQUIRED</small><h2>Your materials are ready</h2><p>Resume and cover letter are prepared for your strongest match.</p>
-          <div><FileCheck2 /> Resume.pdf <span>Ready</span></div><div><FileCheck2 /> Cover-letter.pdf <span>Ready</span></div>
-          <button className="primary">Review materials <ArrowRight size={18} /></button>
-        </aside>
-      </section>
-      <footer><ShieldCheck /><strong>Human approval is always required.</strong><span>The system recommends; you control every external action.</span></footer>
+
+      <footer>
+        <ShieldCheck aria-hidden="true" />
+        <strong>Human approval is always required.</strong>
+        <span>The system recommends; you control every external action.</span>
+      </footer>
     </main>
   );
 }
