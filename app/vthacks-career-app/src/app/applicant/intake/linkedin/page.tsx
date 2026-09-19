@@ -23,8 +23,8 @@ export default function LinkedInIntakePage() {
         <p className="eyebrow">STEP TWO</p>
         <h1>Add your LinkedIn.</h1>
         <p className="muted">
-          It goes on your profile and travels with anything I send on your behalf. This is the last
-          thing I ask for — next I read everything at once.
+          It goes on your profile and gets shared with applications. Last step — then I review
+          everything.
         </p>
 
         <LinkedInIntakeForm />

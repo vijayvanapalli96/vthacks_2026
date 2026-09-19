@@ -1,4 +1,4 @@
-import { ArrowRight, BriefcaseBusiness, FileCheck2, Mic, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Mic } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
 import { IntakeProgress } from '@/components/IntakeProgress';
@@ -9,19 +9,6 @@ import { intakeGate } from '@/lib/intake';
 import { requireRole } from '@/lib/session';
 
 import './intake/intake.css';
-
-const jobs = [
-  ['Data & AI Engineer', 'Northstar Labs', '92%'],
-  ['Product Data Analyst', 'Brightworks', '86%'],
-  ['Machine Learning Engineer', 'Canopy Systems', '78%'],
-];
-
-const metrics = [
-  ['Discovered', '24'],
-  ['Reviewing', '8'],
-  ['Approved', '5'],
-  ['Responses', '3'],
-];
 
 /**
  * The dashboard IS the landing page, including while onboarding finishes.
@@ -61,15 +48,14 @@ export default async function ApplicantDashboard() {
           <p className="eyebrow">SETTING UP YOUR WORKSPACE</p>
           <h1>Reading everything you gave me.</h1>
           <p className="muted">
-            One pass over every source at once, so a detail missing from one can be filled in by
-            another. This is the actual work, as it happens — including the parts that do not go
-            perfectly.
+            Reading your resume and LinkedIn together, so gaps in one get filled by the other.
+            Here is what I find as I go.
           </p>
           <IntakeProgress />
         </Reveal>
       ) : (
         <>
-          <Reveal as="section" className="hero">
+          <Reveal as="section" className="hero hero--center">
             <p className="eyebrow">APPLICATION COMMAND CENTER</p>
             <h1>
               Find the right role.
@@ -90,61 +76,6 @@ export default async function ApplicantDashboard() {
           </Reveal>
         </>
       )}
-
-      <section className="metrics">
-        {metrics.map(([label, value], i) => (
-          <Reveal as="article" key={label} index={i + 2}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </Reveal>
-        ))}
-      </section>
-
-      <section className="grid">
-        <Reveal className="panel" onScroll>
-          <header>
-            <div>
-              <small>MATCH QUEUE</small>
-              <h2>Jobs worth your attention</h2>
-            </div>
-            <BriefcaseBusiness aria-hidden="true" />
-          </header>
-          {jobs.map(([role, company, match]) => (
-            <article className="job" key={role}>
-              <div>
-                <h3>{role}</h3>
-                <p>{company}</p>
-              </div>
-              <span className="verified">
-                <ShieldCheck size={15} aria-hidden="true" /> Verified
-              </span>
-              <strong>{match}</strong>
-              <ArrowRight size={17} aria-hidden="true" />
-            </article>
-          ))}
-        </Reveal>
-
-        <Reveal as="aside" className="panel approval" onScroll>
-          <small>APPROVAL REQUIRED</small>
-          <h2>Your materials are ready</h2>
-          <p>Resume and cover letter are prepared for your strongest match.</p>
-          <div>
-            <FileCheck2 aria-hidden="true" /> Resume.pdf <span>Ready</span>
-          </div>
-          <div>
-            <FileCheck2 aria-hidden="true" /> Cover-letter.pdf <span>Ready</span>
-          </div>
-          <button className="primary">
-            Review materials <ArrowRight size={18} aria-hidden="true" />
-          </button>
-        </Reveal>
-      </section>
-
-      <Reveal as="footer" onScroll>
-        <ShieldCheck aria-hidden="true" />
-        <strong>Human approval is always required.</strong>
-        <span>The system recommends; you control every external action.</span>
-      </Reveal>
     </main>
   );
 }
