@@ -37,6 +37,9 @@ resources:
             value_from: employer-identity-key
           - name: EMPLOYER_IDENTITY_CERT
             value_from: employer-identity-cert
+          # The immutable A2A audit log (src/lib/audit.ts), MongoDB Atlas.
+          - name: MONGODB_URI
+            value_from: mongodb-uri
 
       # Start the app automatically on deploy.
       lifecycle:
@@ -75,6 +78,11 @@ resources:
           secret:
             scope: hirewire
             key: employer-identity-cert
+            permission: READ
+        - name: mongodb-uri
+          secret:
+            scope: hirewire
+            key: mongodb-uri
             permission: READ
 
 targets:

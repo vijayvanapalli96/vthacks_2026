@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
+import { auth } from '../../../../auth';
 import { discoverEmployerAgent } from '../../../../lib/ans/discovery';
 import { saveJobAgentLink } from '../../../../lib/ans/store';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  if (session.user.role !== 'applicant') return NextResponse.json({ error: 'Applicant role required.' }, { status: 403 });
+
   try {
     const body = await request.json() as { job_id?: string; job_url?: string; employer_domain?: string };
     if (!body.job_id) return NextResponse.json({ error: 'job_id is required' }, { status: 400 });

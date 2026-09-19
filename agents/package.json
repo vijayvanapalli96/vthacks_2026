@@ -6,6 +6,7 @@
     "start:employer": "node employer/server.mjs",
     "start:applicant": "node applicant/server.mjs",
     "demo": "node applicant/demo.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "battery": "node attack-battery.mjs"
   }
 }
