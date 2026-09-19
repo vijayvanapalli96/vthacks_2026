@@ -193,6 +193,51 @@ CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.artifacts (
   created_at  TIMESTAMP
 ) USING DELTA;
 
+-- job_agent_links — verified association between an immutable job snapshot and
+--   the employer agent that can receive an application for it.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.job_agent_links (
+  job_id             STRING    NOT NULL,
+  employer_domain    STRING    NOT NULL,
+  employer_agent_id  STRING    NOT NULL,
+  employer_ans_name  STRING    NOT NULL,
+  employer_endpoint  STRING    NOT NULL,
+  discovery_status   STRING    NOT NULL COMMENT 'verified | unavailable | refused',
+  discovered_at      TIMESTAMP NOT NULL
+) USING DELTA
+COMMENT 'Verified job-to-employer-agent associations discovered through ANS.';
+
+-- candidate_discovery_profiles — opt-in, non-PII search surface for employers.
+--   Contact details and resumes stay private until the applicant approves release.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.candidate_discovery_profiles (
+  user_id          STRING        NOT NULL,
+  applicant_ans_name STRING      NOT NULL,
+  headline         STRING,
+  skills           ARRAY<STRING>,
+  target_roles     ARRAY<STRING>,
+  locations        ARRAY<STRING>,
+  opt_in           BOOLEAN       NOT NULL,
+  updated_at       TIMESTAMP     NOT NULL
+) USING DELTA
+COMMENT 'Opt-in, non-PII student profiles used for verified employer discovery.';
+
+-- agent_match_explanations — why an agent considered a candidate and a job a fit,
+--   computed only from candidate-approved skills and employer-published requirements.
+--   Append-only; every row carries its reasons.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.agent_match_explanations (
+  match_id                STRING        NOT NULL,
+  application_id          STRING,
+  job_id                  STRING        NOT NULL,
+  direction               STRING        NOT NULL COMMENT 'applicant_to_employer | employer_to_applicant',
+  score                   DOUBLE        NOT NULL COMMENT '0..100',
+  verdict                 STRING        NOT NULL COMMENT 'strong | potential | weak',
+  matched_skills          ARRAY<STRING>,
+  missing_required_skills ARRAY<STRING>,
+  reasons_json            STRING        NOT NULL COMMENT 'JSON array of reason strings',
+  evidence_basis          STRING        NOT NULL,
+  created_at              TIMESTAMP     NOT NULL
+) USING DELTA
+COMMENT 'Deterministic, explainable skill-match verdicts exchanged between ANS agents.';
+
 -- agent_verifications — the ANS / Trust Index record. The strategy doc flags the
 --   absence of this table as an explicit GAP; the Trust Card UI reads it.
 --   A refusal MUST have pii_fields_released empty. If it ever isn't, that is the
@@ -200,7 +245,10 @@ CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.artifacts (
 CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.agent_verifications (
   verification_id     STRING    NOT NULL,
   application_id      STRING,
+  verifier_ans_name   STRING             COMMENT 'Agent performing the verification',
   agent_ans_name      STRING             COMMENT 'e.g. ans://v1.0.0.employer.<domain>',
+  subject_role        STRING             COMMENT 'employer | applicant',
+  purpose             STRING             COMMENT 'job_application | recruiting_invitation',
   agent_version       STRING,
   verdict             STRING             COMMENT 'allowed | refused',
   integrity           DOUBLE,

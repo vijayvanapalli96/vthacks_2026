@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 export type SqlParam = {
   name: string;
   value: string | null;
-  type?: 'STRING' | 'TIMESTAMP' | 'INT' | 'BOOLEAN';
+  type?: 'STRING' | 'TIMESTAMP' | 'INT' | 'DOUBLE' | 'BOOLEAN';
 };
 
 export type SqlResult = {
