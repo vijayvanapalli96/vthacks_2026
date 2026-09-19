@@ -12,8 +12,17 @@ $applicantCard = Invoke-RestMethod -Uri "$applicantBaseUrl/.well-known/agent-car
 if ($applicantHealth.status -ne "ok") { throw "Applicant health endpoint did not return ok." }
 if ($applicantCard.name -ne "ans://v1.0.0.applicant.hirewire.biz") { throw "Published applicant ANS name is incorrect." }
 
-$refusal = Invoke-RestMethod -Method Post -Uri "$baseUrl/a2a/apply" -ContentType "application/json" -Body '{"verification":{"verdict":"refuse"}}' -SkipHttpErrorCheck
-Write-Host "Health and agent card verified. The refusal probe should return HTTP 403."
+# An unverified caller must be refused. Windows PowerShell 5.1 has no
+# -SkipHttpErrorCheck, so read the status code from the thrown response.
+$refusalStatus = $null
+try {
+  Invoke-RestMethod -Method Post -Uri "$baseUrl/a2a/apply" -ContentType "application/json" -Body '{"verification":{"verdict":"refuse"}}' | Out-Null
+} catch {
+  if ($_.Exception.Response) { $refusalStatus = [int]$_.Exception.Response.StatusCode }
+}
+if ($refusalStatus -ne 403) { throw "The refusal probe returned '$refusalStatus' instead of HTTP 403." }
+
+Write-Host "Health, agent cards, and the unverified-caller refusal (HTTP 403) verified."
 $health | ConvertTo-Json
 $card | ConvertTo-Json -Depth 5
 $applicantCard | ConvertTo-Json -Depth 5

@@ -44,6 +44,7 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "agents/applicant/server.mjs") -Dest
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/applicant/agent-card.json") -Destination (Join-Path $stagingRoot "agents/applicant")
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/remote-agent.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/trust-policy.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
+Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/mutual-match.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
 Copy-Item -LiteralPath $requiredFiles[0] -Destination (Join-Path $stagingRoot "certs/employer.leaf.pem")
 Copy-Item -LiteralPath $requiredFiles[1] -Destination (Join-Path $stagingRoot "certs/employer.key")
 Copy-Item -LiteralPath $requiredFiles[2] -Destination (Join-Path $stagingRoot "certs/applicant.leaf.pem")
@@ -82,7 +83,9 @@ ssh @identityArgs $destination "mkdir -p /opt/hirewire"
 if ($LASTEXITCODE -ne 0) { throw "Could not prepare /opt/hirewire on the server." }
 scp @identityArgs $archive "${destination}:/tmp/hirewire-vultr.tgz"
 if ($LASTEXITCODE -ne 0) { throw "Could not upload the deployment archive." }
-ssh @identityArgs $destination "tar -xzf /tmp/hirewire-vultr.tgz -C /opt/hirewire && chmod 600 /opt/hirewire/certs/employer.key /opt/hirewire/certs/applicant.key && cd /opt/hirewire && docker compose up -d --build"
+# Docker writes progress to stderr; fold it into stdout so Windows PowerShell 5.1
+# does not treat build progress as a failure. The exit code still decides success.
+ssh @identityArgs $destination "tar -xzf /tmp/hirewire-vultr.tgz -C /opt/hirewire && chmod 600 /opt/hirewire/certs/employer.key /opt/hirewire/certs/applicant.key && cd /opt/hirewire && docker compose up -d --build --quiet-pull 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "Remote Docker deployment failed." }
 
 Write-Host "Both agents deployed. Point employer.hirewire.biz and applicant.hirewire.biz A records to $HostIp, then run verify-public.ps1."
