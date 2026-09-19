@@ -413,3 +413,57 @@ CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_gaps (
   CONSTRAINT profile_gaps_pk PRIMARY KEY (user_id, field_key)
 ) USING DELTA
 COMMENT 'What we still need to ask. Drives the ElevenLabs question queue.';
+
+
+-- ---------------------------------------------------------------------------
+-- SECTION 5 — the match agent. APPLIED LIVE 2026-09-19.
+-- See docs/MATCH_AGENT_PLAN.md §5.
+--
+-- Read this before re-running the ALTER below:
+--   `ADD COLUMNS IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` are BOTH parse
+--   errors on this warehouse. The ALTER is therefore NOT idempotent — the rest
+--   of this file is. `DESCRIBE TABLE workspace.vthacks_2026.match_evaluations`
+--   first and skip it if `run_id` is already there.
+-- ---------------------------------------------------------------------------
+
+-- match_runs — one row per match run. Same role as scan_runs: observability, and
+--   the "is it working?" answer. Without it a bad run is invisible: you can see
+--   that rows were written but not that 340 candidates collapsed to 3 because a
+--   filter was inverted.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.match_runs (
+  run_id             STRING    NOT NULL,
+  user_id            STRING    NOT NULL,
+  started_at         TIMESTAMP NOT NULL,
+  finished_at        TIMESTAMP,
+  candidates_total   INT                COMMENT 'Jobs considered before filtering',
+  after_filters      INT                COMMENT 'Survived the hard filters, incl. the eligibility gate',
+  after_similarity   INT                COMMENT 'Survived the cosine cut — the rerank candidate set',
+  reranked           INT                COMMENT 'How many model calls were actually spent',
+  written            INT                COMMENT 'match_evaluations rows written',
+  dropped_ineligible INT                COMMENT 'Filtered by the eligibility gate, each with a stated reason',
+  model_provider     STRING,
+  model_name         STRING,
+  error_message      STRING,
+  CONSTRAINT match_runs_pk PRIMARY KEY (run_id)
+) USING DELTA
+COMMENT 'One row per match run. Observability for the match agent.';
+
+-- The zero-token stage-1 output, kept on the evaluation row so a score can be
+-- explained without a model — and so the coursework lever (a later follow-up)
+-- has `skills_missing` to aggregate. NOT IDEMPOTENT; see the note above.
+--
+-- NOTE on the live table: `overall_score` is DECIMAL(5,2) in the workspace, not
+-- the DOUBLE this file's SECTION 1 records. SECTION 1 documents a table that
+-- predates this file; the live definition wins and the match writer binds a
+-- DOUBLE parameter that Delta narrows on insert.
+ALTER TABLE workspace.vthacks_2026.match_evaluations ADD COLUMNS (
+  run_id             STRING,
+  user_id            STRING        COMMENT 'candidate_profile_id predates users; this is users.user_id',
+  retrieval_rank     INT           COMMENT 'Rank after the stage-1 cosine cut, 1-based',
+  similarity         DOUBLE        COMMENT 'Cosine, job description embedding vs profile summary embedding',
+  skills_matched     ARRAY<STRING> COMMENT 'Profile skills the JD explicitly asks for',
+  skills_missing     ARRAY<STRING> COMMENT 'JD requirements with no trace in the profile',
+  courses_matched    ARRAY<STRING> COMMENT 'Coursework that covers a JD requirement',
+  eligibility        STRING        COMMENT 'pass | fail | unknown',
+  eligibility_reason STRING        COMMENT 'Why. A fail with no reason is a bug — see hard rule 4.'
+);
