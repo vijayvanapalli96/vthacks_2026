@@ -1,0 +1,13 @@
+{
+  "name": "ans://v1.0.0.employer.example.com",
+  "display_name": "VT Hacks Demo Employer Agent",
+  "version": "1.0.0",
+  "endpoint": "https://employer.example.com/a2a/apply",
+  "capabilities": ["job_application.receive"],
+  "required_fields": ["full_name", "email", "resume_url"],
+  "optional_fields": ["cover_letter"],
+  "privacy": {
+    "purpose": "Evaluate a candidate for a selected job opening",
+    "retention_days": 30
+  }
+}

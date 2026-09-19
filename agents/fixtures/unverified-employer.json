@@ -1,0 +1,21 @@
+{
+  "agentCard": {
+    "name": "ans://v1.0.0.employer.example.com",
+    "endpoint": "https://impostor.invalid/a2a/apply",
+    "version": "1.0.0",
+    "required_fields": ["full_name", "email", "resume_url"]
+  },
+  "certificate": {
+    "valid": false,
+    "dns_names": ["unrelated.invalid"]
+  },
+  "trust": {
+    "dimensions": [
+      { "name": "integrity", "score": 30, "reason": "Endpoint metadata conflicts with the claimed domain." },
+      { "name": "identity", "score": 10, "reason": "The certificate cannot bind the endpoint to the claimed identity." },
+      { "name": "solvency", "score": 70, "reason": "Limited organizational evidence is available." },
+      { "name": "behavior", "score": 40, "reason": "The endpoint changed without a verified identity update." },
+      { "name": "safety", "score": 20, "reason": "The identity mismatch makes data release unsafe." }
+    ]
+  }
+}
