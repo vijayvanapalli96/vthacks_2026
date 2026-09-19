@@ -654,3 +654,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
 @media (max-width: 760px) {
   .hero h1 { font-size: clamp(38px, 11vw, 56px); -webkit-text-stroke: 0.4px var(--ink); }
 }
+
+/* --- Lenis: required plumbing ------------------------------------------- */
+/* Lenis sets these classes on <html>. Without them it fights the native
+   scroll container and the easing never engages. */
+
+html.lenis, html.lenis body { height: auto; }
+.lenis:not(.lenis-autoToggle).lenis-stopped { overflow: clip; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
+
+/* Give the page room to actually scroll, so the easing is perceptible and the
+   scroll-triggered reveals have somewhere to trigger. */
+main { padding-bottom: 96px; }

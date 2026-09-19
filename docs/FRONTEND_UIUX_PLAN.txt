@@ -197,8 +197,11 @@ Status as of the applicant-page styling pass.
 | [x] | F2 Forum on ALL text        | entire page is one serif face; | CRIT   | 25m  |
 |     |    Inter removed            | small sizes nudged up+tracked  |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
-| [x] | F3 Lenis, reduced-motion    | scroll gains subtle weight;    | HIGH   | 20m  |
-|     |    gated                    | off entirely if user opts out  |        |      |
+| [x] | F3 Lenis, reduced-motion    | scroll gains subtle weight;    | HIGH   | 30m  |
+|     |    gated + required CSS     | off entirely if user opts out  |        |      |
++-----+-----------------------------+--------------------------------+--------+------+
+| [x] | F7 Scroll-triggered reveals | lower sections rise in as you  | HIGH   | 15m  |
+|     |    (whileInView)            | scroll to them, once each      |        |      |
 +-----+-----------------------------+--------------------------------+--------+------+
 | [x] | F4 Skip link + focus rings  | tab from top reveals "Skip to  | CRIT   | 15m  |
 |     |                             | content"; 2px ink ring         |        |      |
@@ -280,7 +283,7 @@ Status as of the applicant-page styling pass.
 | [ ] | X3 Mouse-free demo run      | the move that wins UI/UX       | CRIT   | 20m  |
 +-----+-----------------------------+--------------------------------+--------+------+
 
-  DONE 11 of 30  ·   spent ~2h40m  ·   remaining P0 ~4h05m, everything ~6h00m
+  DONE 12 of 31  ·   spent ~3h05m  ·   remaining P0 ~3h50m, everything ~5h45m
 
   NEVER CUT: S1, S4, H1, H2, X1, X3
   DESCOPE ORDER: P5 -> P4 -> P3 -> P2 -> P1 -> H4 -> F6 -> A4

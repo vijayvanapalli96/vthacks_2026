@@ -56,7 +56,7 @@ export default function ApplicantDashboard() {
       </section>
 
       <section className="grid">
-        <Reveal className="panel" index={5}>
+        <Reveal className="panel" onScroll>
           <header>
             <div>
               <small>MATCH QUEUE</small>
@@ -79,7 +79,7 @@ export default function ApplicantDashboard() {
           ))}
         </Reveal>
 
-        <Reveal as="aside" className="panel approval" index={6}>
+        <Reveal as="aside" className="panel approval" onScroll>
           <small>APPROVAL REQUIRED</small>
           <h2>Your materials are ready</h2>
           <p>Resume and cover letter are prepared for your strongest match.</p>
@@ -95,7 +95,7 @@ export default function ApplicantDashboard() {
         </Reveal>
       </section>
 
-      <Reveal as="footer" index={7}>
+      <Reveal as="footer" onScroll>
         <ShieldCheck aria-hidden="true" />
         <strong>Human approval is always required.</strong>
         <span>The system recommends; you control every external action.</span>
