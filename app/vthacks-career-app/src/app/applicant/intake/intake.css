@@ -71,29 +71,32 @@
 .intake-form input[type='url']:hover,
 .intake-form input[type='url']:focus { border-color: var(--ink); }
 
-/* A file input cannot be restyled, so give it a frame that matches everything
-   else and leave the control itself alone. */
+/* No frame. The button carries the affordance and the filename sits beside it,
+   which is all a file input needs to be understood. */
 .intake-form input[type='file'] {
   font: inherit;
   font-size: 15px;
   width: 100%;
-  padding: 18px;
+  padding: 0;
   background: transparent;
-  border: 1px dashed var(--line-strong);
+  border: 0;
   color: var(--muted);
   cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
 }
-.intake-form input[type='file']:hover { border-color: var(--ink); color: var(--ink); }
 .intake-form input[type='file']::file-selector-button {
   font: inherit;
-  font-size: 14px;
-  margin-right: 14px;
-  padding: 8px 14px;
-  background: var(--ink);
-  color: var(--paper);
-  border: 0;
+  font-size: 15px;
+  margin-right: 16px;
+  padding: 12px 20px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  letter-spacing: 0.03em;
   cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.intake-form input[type='file']:hover::file-selector-button {
+  border-color: var(--ink);
 }
 
 .intake-form input[aria-invalid='true'] { border-color: var(--failure); }
