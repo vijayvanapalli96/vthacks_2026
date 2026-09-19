@@ -1,7 +1,32 @@
 import { ArrowRight, BadgeCheck, BriefcaseBusiness, ShieldCheck, Users } from 'lucide-react';
 
+import { ApplicantAgentCheck, type AgentCheckResult } from '@/components/ApplicantAgentCheck';
 import { Reveal } from '@/components/Reveal';
 import { SignOutForm } from '@/components/SignOutForm';
+import { APPLICANT_ANS_NAME, verifyProductionAgent } from '@/lib/ans/production';
+
+import '../applicant/apply/apply.css';
+
+export const dynamic = 'force-dynamic';
+
+/** Verified on the server so the badge arrives already decided. */
+async function checkApplicantAgent(): Promise<AgentCheckResult> {
+  try {
+    const result = await verifyProductionAgent({ ansName: APPLICANT_ANS_NAME, expectedRole: 'applicant' });
+    return {
+      state: result.verdict === 'pass' ? 'verified' : 'refused',
+      ansName: result.registry.ans_name,
+      reason: result.spoken_reason,
+      score: Math.round(result.dimensions.reduce((sum, dimension) => sum + dimension.score, 0) / result.dimensions.length),
+    };
+  } catch (error) {
+    return {
+      state: 'refused',
+      ansName: APPLICANT_ANS_NAME,
+      reason: error instanceof Error ? error.message : 'This agent could not be verified.',
+    };
+  }
+}
 
 const openRoles = [
   ['Data & AI Engineer', 'Blacksburg / Hybrid', '18'],
@@ -15,7 +40,9 @@ const verifiedApplicants = [
   ['Dani Okafor', 'Applied Research Intern', 'Pending'],
 ];
 
-export default function EmployerDashboard() {
+export default async function EmployerDashboard() {
+  const applicantAgent = await checkApplicantAgent();
+
   return (
     <main id="main">
       <nav>
@@ -37,6 +64,16 @@ export default function EmployerDashboard() {
           Publish a role once and let your agent answer for it. Every inbound application carries a
           domain-anchored identity, so you review people instead of filtering bots.
         </p>
+      </Reveal>
+
+      <Reveal as="section" className="panel trust-step" index={1}>
+        <header>
+          <div>
+            <small>INBOUND AGENT</small>
+            <h2>Is this applicant agent real?</h2>
+          </div>
+        </header>
+        <ApplicantAgentCheck initial={applicantAgent} />
       </Reveal>
 
       <section className="metrics">

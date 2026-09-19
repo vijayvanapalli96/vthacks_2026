@@ -37,21 +37,15 @@ const STATUS_TEXT: Record<VoiceStatus, string> = {
 };
 
 /**
- * The visual state, named to match `OrbState` in the VoiceOrb component that
- * landed on main in PR #14 — deliberately, so the two can be joined without a
- * translation layer.
+ * The visual state. Named to match the vocabulary PR #14's VoiceOrb spoke, so the
+ * two could be joined without a translation layer — which is what happened at the
+ * merge, except that branch had already replaced the orb with `AgentFace`, whose
+ * moods are the same five names plus 'happy'.
  *
- * THIS IS A SEAM, NOT A DUPLICATE. `VoiceOrb` is genuinely reusable: it is pure
- * presentation over `{ state, stream }` and it is nicer than the dot below. It is
- * NOT imported here because this branch is based on 55a94b8 and that file (plus the
- * ~950 lines of `.orb__*` CSS it needs) does not exist in this tree — importing it
- * would not compile, and copying it in would create an identical-path conflict,
- * which is strictly worse than leaving a one-line hole.
- *
- * TO JOIN THEM AFTER THE MERGE: pass `visual={<VoiceOrb state={visualState} size={120} />}`
- * from VoiceAgent.tsx, which already computes exactly this value. Nothing else
- * changes, and `VoiceConsole` — which owns its own getUserMedia — must stop being
- * rendered on /applicant at the same time. See the report.
+ * THE SEAM IS CLOSED. VoiceAgent.tsx passes
+ * `visual={<AgentFace mood={visualState} size={120} />}`, and `VoiceConsole` — which
+ * owned a second getUserMedia — no longer renders on /applicant, so the SDK holds
+ * the only microphone stream the page is allowed.
  */
 export type VoiceVisualState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'refusing';
 
@@ -78,7 +72,7 @@ export function VoiceWidget({
   onDisconnect: () => void;
   onToggleMute: () => void;
   visualState: VoiceVisualState;
-  /** Optional visual indicator. The seam for VoiceOrb — see VoiceVisualState. */
+  /** Optional visual indicator — HireWire's face. See VoiceVisualState. */
   visual?: React.ReactNode;
 }) {
   // The hook lives here rather than in the parent so the DOM node it measures never
@@ -103,8 +97,8 @@ export function VoiceWidget({
         ref={attach}
         role="group"
         aria-label="Voice control"
-        // Same vocabulary as VoiceOrb's OrbState, so a CSS-only or test-only hook on
-        // the state exists whether or not the orb is wired in yet.
+        // Same vocabulary as AgentFace's moods, so a CSS-only or test-only hook on
+        // the state exists independently of what is passed as `visual`.
         data-voice-state={visualState}
       >
         <div className="vw-head">

@@ -1,14 +1,17 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, BriefcaseBusiness, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { ApplicantNav } from '@/components/ApplicantNav';
 import { IntakeProgress } from '@/components/IntakeProgress';
 import { Reveal } from '@/components/Reveal';
-import { SignOutForm } from '@/components/SignOutForm';
 import { VoiceAgent } from '@/components/voice/VoiceAgent';
 import { intakeGate } from '@/lib/intake';
+import { DEMO_JOB, listJobs } from '@/lib/jobs';
 import { requireRole } from '@/lib/session';
 
 import './intake/intake.css';
+import './apply/apply.css';
 
 /**
  * The dashboard IS the landing page, including while onboarding finishes.
@@ -24,26 +27,25 @@ import './intake/intake.css';
  * of the first page a new user ever lands on. Now the analysis runs in place, here,
  * with the live log above the workspace — so the URL after signing up is just
  * /applicant and the work is still visible.
+ *
+ * WHAT IS NOT ON THIS PAGE. A metrics row reading 24 / 8 / 5 / 3 and an "approval
+ * required" panel listing Resume.pdf and Cover-letter.pdf as Ready. Both were
+ * fixture values with nothing behind them, presented as this user's own numbers and
+ * this user's own files — hard rule 7, and the first thing a judge would click. The
+ * match queue below stays because it now reads real postings.
  */
 export default async function ApplicantDashboard() {
   const user = await requireRole('applicant');
   const { nextStep, needsAnalysis } = await intakeGate(user.id);
   if (nextStep) redirect(nextStep);
+  // Real postings only (CLAUDE.md rule 7). The demo row is our own ANS employer
+  // agent and is labelled as such.
+  const { jobs } = await listJobs(3);
+  const queue = [DEMO_JOB, ...jobs].slice(0, 4);
 
   return (
     <main id="main">
-      <nav>
-        <strong>Application Workspace</strong>
-        <span>Overview</span>
-        <span>Jobs</span>
-        <span>Materials</span>
-        {/* The "Voice navigation" button that used to sit here did nothing when
-            clicked. The floating control is the real one, and it is always on
-            screen — a button that looks like it starts a microphone and does not is
-            worse than no button, particularly for someone who cannot see whether
-            anything happened. */}
-        <SignOutForm />
-      </nav>
+      <ApplicantNav current="overview" />
 
       {needsAnalysis ? (
         <Reveal as="section" className="setup-band">
@@ -67,11 +69,68 @@ export default async function ApplicantDashboard() {
             Evaluate opportunities, create evidence-backed materials, and approve every external
             action.
           </p>
-          <button className="primary">
+          <Link className="primary" href="/applicant/jobs">
             Review best match <ArrowRight size={18} aria-hidden="true" />
-          </button>
+          </Link>
         </Reveal>
       )}
+
+      <Reveal as="section" className="panel handshake" index={1}>
+        <div>
+          <small>BEFORE ANYTHING IS SENT</small>
+          <h2>Your agent proves who is asking</h2>
+          <p>
+            Every application goes through a live check against GoDaddy&apos;s Agent Name Service. Try a verified
+            employer, then an impostor.
+          </p>
+        </div>
+        <div className="handshake-actions">
+          <Link className="primary" href="/applicant/apply?host=employer.hirewire.biz">
+            <ShieldCheck size={18} aria-hidden="true" /> Verified employer
+          </Link>
+          <Link className="secondary" href="/applicant/apply?host=fraud.webmesh.ai">
+            Impostor agent
+          </Link>
+        </div>
+      </Reveal>
+
+      {/* Full width rather than in the old two-column .grid: the "approval required"
+          aside that used to fill the narrow column is gone, and one panel sitting in
+          a 1.6fr slot beside 0.85fr of nothing reads as a layout bug. */}
+      <Reveal className="panel" onScroll>
+        <header>
+          <div>
+            <small>MATCH QUEUE</small>
+            <h2>Jobs worth your attention</h2>
+          </div>
+          <BriefcaseBusiness aria-hidden="true" />
+        </header>
+        <ul className="job-list">
+          {queue.map((job) => (
+            <li key={job.job_id}>
+              <Link href={`/applicant/jobs/${encodeURIComponent(job.job_id)}`} className="job-row">
+                <span>
+                  <strong>{job.job_title}</strong>
+                  <small>
+                    {job.company_name}
+                    {job.location_text ? ` · ${job.location_text}` : ''}
+                  </small>
+                </span>
+                <span className={job.demo ? 'job-tag' : 'job-tag muted-tag'}>
+                  {job.demo ? 'Demo ANS agent' : (job.source ?? 'posting')}
+                </span>
+                <ArrowRight size={17} aria-hidden="true" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {queue.length <= 1 ? (
+          <p className="job-empty">
+            Real postings appear here as the discovery pipeline fills them in.{' '}
+            <Link href="/applicant/jobs">See all jobs</Link>.
+          </p>
+        ) : null}
+      </Reveal>
 
       {/* Last in the DOM, so tab order reaches the page content before the floating
           control rather than making every keyboard user pass through it first. It
