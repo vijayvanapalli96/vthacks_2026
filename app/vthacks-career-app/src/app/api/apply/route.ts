@@ -44,11 +44,15 @@ export async function POST(request: Request) {
   }));
   const requested = Array.isArray(body.requested_fields) ? body.requested_fields : [];
   const releasable = requested.filter((field) => allowedFields.has(field));
-  const matchExplanation = explainMutualMatch({
-    candidateSkills: body.candidate?.skills,
-    requiredSkills: body.job?.required_skills,
-    preferredSkills: body.job?.preferred_skills,
-  });
+  // The explanation names the candidate's matched skills, so it only exists when
+  // the candidate approved releasing `skills`. Otherwise it would leak them.
+  const matchExplanation = releasable.includes('skills')
+    ? explainMutualMatch({
+        candidateSkills: body.candidate?.skills,
+        requiredSkills: body.job?.required_skills,
+        preferredSkills: body.job?.preferred_skills,
+      })
+    : null;
 
   if (verification.verdict !== 'pass' || body.human_approved !== true || !verification.evidence) {
     const spokenReason = verification.verdict !== 'pass'
@@ -115,7 +119,7 @@ export async function POST(request: Request) {
     signal: AbortSignal.timeout(8000),
   });
 
-  const matchPersisted = body.job?.job_id ? await recordMatchExplanationSafely({
+  const matchPersisted = body.job?.job_id && matchExplanation ? await recordMatchExplanationSafely({
     applicationId: body.application_id,
     jobId: body.job.job_id,
     direction: 'applicant_to_employer',
