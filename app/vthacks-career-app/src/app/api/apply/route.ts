@@ -27,6 +27,10 @@ type ApplyBody = {
   };
 };
 
+function claimedIdentity(body: ApplyBody): string {
+  return (body.employer_ans_name ?? body.employer_host ?? body.agent_id ?? 'unidentified').slice(0, 255);
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({})) as ApplyBody;
   const verification = await verifyProductionAgent({
@@ -58,16 +62,18 @@ export async function POST(request: Request) {
     const spokenReason = verification.verdict !== 'pass'
       ? verification.spoken_reason
       : 'Application blocked until the candidate approves the exact fields to release.';
-    const persisted = verification.registry ? await recordAgentVerificationSafely({
+    // Every refusal is recorded, including an "employer" with no ANS registration
+    // at all: then the subject is whatever identity it was claimed under.
+    const persisted = await recordAgentVerificationSafely({
       applicationId: body.application_id,
       verifierAnsName: APPLICANT_ANS_NAME,
-      subjectAnsName: verification.registry.ans_name,
+      subjectAnsName: verification.registry?.ans_name ?? claimedIdentity(body),
       subjectRole: 'employer',
       purpose: 'job_application',
       verdict: verification.verdict,
       dimensions: verification.dimensions,
       fieldsReleased: [],
-    }) : false;
+    });
     return NextResponse.json({
       status: 'refused',
       fields_released: [],

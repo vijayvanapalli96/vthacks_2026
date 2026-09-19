@@ -6,16 +6,18 @@ import { recordAgentVerificationSafely } from '../../../lib/ans/store';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({})) as {
+    agent_id?: string;
+    ans_name?: string;
+    host?: string;
+    expected_role?: 'employer' | 'applicant';
+    application_id?: string;
+    purpose?: 'job_application' | 'recruiting_invitation';
+  };
+  const expectedRole = body.expected_role ?? 'employer';
+  const verifierAnsName = expectedRole === 'employer' ? APPLICANT_ANS_NAME : EMPLOYER_ANS_NAME;
+  const purpose = body.purpose ?? (expectedRole === 'employer' ? 'job_application' : 'recruiting_invitation');
   try {
-    const body = await request.json().catch(() => ({})) as {
-      agent_id?: string;
-      ans_name?: string;
-      host?: string;
-      expected_role?: 'employer' | 'applicant';
-      application_id?: string;
-      purpose?: 'job_application' | 'recruiting_invitation';
-    };
-    const expectedRole = body.expected_role ?? 'employer';
     const result = await verifyProductionAgent({
       agentId: body.agent_id,
       ansName: body.ans_name,
@@ -24,10 +26,10 @@ export async function POST(request: Request) {
     });
     const persisted = await recordAgentVerificationSafely({
       applicationId: body.application_id,
-      verifierAnsName: expectedRole === 'employer' ? APPLICANT_ANS_NAME : EMPLOYER_ANS_NAME,
+      verifierAnsName,
       subjectAnsName: result.registry.ans_name,
       subjectRole: expectedRole,
-      purpose: body.purpose ?? (expectedRole === 'employer' ? 'job_application' : 'recruiting_invitation'),
+      purpose,
       verdict: result.verdict,
       dimensions: result.dimensions,
       fieldsReleased: [],
@@ -42,11 +44,24 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'Unknown ANS verification failure.';
+    const dimensions = failedTrustDimensions(reason);
+    // No registry record to name, so record the identity it was claimed under.
+    const persisted = await recordAgentVerificationSafely({
+      applicationId: body.application_id,
+      verifierAnsName,
+      subjectAnsName: (body.ans_name ?? body.host ?? body.agent_id ?? 'unidentified').slice(0, 255),
+      subjectRole: expectedRole,
+      purpose,
+      verdict: 'refuse',
+      dimensions,
+      fieldsReleased: [],
+    });
     return NextResponse.json({
       verdict: 'refuse',
-      dimensions: failedTrustDimensions(reason),
+      dimensions,
       spoken_reason: `Application blocked. ${reason}`,
       checked_at: new Date().toISOString(),
+      persisted,
     }, { status: 502 });
   }
 }
