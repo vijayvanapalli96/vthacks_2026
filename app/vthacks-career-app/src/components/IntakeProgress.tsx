@@ -55,14 +55,26 @@ export function IntakeProgress() {
     if (started.current) return;
     started.current = true;
 
-    const controller = new AbortController();
-
+    /**
+     * Deliberately NO AbortController and NO cleanup.
+     *
+     * THE BUG THIS REPLACES, because it is easy to reintroduce: Strict Mode runs
+     * this effect twice. The first version aborted the request in its cleanup, so
+     * pass one started the fetch, the simulated unmount killed it before it left the
+     * browser, and pass two hit the `started` guard above — refs survive that
+     * remount — and returned without re-sending. The server never saw a request and
+     * the page sat on "Starting up" forever, silently, because the catch recognised
+     * its own abort and said nothing. A cleanup that nulls a liveness flag has the
+     * same failure: it disables the UI updates of the one request still running.
+     *
+     * Nothing needs cancelling. This request is not a read — it writes the user's
+     * profile — so navigating away should let it finish, not interrupt it halfway.
+     * And a setState on an unmounted component is a silent no-op in React 19, so a
+     * liveness guard would only buy back the bug.
+     */
     (async () => {
       try {
-        const res = await fetch('/api/intake/analyze', {
-          method: 'POST',
-          signal: controller.signal,
-        });
+        const res = await fetch('/api/intake/analyze', { method: 'POST' });
         if (!res.ok || !res.body) {
           setOutcome({ kind: 'error', message: `The analysis could not start (${res.status}).` });
           return;
@@ -120,12 +132,9 @@ export function IntakeProgress() {
           }
         }
       } catch (error) {
-        if (controller.signal.aborted) return;
         setOutcome({ kind: 'error', message: (error as Error).message });
       }
     })();
-
-    return () => controller.abort();
   }, []);
 
   /**
