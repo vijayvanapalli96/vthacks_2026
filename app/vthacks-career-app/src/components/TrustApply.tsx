@@ -3,6 +3,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, Loader2, ShieldAlert, ShieldCheck, Volume2 } from 'lucide-react';
 
+import { AgentBadge } from '@/components/AgentBadge';
+import { emitAgentState } from '@/lib/agent-state';
+
 // Mirrors the /api/verify and /api/apply contracts (TASK_DIVISION.md §4).
 type Dimension = { name: string; score: number; reason: string };
 type Verification = {
@@ -15,7 +18,7 @@ type Verification = {
 type ApplyResult = {
   status: 'submitted' | 'refused' | 'delivery_failed';
   fields_released: string[];
-  audit_id: string;
+  audit_id: string | null;
   spoken_reason: string;
   match_explanation?: { score: number; verdict: string; reasons: string[] };
 };
@@ -100,7 +103,10 @@ export function TrustApply({ name, email, initialHost }: { name: string; email: 
     }
   }, [phase.kind]);
 
-  function announce(text: string) {
+  // Announce twice: the browser voice when asked, and the agent-state event any
+  // visualiser listens to (the voice orb). See lib/agent-state.ts.
+  function announce(verdict: 'pass' | 'refuse', text: string) {
+    emitAgentState({ state: verdict === 'refuse' ? 'refusing' : 'speaking', spoken_reason: text });
     if (speakAloud) speak(text);
   }
 
@@ -108,6 +114,7 @@ export function TrustApply({ name, email, initialHost }: { name: string; email: 
     if (!target) return;
     setApproved({});
     setPhase({ kind: 'verifying' });
+    emitAgentState({ state: 'thinking' });
     try {
       const response = await fetch('/api/verify', {
         method: 'POST',
@@ -116,7 +123,7 @@ export function TrustApply({ name, email, initialHost }: { name: string; email: 
       });
       const result = (await response.json()) as Verification;
       setPhase(result.verdict === 'pass' ? { kind: 'verified', verification: result } : { kind: 'refused', verification: result });
-      announce(result.spoken_reason);
+      announce(result.verdict, result.spoken_reason);
     } catch {
       setPhase({ kind: 'error', message: 'Could not reach the verification service. Try again.' });
     }
@@ -125,6 +132,7 @@ export function TrustApply({ name, email, initialHost }: { name: string; email: 
   async function apply(humanApproved: boolean, fields: string[]) {
     if (!verification) return;
     setPhase({ kind: 'sending', verification });
+    emitAgentState({ state: 'thinking' });
     try {
       const response = await fetch('/api/apply', {
         method: 'POST',
@@ -144,7 +152,7 @@ export function TrustApply({ name, email, initialHost }: { name: string; email: 
       });
       const result = (await response.json()) as ApplyResult;
       setPhase({ kind: 'done', verification, result });
-      announce(result.spoken_reason);
+      announce(result.status === 'submitted' ? 'pass' : 'refuse', result.spoken_reason);
     } catch {
       setPhase({ kind: 'error', message: 'Could not reach the apply service. Nothing was confirmed as sent.' });
     }
@@ -269,6 +277,15 @@ export function TrustApply({ name, email, initialHost }: { name: string; email: 
             </button>
           </header>
           <div className="trust-body">
+            <AgentBadge
+              party="employer"
+              state={verification.verdict === 'pass' ? 'verified' : 'refused'}
+              ansName={verification.registry?.ans_name ?? target}
+              score={Math.round(
+                verification.dimensions.reduce((sum, dimension) => sum + dimension.score, 0) /
+                  Math.max(verification.dimensions.length, 1),
+              )}
+            />
             <p className="trust-reason" role={verification.verdict === 'pass' ? undefined : 'alert'}>
               {verification.spoken_reason}
             </p>
@@ -412,7 +429,7 @@ export function TrustApply({ name, email, initialHost }: { name: string; email: 
               </dd>
               <dt>audit_id</dt>
               <dd>
-                <code>{phase.result.audit_id}</code>
+                <code>{phase.result.audit_id ?? 'not recorded'}</code>
               </dd>
               {phase.result.match_explanation ? (
                 <>
