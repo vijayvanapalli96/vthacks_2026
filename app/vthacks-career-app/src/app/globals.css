@@ -505,6 +505,76 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
+/* --- Role pathway (signup) ---------------------------------------------- */
+
+.role-locked {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 20px 0 22px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 34px;
+}
+.role-locked p { margin: 0; display: grid; gap: 6px; }
+.role-locked strong { font-weight: 400; font-size: 18px; }
+.role-locked small { text-transform: none; letter-spacing: 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.role-locked a { color: var(--ink); font-size: 14px; white-space: nowrap; text-decoration: underline; text-underline-offset: 3px; }
+
+.role-options { border: 0; padding: 0; margin: 0 0 34px; display: grid; gap: 0; }
+.role-options legend {
+  padding: 0 0 14px;
+  font-size: 12.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.role-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+.role-option:last-of-type { border-bottom: 1px solid var(--line); }
+.role-option input { margin-top: 5px; accent-color: var(--ink); }
+.role-option span { display: grid; gap: 5px; }
+.role-option strong { font-weight: 400; font-size: 17px; }
+.role-option small { text-transform: none; letter-spacing: 0; font-size: 14px; line-height: 1.6; }
+
+.field-hint { font-size: 14px; color: var(--muted); margin: 0; line-height: 1.5; }
+
+/* --- Secondary + sign out ------------------------------------------------ */
+
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  padding: 13px 19px;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  transition: border-color 0.2s ease;
+}
+.secondary:hover { border-color: var(--ink); }
+
+.signout {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+.signout:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+
+/* First field needs air after the pathway block above it. */
+.auth-form > .field:first-of-type { margin-top: 4px; }
+
 /* ===========================================================================
    REDUCED MOTION — flatten everything
    =========================================================================== */
