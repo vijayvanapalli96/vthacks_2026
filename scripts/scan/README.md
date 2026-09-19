@@ -38,6 +38,7 @@ Useful flags:
 | `--all` | Every board in `boards.json` (pair with `--dry-run`). |
 | `--json` | Machine-readable summary on stdout. |
 | `--seed-boards` | Upsert `boards.json`; never resets rotation or health state. |
+| `--reclassify` | Recompute `is_us` / `location_confidence` for rows already stored, after the location heuristic changes. Fetches nothing. Updates **only** those two derived columns — never `description_text` or `raw_payload_json`. |
 
 Environment (all optional — the team workspace defaults are baked in):
 
@@ -131,6 +132,19 @@ and the US filter being subtly wrong is the most likely silent failure in this
 lane. `scan_runs.postings_us / postings_fresh / postings_undated` are how you
 tell "the filter is working" from "the filter is eating everything".
 
+**This paid for itself within the hour.** The first full sweep stored 834
+postings whose location was the bare string `"San Francisco"` and marked every one
+of them **not US** — the lifted USPS table matches state names and abbreviations,
+and a city with no state attached matches nothing in it. Nothing threw; the only
+symptom was a suspiciously low `postings_us`. Because the rows were stored rather
+than discarded, fixing the filter and running `--reclassify` corrected 1,559
+verdicts in place. Had they been dropped at scan time, they would simply have
+been gone. Query it yourself after changing the filter:
+
+```sql
+SELECT is_us, location_confidence, count(*) FROM workspace.vthacks_2026.job_snapshots GROUP BY 1, 2;
+```
+
 ## Deploying the cron
 
 `*/5 * * * *` on the Vultr box. **Untested — there is no VM provisioned yet**, so
@@ -195,11 +209,16 @@ tracker and its lock files for ~200 lines of string matching.
    and still listed on the employer's own board.* The stronger claim needs
    `career-ops/check-liveness.mjs`, which needs Playwright — out of scope.
 2. **The US filter is a heuristic** over a display string and one URL path
-   segment. It gets "Dublin, OH" right and "Ontario, CA" (Canada) wrong. Rows are
-   never discarded, so a wrong verdict is re-examinable — that is the point of
-   storing everything.
+   segment, plus a hand-written list of ~150 US cities. It gets "Dublin, OH"
+   right and "Ontario, CA" (Canada) wrong, and a US city that is not on the list
+   and carries no state falls through to `is_us = false`. Rows are never
+   discarded, so a wrong verdict is re-examinable with `--reclassify` — that is
+   the point of storing everything.
 3. **A bare "Remote" is admitted** as US with `location_confidence = 'unknown'`.
-   These are US employers' own boards, but no geography was actually read.
+   These are US employers' own boards, but no geography was actually read. 194 of
+   16,206 rows currently sit in that pile ("Remote", "Remote, Global",
+   "Remote, AMER"), and they are the first thing to audit if the numbers look
+   wrong.
 4. **`boards.json` is a curated list of 74 employers**, not "all US jobs". The
    pitch must not say otherwise.
 5. **`raw_payload_json` is the provider-*normalised* posting minus its body**, not

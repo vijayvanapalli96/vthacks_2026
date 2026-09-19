@@ -114,6 +114,28 @@ test('US cities that contain a blocked country name survive', () => {
   }
 });
 
+test('a bare US city with no state is a US job', () => {
+  // REGRESSION. The first live run stored 834 postings whose location was the
+  // bare string "San Francisco" and marked every one NOT US, because the USPS
+  // table only knows state names and abbreviations. Ashby and Greenhouse boards
+  // write bare city names constantly, so this was the filter quietly eating a
+  // third of the product.
+  for (const location of ['San Francisco', 'Seattle', 'Austin', 'New York City', 'Blacksburg', 'Arlington']) {
+    const got = classifyLocation(location, '', 'Software Engineer');
+    assert.equal(got.isUs, true, location);
+    assert.equal(got.confidence, 'display', location);
+  }
+});
+
+test('a blocked foreign city still beats the US city list', () => {
+  // The city list is in `allow`, one tier BELOW `block`, so adding it cannot
+  // resurrect a foreign city. "London" stays non-US.
+  assert.equal(classifyLocation('London', '', 'Engineer').isUs, false);
+  assert.equal(classifyLocation('Dublin', '', 'Engineer').isUs, false);
+  // …and the state table above `block` still rescues the US homonym.
+  assert.equal(classifyLocation('Dublin, OH', '', 'Engineer').isUs, true);
+});
+
 test('a multi-location posting survives one blocked city', () => {
   // always_allow beats plain block, so a role open in New York AND London is
   // still a US job.

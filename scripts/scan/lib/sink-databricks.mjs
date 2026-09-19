@@ -349,6 +349,61 @@ export async function countRowsAndKeys() {
   };
 }
 
+// ── Re-classifying the derived location columns ──────────────────────────────
+
+/**
+ * Page through the columns needed to recompute a location verdict.
+ * ORDER BY job_id so paging is stable across statements.
+ */
+export async function readLocationInputs(offset, limit) {
+  const o = Number.parseInt(String(offset), 10);
+  const n = Number.parseInt(String(limit), 10);
+  if (!Number.isInteger(o) || o < 0 || !Number.isInteger(n) || n <= 0 || n > 20_000) {
+    throw new Error(`bad paging window: ${offset}/${limit}`);
+  }
+  return sqlObjects(`
+    SELECT job_id, location_text, source_url, job_title, is_us, location_confidence
+    FROM ${CATALOG_SCHEMA}.job_snapshots
+    ORDER BY job_id
+    LIMIT ${n} OFFSET ${o}`);
+}
+
+const RECLASSIFY_STRUCT = 'job_id:string,is_us:boolean,location_confidence:string';
+
+/**
+ * Refresh is_us and location_confidence on rows already stored.
+ *
+ * THIS IS THE ONLY WHEN-MATCHED-UPDATE AGAINST job_snapshots IN THE REPO, and it
+ * touches exactly two columns, both of them DERIVED. `description_text` and
+ * `raw_payload_json` — the two the write-once rule names (CLAUDE.md hard rule 2)
+ * — are not in the SET list and must never be added to it.
+ *
+ * Why this exists: the plan's argument for storing every posting is that a
+ * dropped row cannot be re-examined when the filter turns out to have been
+ * wrong. That promise is empty unless the stored verdict can actually be
+ * recomputed when the filter improves — which it did, immediately: the first
+ * live sweep marked 834 bare-"San Francisco" postings as non-US.
+ */
+export async function reclassifyLocations(updates) {
+  let changed = 0;
+  for (const chunk of chunkRows(updates)) {
+    const result = await sql(`
+MERGE INTO ${CATALOG_SCHEMA}.job_snapshots AS t
+USING (
+  SELECT u.job_id, u.is_us, u.location_confidence
+  FROM (SELECT explode(from_json(:payload, 'array<struct<${RECLASSIFY_STRUCT}>>')) AS u)
+) AS s
+ON t.job_id = s.job_id
+WHEN MATCHED THEN UPDATE SET
+  t.is_us = s.is_us,
+  t.location_confidence = s.location_confidence`,
+    [{ name: 'payload', value: JSON.stringify(chunk) }]);
+    const idx = result.columns.indexOf('num_updated_rows');
+    if (idx !== -1 && result.rows.length > 0) changed += Number(result.rows[0][idx] ?? 0);
+  }
+  return { changed };
+}
+
 // ── job_boards ──────────────────────────────────────────────────────────────
 
 const BOARD_STRUCT = [

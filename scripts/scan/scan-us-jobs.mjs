@@ -23,6 +23,9 @@
 //                                         (this is how the seed list is verified)
 //   node scan-us-jobs.mjs --slice 20      override the slice size for one run
 //   node scan-us-jobs.mjs --json          machine-readable summary on stdout
+//   node scan-us-jobs.mjs --reclassify    recompute is_us / location_confidence
+//                                         on rows already stored, after the
+//                                         location heuristic changes
 // ---------------------------------------------------------------------------
 
 import { randomUUID } from 'node:crypto';
@@ -45,6 +48,8 @@ import {
   existingJobIds,
   insertScanRun,
   mergeJobSnapshots,
+  readLocationInputs,
+  reclassifyLocations,
   recordBoardHealth,
   seedBoards,
 } from './lib/sink-databricks.mjs';
@@ -233,6 +238,37 @@ async function main() {
 
   const boardsFile = JSON.parse(await readFile(path.join(HERE, 'boards.json'), 'utf8'));
   const seeded = boardsFile.boards;
+
+  if (hasFlag('--reclassify')) {
+    // Recompute is_us / location_confidence for rows already stored, and update
+    // ONLY those two derived columns. This is the payoff of storing every
+    // posting: when the heuristic improves, the stored verdicts can be
+    // re-examined instead of being frozen at whatever the filter believed on the
+    // day the row was captured. It does not fetch anything and cannot touch
+    // description_text or raw_payload_json.
+    const PAGE = 4_000;
+    let offset = 0;
+    let scanned = 0;
+    let changed = 0;
+    for (;;) {
+      const page = await readLocationInputs(offset, PAGE);
+      if (page.length === 0) break;
+      const updates = [];
+      for (const row of page) {
+        const { isUs, confidence } = classifyLocation(row.location_text, row.source_url, row.job_title);
+        const wasUs = row.is_us === 'true' || row.is_us === true;
+        if (wasUs !== isUs || row.location_confidence !== confidence) {
+          updates.push({ job_id: row.job_id, is_us: isUs, location_confidence: confidence });
+        }
+      }
+      if (updates.length > 0) changed += (await reclassifyLocations(updates)).changed;
+      scanned += page.length;
+      offset += PAGE;
+      console.log(`  reclassified ${scanned} rows so far, ${changed} verdicts changed`);
+    }
+    console.log(`reclassify done: ${scanned} rows read, ${changed} is_us/location_confidence values updated`);
+    return;
+  }
 
   if (hasFlag('--seed-boards')) {
     const result = await seedBoards(seeded.map(b => ({

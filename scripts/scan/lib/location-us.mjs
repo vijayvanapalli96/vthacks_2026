@@ -287,7 +287,13 @@ export function buildLocationFilter(locationFilter) {
  * here is re-examinable rather than lost.
  */
 export const US_LOCATION_FILTER = Object.freeze({
-  always_allow: ['united states', 'usa', 'u.s.', 'u.s.a.'],
+  // 'us' is here because these boards write "Remote - US", "Remote US" and
+  // "US - Remote" in bulk (300+ rows in the first sweep). Word-boundary matching
+  // makes the bare token safe: the lookarounds in compileLocationKeyword mean
+  // "Austin", "Houston" and "Columbus" cannot match it. Note that always_allow
+  // outranks block, which is correct here — "Remote - US or London" IS a US-open
+  // role.
+  always_allow: ['united states', 'usa', 'u.s.', 'u.s.a.', 'us'],
 
   // Country / region names that mean "not in the US", whatever else the string
   // says. Ordered roughly by how often they show up on the seed boards.
@@ -336,18 +342,80 @@ export const US_LOCATION_FILTER = Object.freeze({
   // lands here: it is admitted (these are US employers' own boards) but the
   // caller records location_confidence 'unknown', because no geography was ever
   // read. That is the honest shape — see docs/JOB_PIPELINE_PLAN.md §6.3.
-  allow: ['united states', 'usa', 'u.s.', 'u.s.a.', 'remote', 'anywhere', 'nationwide'],
+  //
+  // US CITIES ARE IN THIS TIER FOR A MEASURED REASON. The first live run stored
+  // 834 postings whose location was the bare string "San Francisco" and marked
+  // every one of them NOT US: the USPS table matches state names and
+  // abbreviations, and a city with no state attached matches nothing in it. Ashby
+  // and Greenhouse boards write bare city names constantly. This is precisely the
+  // "the US filter is eating everything" failure the plan calls the most likely
+  // silent one, and it was caught by querying is_us counts rather than by any
+  // error.
+  //
+  // They sit in `allow` and not `always_allow` so a blocked foreign city still
+  // wins: "Birmingham" stays non-US because Birmingham, England is on the block
+  // list, while "Birmingham, AL" is rescued by the state table one tier up. Cities
+  // whose names are ALSO major non-US cities are deliberately absent here.
+  allow: [
+    'united states', 'usa', 'u.s.', 'u.s.a.', 'remote', 'anywhere', 'nationwide',
+    // Bay Area
+    'san francisco', 'sf bay area', 'bay area', 'silicon valley', 'oakland',
+    'berkeley', 'palo alto', 'mountain view', 'menlo park', 'sunnyvale',
+    'santa clara', 'san mateo', 'redwood city', 'cupertino', 'san jose',
+    'south san francisco', 'emeryville', 'fremont',
+    // Pacific Northwest
+    'seattle', 'bellevue', 'redmond', 'kirkland', 'tacoma', 'spokane', 'portland',
+    // SoCal
+    'los angeles', 'santa monica', 'culver city', 'pasadena', 'irvine',
+    'long beach', 'costa mesa', 'el segundo', 'burbank', 'san diego', 'la jolla',
+    // Mountain / Southwest
+    'denver', 'boulder', 'colorado springs', 'salt lake city', 'provo', 'lehi',
+    'phoenix', 'scottsdale', 'tempe', 'chandler', 'tucson', 'albuquerque',
+    'las vegas', 'reno', 'boise',
+    // Texas
+    'austin', 'dallas', 'houston', 'san antonio', 'fort worth', 'plano', 'irving',
+    'el paso',
+    // Midwest
+    'chicago', 'evanston', 'detroit', 'ann arbor', 'minneapolis', 'saint paul',
+    'st. paul', 'madison', 'milwaukee', 'columbus', 'cincinnati', 'cleveland',
+    'indianapolis', 'st. louis', 'saint louis', 'kansas city', 'omaha',
+    'des moines', 'pittsburgh',
+    // Northeast
+    'boston', 'cambridge', 'somerville', 'brookline', 'waltham', 'nyc',
+    'new york city', 'brooklyn', 'queens', 'manhattan', 'jersey city', 'hoboken',
+    'newark', 'princeton', 'stamford', 'hartford', 'new haven', 'providence',
+    'philadelphia', 'pittsburgh', 'buffalo', 'rochester', 'albany', 'syracuse',
+    'portland maine',
+    // Mid-Atlantic / DC metro — the VT catchment
+    'washington dc', 'washington, d.c.', 'arlington', 'alexandria', 'mclean',
+    'tysons', 'reston', 'herndon', 'vienna va', 'fairfax', 'chantilly',
+    'blacksburg', 'roanoke', 'charlottesville', 'richmond va', 'norfolk',
+    'virginia beach', 'bethesda', 'rockville', 'silver spring', 'annapolis',
+    'baltimore', 'columbia md', 'wilmington',
+    // Southeast
+    'atlanta', 'savannah', 'charlotte', 'raleigh', 'durham', 'chapel hill',
+    'cary', 'research triangle', 'nashville', 'memphis', 'knoxville',
+    'huntsville', 'orlando', 'tampa', 'miami', 'jacksonville', 'charleston',
+    'new orleans', 'lexington', 'louisville',
+    // Other
+    'honolulu', 'anchorage',
+  ],
 });
 
 const isUsLocation = buildLocationFilter(US_LOCATION_FILTER);
 
 // Every matcher that recognises a PLACE, US or not. Used only to answer "did we
 // actually read a geography, and from which field?" — never to decide is_us.
+// The three work-arrangement words in `allow` are excluded: "Remote" is not a
+// place, and letting it count as geography would hide exactly the rows that
+// deserve auditing.
+const NOT_A_PLACE = new Set(['remote', 'anywhere', 'nationwide']);
 const GEO_MATCHERS = [
   ...US_LOCATION_FILTER.always_allow.map(k => compileLocationKeyword(k)),
   ...US_STATE_ALWAYS_ALLOW_MATCHERS,
   ...US_LOCATION_FILTER.block_hard.map(k => compileLocationKeyword(k)),
   ...US_LOCATION_FILTER.block.map(k => compileLocationKeyword(k)),
+  ...US_LOCATION_FILTER.allow.filter(k => !NOT_A_PLACE.has(k)).map(k => compileLocationKeyword(k)),
 ];
 
 /**
