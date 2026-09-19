@@ -1,9 +1,38 @@
+# Security headers on every response, including 4xx/5xx and errors Caddy
+# generates itself (handle_errors), not only the agent's 200s.
+(hardened) {
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "geolocation=(), camera=(), microphone=()"
+		-Server
+	}
+}
+
+(agent_errors) {
+	handle_errors {
+		import hardened
+		header Content-Type "application/json"
+		respond `{"status":"error","code":{err.status_code}}` {err.status_code}
+	}
+}
+
+# Certificates are the ANS-issued server certs, pinned by the TLSA record and
+# attested in the ANS transparency log. Do not switch to automatic ACME: a new
+# certificate would no longer match either. See README "Certificate renewal".
 employer.hirewire.biz {
 	tls /certs/employer.fullchain.pem /certs/employer.key
+	import hardened
+	import agent_errors
 	reverse_proxy employer:8787
 }
 
 applicant.hirewire.biz {
 	tls /certs/applicant.fullchain.pem /certs/applicant.key
+	import hardened
+	import agent_errors
 	reverse_proxy applicant:8788
 }

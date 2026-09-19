@@ -42,3 +42,29 @@ The local `certs/` directory and generated `work/` archive remain gitignored.
 `deploy.ps1` packages the files in your working tree, not what is on GitHub.
 Deploy from a checkout that matches `main`, or the server drifts from the repo.
 Destroy the instance after judging; a stopped instance is still billed.
+
+## Response hardening
+
+Caddy adds HSTS, `X-Content-Type-Options: nosniff`, a deny-all
+`Content-Security-Policy`, `X-Frame-Options: DENY`, `Referrer-Policy` and
+`Permissions-Policy` to every response, including 4xx/5xx and errors Caddy
+generates itself, and strips the `Server` header. The agents grant
+`Access-Control-Allow-Origin: *` only on the public read endpoints (`/`,
+`/.well-known/agent-card.json`, `/health`); `POST /a2a/apply` is
+server-to-server and grants no CORS access. `GET /` returns a small index so
+monitoring sees a 200.
+
+## Certificate renewal
+
+Both server certificates expire **2027-04-05** and are ANS-issued, not
+Porkbun or Let's Encrypt. Do **not** switch Caddy to automatic ACME: the
+`_443._tcp` TLSA record (`3 0 1 <sha256 of the full cert>`) and the ANS
+transparency log (`serverCert.fingerprint`) both pin the exact certificate, so
+any other certificate breaks DANE and the ANS attestation. Before expiry:
+
+1. Generate a new server CSR and request a renewed server certificate for each
+   agent through `ans-cli` (production credential, see `docs/VIJAY_ANS_SETUP.md`).
+2. Update each `_443._tcp.<agent>.hirewire.biz` TLSA record to the new
+   certificate's SHA-256, as ANS instructs.
+3. Replace `certs/<agent>/server.crt.pem` and `server.key`, then rerun
+   `deploy.ps1` and `verify-public.ps1`.
