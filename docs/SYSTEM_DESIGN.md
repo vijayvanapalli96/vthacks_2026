@@ -2,19 +2,19 @@
 
 ## 1. Purpose
 
-This document describes a platform that helps a candidate discover relevant jobs, prepare truthful application materials, review and submit applications, monitor employer email responses, and receive an immediate in-app voice notification when a positive response arrives.
+This document describes a platform that helps a candidate discover relevant jobs, prepare truthful application materials, review and submit applications, monitor employer email responses, and operate the experience through an accessible ElevenLabs conversational interface. The same interface can announce high-confidence positive responses and begin job-specific interview preparation.
 
 The system is designed for a hackathon prototype. It prioritizes a coherent user experience and meaningful sponsor integrations over using every available technology.
 
 ## 2. Goals
 
 - Convert a resume into a structured candidate profile.
-- Ingest or accept job descriptions and calculate explainable job-match scores.
+- Ingest jobs from manual input and permitted public applicant-tracking-system APIs, then calculate explainable job-match scores.
 - Generate tailored, evidence-backed application materials.
 - Require candidate approval before any external submission.
 - Monitor Gmail for responses connected to tracked applications.
 - Classify responses into interview, assessment, recruiter follow-up, offer, rejection, neutral, or uncertain.
-- Generate an ElevenLabs in-app spoken notification when a high-confidence positive response arrives.
+- Provide an ElevenLabs-powered conversational interface for accessible and hands-free job discovery, application navigation, status tracking, employer-response review, and interview preparation.
 - Track the complete application lifecycle and display real-time funnel analytics.
 
 ## 3. Non-goals
@@ -23,58 +23,53 @@ The system is designed for a hackathon prototype. It prioritizes a coherent user
 - Submitting fabricated qualifications or experience.
 - Uncontrolled mass application submission.
 - Automatically replying to recruiters in the initial release.
+- Making voice the only way to use the application.
+- Executing a submission from an ambiguous or misunderstood voice command.
 - Using physiological or emotional signals to make hiring decisions.
-- Adding blockchain or additional databases solely for prize eligibility.
 
-## 4. Recommended Sponsor Stack
+## 4. Technology Stack
 
-### Core integrations
-
-| Technology | Role | Why it is meaningful |
-|---|---|---|
-| Gemini API | Resume and job parsing, match explanations, document drafting, and email-response classification | The product depends on multimodal and structured language understanding. |
-| ElevenLabs | In-app positive-response narration and optional voice interview coach | Voice is a primary user-facing workflow, not a decorative add-on. |
-| Tiger Data | PostgreSQL system of record plus time-series application events and real-time dashboard aggregates | The platform combines relational candidate data with a high-frequency lifecycle event stream. |
-| GoDaddy Registry | Custom domain for the deployed application | Useful, inexpensive, and visible in the demo. |
-
-### Optional integration
-
-| Technology | Role | Constraint |
-|---|---|---|
-| Presage | Candidate-only interview coaching using opt-in engagement, breathing, or stress indicators | Results must be private coaching signals and must never influence employer-side decisions. |
-
-### Do not use in the initial architecture
-
-| Technology | Reason |
+| Component | Responsibility |
 |---|---|
-| Solana | The workflow does not require payments, decentralized identity, asset ownership, or public consensus. A consent hash on-chain would add complexity without improving the user outcome. |
-| MongoDB Atlas | Tiger Data already supplies the operational relational store and event analytics. A second application database creates synchronization work without a distinct requirement. |
-| Vultr | Databricks Apps can host the application. Vultr is viable only if the team chooses a standalone deployment instead of Databricks hosting. |
+| Databricks Apps | Host the React web application and backend API. |
+| Databricks Lakeflow Jobs | Run scheduled job ingestion, normalization, scoring, and reconciliation workflows. |
+| Databricks Unity Catalog and Volumes | Govern resumes, generated documents, and analytical datasets. |
+| Tiger Data | Store transactional application state, time-series events, and real-time aggregates. |
+| Gemini API | Parse resumes and jobs, explain matches, generate grounded application materials, and classify employer emails. |
+| ElevenLabs | Provide conversational navigation, spoken summaries, accessible job discovery, response narration, and interview coaching. |
+| Gmail API | Retrieve employer responses associated with tracked applications. |
+| Greenhouse and Lever APIs | Supply published job listings from configured employer boards. |
+| GoDaddy Registry | Provide the public application domain. |
+| Presage SDK (optional) | Provide opt-in, candidate-only signals during interview coaching. |
 
-## 5. Tiger Data, Not Tiger Analytics
+## 5. Data Architecture
 
-The hackathon category refers to **Tiger Data**, the PostgreSQL and time-series platform, not Tiger Analytics, the consulting and analytics company.
+| Data class | System | Contents |
+|---|---|---|
+| Operational state | Tiger Data relational tables | Users, candidate profiles, job sources, jobs, applications, approvals, Gmail connections, and preferences. |
+| Event stream | Tiger Data hypertables | Job discoveries, match scores, state transitions, email classifications, notifications, and voice sessions. |
+| Real-time metrics | Tiger Data continuous aggregates | Funnel counts, response rate, time to response, classification confidence, and voice-task completion. |
+| Documents | Unity Catalog Volumes | Resumes, cover letters, generated application packets, and evaluation fixtures. |
+| Analytical history | Delta tables | Append-oriented workflow history, model-evaluation datasets, and long-term reporting data. |
 
-Tiger Data is a strong fit because the system has both conventional relational records and a timestamped stream of state changes:
-
-- Relational data: users, resumes, jobs, applications, approvals, Gmail connections, and notification preferences.
-- Time-series data: job discoveries, match scores, application transitions, incoming email classifications, notification attempts, and voice-session outcomes.
-- Real-time aggregates: applications by stage, positive-response rate, median time to response, voice notifications played, and classification confidence over time.
-
-For the hackathon, Tiger Data should be the primary operational database. Databricks remains the workflow, AI/data processing, governance, and deeper analytics layer.
+The Application API reads and writes current state in Tiger Data. Lakeflow Jobs update job records and write analytical history to Delta. Documents remain in governed storage and are referenced by identifiers rather than copied into event payloads.
 
 ## 6. High-level Architecture
 
 ```mermaid
 flowchart LR
-    USER[Candidate] --> UI[Web Application]
+    USER[Candidate] <--> VOICE[ElevenLabs Conversational Agent]
+    USER --> UI[Accessible Web Application]
+    VOICE -->|Client navigation tools| UI
+    VOICE -->|Webhook data tools| API
     UI --> API[Application API]
 
     API --> TIGER[(Tiger Data Postgres)]
     API --> FILES[Governed Resume and Document Storage]
     API --> GEMINI[Gemini API]
 
-    JOBSRC[Job URLs or Permitted Job APIs] --> INGEST[Databricks Ingestion and Scoring]
+    MANUAL[Job URL, Text, PDF, or Email] --> INGEST[Databricks Ingestion and Scoring]
+    ATS[Greenhouse and Lever Public Job APIs] --> INGEST
     INGEST --> TIGER
     INGEST --> LAKE[(Delta Event and Analytics Tables)]
 
@@ -82,8 +77,9 @@ flowchart LR
     MAILWORKER --> GEMINI
     GEMINI --> DECISION[Positive-response Gate]
     DECISION --> TIGER
-    DECISION -->|High confidence| VOICE[ElevenLabs Voice Notification]
-    VOICE --> UI
+    DECISION -->|High confidence| ALERT[Accessible Alert Event]
+    ALERT --> UI
+    ALERT --> VOICE
 
     TIGER --> DASH[Real-time Application Dashboard]
     LAKE --> DASH
@@ -101,12 +97,13 @@ The application can be implemented as a Databricks App with a React frontend and
 Primary screens:
 
 - Candidate onboarding and resume upload
+- Job-source and company-watchlist management
 - Job feed and explainable matches
 - Application-material review
 - Submission approval
 - Application tracker
 - Positive-response inbox
-- Voice notification settings
+- Voice navigation and notification settings
 - Mock interview and feedback
 - Application funnel analytics
 
@@ -115,12 +112,13 @@ Primary screens:
 The API owns all privileged operations:
 
 - Candidate and job CRUD
+- Job-source connector configuration and synchronization
 - OAuth connection management
 - Gemini request validation
 - Approval enforcement
 - Submission idempotency
 - Notification policy and quiet hours
-- ElevenLabs voice-notification creation
+- ElevenLabs navigation-tool authorization and voice-alert creation
 - Audit-event creation
 
 The language model may recommend actions, but only the API may execute them.
@@ -135,6 +133,7 @@ Conventional PostgreSQL tables:
 - `candidate_profiles`
 - `resumes`
 - `job_preferences`
+- `job_sources`
 - `jobs`
 - `job_matches`
 - `applications`
@@ -146,10 +145,12 @@ Conventional PostgreSQL tables:
 Time-series/event tables:
 
 - `application_events`
+- `job_ingestion_events`
 - `email_classification_events`
 - `submission_attempt_events`
 - `notification_events`
 - `voice_notification_events`
+- `voice_navigation_events`
 - `interview_session_events`
 
 Continuous aggregates can power:
@@ -159,6 +160,7 @@ Continuous aggregates can power:
 - Median time from submission to response
 - Email-classification confidence distribution
 - Voice-notification generation and playback rate
+- Voice-navigation task success and fallback rate
 
 ### 7.4 Databricks
 
@@ -173,7 +175,57 @@ Databricks provides:
 
 Lakeflow Jobs can orchestrate ingestion, normalization, scoring, and reconciliation. Tiger Data remains the low-latency operational database used by the web application.
 
-### 7.5 Gemini
+### 7.5 Job ingestion connectors
+
+The platform uses layered ingestion so it can demonstrate a reliable MVP without depending on protected job boards.
+
+#### Manual ingestion
+
+Every user can add a job by:
+
+- Pasting a job URL
+- Pasting the description text
+- Uploading a job-description PDF
+- Forwarding or importing a job email
+
+Gemini converts the provided content into the normalized job schema. Arbitrary page scraping is not required for the MVP; when a URL cannot be retrieved safely, the user is asked to paste the description.
+
+#### Public ATS connectors
+
+The first automated connectors target public employer job boards:
+
+- Greenhouse Job Board API: retrieve published jobs through public GET endpoints using an employer board token.
+- Lever Postings API: retrieve published jobs using an employer site identifier; requests run through the backend because browser CORS access can be restricted.
+
+Users configure a company watchlist. Databricks ingestion jobs poll those configured sources, normalize records, and write current state to Tiger Data.
+
+Normalized fields include:
+
+```text
+source
+external_job_id
+company
+title
+description
+location
+remote_policy
+employment_type
+salary_min
+salary_max
+application_url
+required_skills
+preferred_skills
+experience_level
+published_at
+last_seen_at
+status
+```
+
+`source + external_job_id` is unique. Repeated observations update `last_seen_at`; a job missing from several consecutive source scans is marked closed rather than deleted. Every discovery, update, and closure is appended to `job_ingestion_events` for Tiger Data time-series analysis.
+
+The MVP does not scrape LinkedIn, Indeed, protected Workday pages, or sites that prohibit automated access.
+
+### 7.6 Gemini
 
 Gemini is used through bounded, structured operations:
 
@@ -189,7 +241,7 @@ Outputs must follow application-defined schemas and be validated before storage 
 
 The numerical match score should be deterministic. Gemini explains the score and generates content, but it should not invent the score or unsupported candidate claims.
 
-### 7.6 Gmail connector
+### 7.7 Gmail connector
 
 Hackathon implementation:
 
@@ -207,7 +259,7 @@ Production implementation:
 
 The connector matches each email to an application using the sender domain, company name, role title, requisition ID, prior thread, and timing.
 
-### 7.7 Positive-response detector
+### 7.8 Positive-response detector
 
 The detector uses deterministic evidence followed by Gemini classification.
 
@@ -247,7 +299,49 @@ A voice notification is generated only when:
 
 Uncertain messages appear in the application dashboard without generating a spoken alert.
 
-### 7.8 ElevenLabs notification agent
+### 7.9 ElevenLabs conversational accessibility agent
+
+ElevenLabs is the application voice and conversational-control layer. It supports visually impaired users, users with motor limitations, and anyone who prefers hands-free interaction. The accessible visual interface remains fully available as an equivalent path.
+
+Representative requests include:
+
+- “Find remote data engineering jobs in Virginia.”
+- “Read my top three matches.”
+- “Why is the first job a strong match?”
+- “Save that job and open my saved jobs.”
+- “Read the application requirements.”
+- “What applications need my attention?”
+- “Read the recruiter response.”
+- “Start an interview practice session.”
+
+Client tools execute low-risk browser operations:
+
+```text
+navigate_to(page)
+focus_job(job_id)
+next_result()
+previous_result()
+open_dialog(dialog)
+read_visible_content()
+set_filter(name, value)
+```
+
+Webhook tools access server-side data and operations:
+
+```text
+search_jobs(filters)
+get_job_details(job_id)
+explain_match(job_id)
+save_job(job_id)
+get_application_status(application_id)
+generate_application_materials(job_id)
+```
+
+The web application is the source of truth for navigation, focus, permissions, and application state. The agent can propose an action, but the client or API performs it and returns a structured result.
+
+Read-only navigation and search may run automatically. Any operation that changes application state requires confirmation. Submission uses two steps: the agent reads a concise summary of the destination and selected materials, then opens an accessible confirmation screen. A voice utterance alone cannot finalize submission.
+
+#### Positive-response narration
 
 The backend supplies dynamic notification context:
 
@@ -258,7 +352,7 @@ The backend supplies dynamic notification context:
 - Required next action
 - Application dashboard URL
 
-The initial agent can inform and summarize. It cannot reply to recruiters, schedule an interview, or change application state.
+The initial agent can navigate, search, inform, summarize, save a job with confirmation, and start interview practice. It cannot reply to recruiters, schedule an interview, submit an application, or make another sensitive state change without the required confirmation flow.
 
 Example opening:
 
@@ -266,7 +360,7 @@ Example opening:
 
 The application presents the notification through an ElevenLabs-powered in-app voice experience. Every generation and playback outcome is written to `voice_notification_events`.
 
-### 7.9 Presage interview coach (optional)
+### 7.10 Presage interview coach (optional)
 
 During a mock interview, Presage can collect opt-in camera-derived signals such as engagement, breathing rate, or movement. These signals can help the candidate identify moments of stress or loss of focus.
 
@@ -282,7 +376,20 @@ Safeguards:
 
 ## 8. Core Workflows
 
-### 8.1 Application preparation
+### 8.1 Job discovery and ingestion
+
+```text
+Manual input or configured Greenhouse/Lever source
+  -> Retrieve published job
+  -> Normalize and deduplicate
+  -> Record current job in Tiger Data
+  -> Append ingestion event
+  -> Gemini extracts structured requirements
+  -> Deterministic matching algorithm
+  -> Searchable job feed
+```
+
+### 8.2 Application preparation
 
 ```text
 Resume upload
@@ -296,7 +403,21 @@ Resume upload
   -> Authorized submission or user-assisted handoff
 ```
 
-### 8.2 Employer-response notification
+### 8.3 Conversational navigation
+
+```text
+Candidate speaks or types a request
+  -> ElevenLabs identifies the intent
+  -> Read-only request calls a client or webhook tool
+  -> Tool executes against the current UI or Application API
+  -> Structured result returns to the agent
+  -> Agent narrates the result
+  -> UI focus and screen-reader live region update together
+```
+
+Sensitive operations branch to an accessible confirmation screen and do not complete solely from the original voice command.
+
+### 8.4 Employer-response notification
 
 ```text
 Gmail change detected
@@ -311,7 +432,7 @@ Gmail change detected
   -> Store generation and playback result
 ```
 
-### 8.3 Application state machine
+### 8.5 Application state machine
 
 ```text
 DISCOVERED
@@ -327,7 +448,23 @@ DISCOVERED
   -> OFFER | REJECTED | WITHDRAWN
 ```
 
-## 9. Security and Trust
+## 9. Accessibility, Security, and Trust
+
+### 9.1 Accessibility and inclusive interaction
+
+- Voice is optional; every function has a keyboard and screen-reader-accessible equivalent.
+- Use semantic HTML, landmarks, correct heading order, associated form labels, and descriptive controls.
+- Preserve predictable focus when the voice agent changes pages, filters, dialogs, or selected jobs.
+- Announce asynchronous job results and application-state changes through screen-reader live regions.
+- Provide visible focus indicators, high-contrast themes, scalable text, and reduced-motion support.
+- Provide a text transcript and captions for every voice interaction.
+- Support push-to-talk, hands-free, and text-only conversation modes.
+- Explain microphone use before requesting permission and allow permission to be revoked.
+- Allow speech rate, voice, and volume preferences.
+- Never autoplay speech without prior user consent.
+- If a voice tool fails or is ambiguous, preserve the current page and present an accessible recovery action.
+
+### 9.2 Security and trust
 
 - Encrypt OAuth refresh tokens and API credentials.
 - Never expose Gmail, Gemini, ElevenLabs, or database secrets to the browser.
@@ -337,44 +474,49 @@ DISCOVERED
 - Retain the minimum message content required for the user-facing feature.
 - Provide Gmail disconnect and data-deletion controls.
 - Require explicit approval before application submission.
+- Require confirmation for any voice request that changes saved data or application state.
 - Use idempotency keys for submissions and voice notifications.
 - Keep a timestamped audit record of every automated decision and external action.
 - Do not log full resumes, OAuth tokens, or complete email bodies in general application logs.
 
-## 10. Hackathon MVP
+## 10. MVP Scope
 
 Build the following vertical slice:
 
 1. Upload one resume.
 2. Parse it with Gemini into a confirmed profile.
-3. Paste or upload several job descriptions.
-4. Rank jobs with an explainable score.
-5. Generate a tailored application packet.
-6. Track a simulated or user-assisted submission.
-7. Connect one Gmail test account.
-8. Poll for employer responses.
-9. Classify a positive interview email with Gemini.
-10. Write application and email events to Tiger Data.
-11. Generate and play an ElevenLabs in-app voice notification.
-12. Show the state change immediately on a dashboard.
-13. Deploy under a custom GoDaddy domain if time permits.
+3. Add jobs through manual input and one public Greenhouse or Lever connector.
+4. Store normalized jobs and ingestion events in Tiger Data.
+5. Search and navigate jobs through the ElevenLabs conversational interface.
+6. Rank jobs with an explainable score and let the agent read the top results.
+7. Generate a tailored application packet.
+8. Exercise the accessible two-step approval flow for a simulated or user-assisted submission.
+9. Connect one Gmail test account.
+10. Poll for employer responses.
+11. Classify a positive interview email with Gemini.
+12. Write application and email events to Tiger Data.
+13. Generate and play an ElevenLabs in-app voice notification.
+14. Show the state change immediately on a dashboard.
+15. Deploy under a custom GoDaddy domain.
 
-Optional only after the full vertical slice works:
+Phase 2 after the full vertical slice works:
 
-14. Add a Presage-enhanced mock interview.
+16. Add a Presage-enhanced mock interview.
 
-## 11. Demonstration Script
+## 11. End-to-End Acceptance Scenario
 
 1. Show a candidate profile produced from a resume.
-2. Show several job matches and explain one score.
-3. Generate and approve an application packet.
-4. Display the application entering the submitted state.
-5. Inject or receive a realistic recruiter interview email.
-6. Show Gemini's structured classification and supporting evidence.
-7. Show the new event appearing in the Tiger Data-backed dashboard.
-8. Open the ElevenLabs voice alert and hear the job-specific notification.
-9. Show the playback event and updated application status.
-10. If implemented, run a short opt-in Presage interview-coaching segment.
+2. Use ElevenLabs to request remote roles matching the candidate.
+3. Show a job arriving from a Greenhouse or Lever connector and its Tiger Data ingestion event.
+4. Have the agent read the top matches and explain one deterministic score.
+5. Use voice navigation to save a job and open its application-material review screen.
+6. Generate a tailored application packet and demonstrate the accessible confirmation boundary.
+7. Display the application entering the submitted state.
+8. Inject or receive a realistic recruiter interview email.
+9. Show Gemini's structured classification and supporting evidence.
+10. Show the new event appearing in the Tiger Data-backed dashboard.
+11. Ask ElevenLabs to read the positive response and start job-specific interview preparation.
+12. If implemented, run a short opt-in Presage interview-coaching segment.
 
 ## 12. Success Metrics
 
@@ -384,6 +526,9 @@ Optional only after the full vertical slice works:
 - Duplicate-notification prevention rate
 - Time from Gmail receipt to voice-notification readiness
 - Voice-notification generation and playback rate
+- Voice-navigation task completion rate
+- Voice-tool error and accessible-fallback rate
+- Job connector freshness, deduplication, and closure accuracy
 - Median time required to prepare an application packet
 - Percentage of generated claims backed by resume evidence
 - User override rate for model classifications
@@ -396,30 +541,19 @@ Optional only after the full vertical slice works:
 | Email cannot be mapped to an application | Do not generate an alert; place it in an unmatched review queue |
 | Duplicate Gmail notifications | Unique constraint on Gmail message ID and idempotent processing |
 | Duplicate voice notifications | Unique notification idempotency key and terminal notification states |
+| Public ATS source changes or becomes unavailable | Isolate each connector, retain last-known records, expose freshness, and preserve manual ingestion |
 | Gemini fabricates candidate information | Source-backed claims, schema validation, and candidate approval |
-| Sponsor integrations feel superficial | Demonstrate each technology in the primary end-to-end workflow |
-| Too many systems for the weekend | Complete Gemini, Tiger Data, and ElevenLabs first; add GoDaddy and Presage afterward |
+| Voice command is misunderstood | Limit tool scope, return structured results, preserve focus, and require confirmation for mutations |
+| Voice interface excludes users who cannot or do not want to speak | Maintain complete keyboard, screen-reader, and text-chat equivalents |
 
-## 14. Recommended Prize Submissions
+## 14. References
 
-Primary targets:
-
-- Best Use of Gemini API
-- Best Use of ElevenLabs
-- Best Use of Tiger Data
-- Best Domain Name from GoDaddy Registry
-
-Conditional target:
-
-- Best Use of Presage, only if the private interview-coaching feature is complete and thoughtfully explained
-
-Avoid submitting for a category when the sponsor technology is merely mentioned or included without affecting the core experience.
-
-## 15. References
-
-- VTHacks prize descriptions: https://www.mlh.com/events/vthacks-14/prizes
 - Gemini structured outputs: https://ai.google.dev/gemini-api/docs/structured-output
+- Greenhouse Job Board API: https://docs.greenhouse.io/job-board.html
+- Lever Postings API: https://github.com/lever/postings-api
 - Gmail push notifications: https://developers.google.com/workspace/gmail/api/guides/push
 - ElevenLabs Speech Engine: https://elevenlabs.io/docs/overview/capabilities/speech-engine
+- ElevenLabs client tools: https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools
+- ElevenLabs React SDK: https://elevenlabs.io/docs/eleven-agents/libraries/react
 - Databricks Apps: https://docs.databricks.com/aws/en/dev-tools/databricks-apps
 - Lakeflow Jobs: https://docs.databricks.com/aws/en/jobs
