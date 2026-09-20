@@ -80,10 +80,20 @@ export type PlannedField = {
  * Belt and braces, same pattern as the fact gate on generated documents.
  */
 const NEVER_ANSWER =
-  /(sponsor|visa|work authoriz|work authoris|right to work|citizen|immigration|salary|compensation|pay expect|desired pay|race|ethnic|gender|sex |pronoun|disab|veteran|military|felony|conviction|background check|date of birth|age\b|sexual orientation)/i;
+  /(sponsor|visa|work authoriz|work authoris|right to work|citizen|immigration|salary|compensation|pay expect|desired pay|race|ethnic|gender|sex |pronoun|disab|veteran|military|felony|conviction|background check|date of birth|age\b|age range|sexual orientation|prefer not to (say|answer)|decline to)/i;
+
+/**
+ * Age bands, which name no protected word at all.
+ *
+ * A real Ashby form asks this as radio options reading "Under 30", "30-39",
+ * "40-49", "50-59" - found while testing discovery against a live posting. The
+ * worker now prefixes a radio with its group question so the word "age" usually
+ * arrives with it; this catches the case where the question is worded without.
+ */
+const AGE_BAND = /(^|\s)(under|over)\s*\d{2}(\s|$)|(^|\s)\d{2}\s*[-–]\s*\d{2}(\s|$)/i;
 
 export function requiresHuman(label: string): boolean {
-  return NEVER_ANSWER.test(label);
+  return NEVER_ANSWER.test(label) || AGE_BAND.test(label);
 }
 
 export function hasAutofillModel(): boolean {
