@@ -47,7 +47,17 @@ const {
   resolveSponsorshipNeed,
 } = await import(`${BASE}eligibility.mjs`);
 const { cosine, cosineSql } = await import(`${BASE}cosine.mjs`);
-const { seniorityTokens, titleHits } = await import(`${BASE}title-match.mjs`);
+const {
+  degreeFit,
+  highestDegreeOf,
+  levelFit,
+  levelFloor,
+  normalizeDegree,
+  requiredDegree,
+  seniorityTokens,
+  titleHits,
+} = await import(`${BASE}title-match.mjs`);
+const { rankCandidates } = await import(`${BASE}retrieve.mjs`);
 const { validateEvaluation } = await import(`${BASE}rerank.mjs`);
 const { buildEmbedText } = await import(`${BASE}profile.mjs`);
 
@@ -530,10 +540,120 @@ test('titles: a target role boosts, and short acronyms are word-anchored', () =>
   assert.equal(titleHits(null, [null, 42, '', 'backend']).hits, 0);
 });
 
-test('titles: seniority tokens are reported, not scored', () => {
+test('titles: seniority tokens are reported AND scored', () => {
   assert.deepEqual(seniorityTokens('Senior Staff Engineer').sort(), ['senior', 'staff']);
   assert.deepEqual(seniorityTokens('Software Engineering Intern'), ['intern']);
   assert.deepEqual(seniorityTokens('Software Engineer'), []);
+  // THE BUG THIS TEST USED TO MISS. The set had no word for management, so the
+  // titles that a student most needs filtered out reported no seniority at all and
+  // the old test passed while a graduating senior was shown eight of them.
+  assert.deepEqual(seniorityTokens('Engineering Manager'), ['manager']);
+  assert.deepEqual(seniorityTokens('Senior Engineering Manager').sort(), ['manager', 'senior']);
+  assert.deepEqual(seniorityTokens('Director of Engineering'), ['director']);
+});
+
+test('level: the floor is read off the title, highest word wins', () => {
+  assert.equal(levelFloor('Software Engineering Intern'), 0);
+  assert.equal(levelFloor('Software Engineer'), 1);
+  assert.equal(levelFloor('Senior Software Engineer'), 5);
+  assert.equal(levelFloor('Staff Software Engineer'), 7);
+  assert.equal(levelFloor('Principal Engineer'), 10);
+  assert.equal(levelFloor('Engineering Manager'), 8);
+  assert.equal(levelFloor('Director, Platform'), 12);
+  assert.equal(levelFloor('VP of Engineering'), 15);
+  // "Senior Engineering Manager" is a manager FIRST: the highest floor wins, so a
+  // title cannot be talked down by carrying a smaller word as well.
+  assert.equal(levelFloor('Senior Engineering Manager'), 8);
+  // A sub-baseline word must not pull down a title that already read as senior.
+  assert.equal(levelFloor('Senior Associate Engineer'), 5);
+});
+
+test('level: a student is not sorted by how far out of reach the job is', () => {
+  // The reported bug, as an assertion: for a candidate with no experience an
+  // internship must outrank a bare title, which must outrank Senior, which must
+  // outrank Manager.
+  const student = (t) => levelFit(t, 0);
+  assert.ok(student('Software Engineering Intern') > student('Software Engineer'));
+  assert.ok(student('Software Engineer') > student('Senior Software Engineer'));
+  assert.ok(student('Senior Software Engineer') > student('Engineering Manager'));
+  assert.equal(student('Software Engineering Intern'), 1);
+  assert.ok(student('Engineering Manager') <= 0.05);
+
+  // NOT a gate. Even the worst fit stays strictly above zero, so a reach role can
+  // still surface and still be applied to.
+  assert.ok(student('VP of Engineering') > 0);
+
+  // An experienced candidate is the mirror image, and over-qualification is a much
+  // gentler penalty than under-qualification.
+  assert.equal(levelFit('Senior Software Engineer', 7), 1);
+  assert.equal(levelFit('Software Engineering Intern', 8), 0.4);
+  assert.ok(levelFit('Software Engineering Intern', 8) > levelFit('VP of Engineering', 0));
+
+  // Unknown experience is treated as none, because that is what an unfinished
+  // student profile means in this product.
+  assert.equal(levelFit('Engineering Manager', null), levelFit('Engineering Manager', 0));
+  assert.equal(levelFit('Engineering Manager', undefined), levelFit('Engineering Manager', 0));
+});
+
+test('degree: the LOWEST degree a title accepts is the one that matters', () => {
+  // "BS/MS" accepts a bachelor's student. Reading the highest would have rejected
+  // a perfectly reachable posting.
+  assert.equal(requiredDegree('2027 Summer Intern, BS/MS, Scenes'), 'bachelors');
+  assert.equal(requiredDegree('2027 Summer Intern, MS/PhD, Machine Learning'), 'masters');
+  assert.equal(requiredDegree('2027 Summer Intern, PhD, Computer Vision'), 'phd');
+  assert.equal(requiredDegree('MBA Intern Summer 2027'), 'mba');
+  assert.equal(requiredDegree('Software Engineering Intern'), null);
+  // Word-anchored: these must not match inside ordinary words.
+  assert.equal(requiredDegree('Database Systems Engineer'), null);
+  assert.equal(requiredDegree('Claims Adjuster'), null);
+});
+
+test('degree: a PhD-only internship is entry-level and still unreachable', () => {
+  // This is the case every years-of-experience signal gets wrong: it IS an
+  // internship, so experience says 1.0, and the barrier is the degree.
+  assert.equal(levelFit('2027 Summer Intern, PhD, Computer Vision', 0), 1);
+  assert.equal(degreeFit('2027 Summer Intern, PhD, Computer Vision', 'Bachelor of Science'), 0.1);
+  assert.equal(degreeFit('2027 Summer Intern, MS/PhD, ML', 'Bachelor of Science'), 0.45);
+  assert.equal(degreeFit('2027 Summer Intern, BS/MS, Scenes', 'Bachelor of Science'), 1);
+  assert.equal(degreeFit('Software Engineering Intern', 'Bachelor of Science'), 1);
+  // A PhD student is not penalised for their own postings.
+  assert.equal(degreeFit('2027 Summer Intern, PhD, Computer Vision', 'PhD in Computer Science'), 1);
+  // MBA is a different track, not one rung up.
+  assert.equal(degreeFit('MBA Intern Summer 2027', 'Bachelor of Science'), 0.15);
+  assert.equal(degreeFit('MBA Intern Summer 2027', 'MBA'), 1);
+});
+
+test('degree: free text normalises, and unknown means bachelors', () => {
+  assert.equal(normalizeDegree('Bachelor of Science, Computer Science'), 'bachelors');
+  assert.equal(normalizeDegree('B.S. Computer Engineering'), 'bachelors');
+  assert.equal(normalizeDegree('Master of Science in Data Analytics'), 'masters');
+  assert.equal(normalizeDegree('Doctor of Philosophy'), 'phd');
+  assert.equal(normalizeDegree('Ph.D.'), 'phd');
+  // An unrecognised or empty degree on a student profile is a bachelor's, not a
+  // doctorate — guessing high would re-open the PhD bug from the other side.
+  assert.equal(normalizeDegree(''), 'bachelors');
+  assert.equal(normalizeDegree(null), 'bachelors');
+  assert.equal(normalizeDegree('Integrated Programme in Engineering'), 'bachelors');
+  assert.equal(highestDegreeOf(['B.S. Statistics', 'M.S. Computer Science']), 'masters');
+  assert.equal(highestDegreeOf([]), 'bachelors');
+  assert.equal(highestDegreeOf(null), 'bachelors');
+});
+
+test('blend: one extracted requirement is not evidence of coverage', () => {
+  // The measured inversion. A posting from which ONE generic requirement was
+  // extracted and matched used to score coverage 1.00 and outrank a real software
+  // posting matching eight of twelve. Both of these must now read as UNKNOWN (0.5).
+  const profile = { claimedSkills: ['python'], proseText: '', courses: [], goals: {}, yearsExperience: 0 };
+  const rows = [
+    { job_id: 'a', company_name: 'X', job_title: 'Production Quality Intern', description_text: 'Requirements: Python.', similarity: 0.5 },
+  ];
+  const { top } = rankCandidates(rows, profile, {});
+  assert.equal(top.length, 1);
+  assert.ok(
+    top[0].requirements_found < 3,
+    `expected a stub posting to yield <3 requirements, got ${top[0].requirements_found}`,
+  );
+  assert.equal(top[0].skill_coverage, 0.5);
 });
 
 test('embed text: skills and target roles are in it, not just the summary', () => {

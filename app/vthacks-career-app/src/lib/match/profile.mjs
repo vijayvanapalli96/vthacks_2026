@@ -5,12 +5,13 @@
  * writes at all — not an INSERT, not an UPDATE. Matching is a recommendation,
  * never an action (hard rule 3).
  *
- * Five sources, and each is here for a different reason:
+ * Six sources, and each is here for a different reason:
  *   profiles          the summary, which is what gets EMBEDDED
  *   profile_skills    the CLAIMED skills -> the `existing` bucket
  *   experience+       the prose evidence -> the `supportedByResume` bucket
  *   courses           -> `courses_matched`
  *   goals             the preferences the hard filters and the gate read
+ *   profile_education the highest degree -> whether a PhD-only posting is reachable
  *
  * The `sql` client is INJECTED rather than imported. There are two of them in
  * this repo — the app's `src/lib/databricks.ts` and the scripts' longer-polling
@@ -34,6 +35,8 @@
  * @typedef {(statement: string, parameters?: SqlParam[])
  *           => Promise<{columns: string[], rows: (string|null)[][]}>} SqlFn
  */
+
+import { highestDegreeOf } from './title-match.mjs';
 
 const FQ = 'workspace.vthacks_2026';
 
@@ -82,7 +85,7 @@ function parseArray(value) {
 export async function loadProfile(sql, userId) {
   const p = { name: 'user_id', value: userId };
 
-  const [head, skills, courses, goals] = await Promise.all([
+  const [head, skills, courses, goals, education] = await Promise.all([
     sql(
       `SELECT p.full_name, p.location, p.headline, p.summary, p.years_experience, u.email
          FROM ${FQ}.users u
@@ -107,6 +110,15 @@ export async function loadProfile(sql, userId) {
               clearance, industries_avoid, company_size
          FROM ${FQ}.goals WHERE user_id = :user_id
         ORDER BY updated_at DESC LIMIT 1`,
+      [p],
+    ),
+    // Degrees only. A PhD-only internship is entry-level on every experience signal
+    // and still unreachable for a bachelor's student, so the matcher needs to know
+    // which degrees the student actually holds or is enrolled in. One more parallel
+    // read, so it costs no extra wall-clock on a warehouse that is already awake.
+    sql(
+      `SELECT CONCAT_WS('\u001f', COLLECT_LIST(degree)) AS degrees
+         FROM ${FQ}.profile_education WHERE user_id = :user_id`,
       [p],
     ),
   ]);
@@ -162,6 +174,23 @@ export async function loadProfile(sql, userId) {
     email: h.email ?? null,
     fullName: h.full_name ?? null,
     location: h.location ?? null,
+    // WAS SELECTED AND DROPPED. `years_experience` has been in the query above since
+    // this file was written and never reached the returned object, so nothing
+    // downstream — not the stage-1 blend, not the reranker prompt — knew whether it
+    // was scoring for a sophomore or a VP. That is why a graduating senior's top ten
+    // was mostly Senior/Staff/Manager roles. Number() rather than a bare pass-through
+    // because the warehouse returns this column as a string over the SQL API.
+    yearsExperience: Number.isFinite(Number(h.years_experience))
+      ? Number(h.years_experience)
+      : null,
+    // Same unit-separator idiom as claimedSkills above, for the same reason: a degree
+    // string legitimately contains commas ("Bachelor of Science, Computer Science").
+    highestDegree: highestDegreeOf(
+      String(education.rows[0]?.[0] ?? '')
+        .split('\u001f')
+        .map((d) => d.trim())
+        .filter(Boolean),
+    ),
     summary,
     claimedSkills,
     proseText,
