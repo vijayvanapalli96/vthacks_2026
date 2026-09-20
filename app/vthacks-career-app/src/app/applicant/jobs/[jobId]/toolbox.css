@@ -385,3 +385,17 @@
   min-height: 4.5em;
   resize: vertical;
 }
+
+/* The save control. Sits between the employer check and the toolbox, so the
+   order on the page is: what this job is, who the employer is, keep it, act on
+   it. */
+.pipeline-save {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.pipeline-save p {
+  margin: 0;
+  font-size: 14px;
+}
