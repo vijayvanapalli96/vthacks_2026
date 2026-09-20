@@ -57,6 +57,71 @@ Two consequences for step 3, stated because they are visible in the UI:
 
 ---
 
+## MEASURED — step 1 answered (2026-09-20, warehouse `441b670a0ff475e0`)
+
+`POST /api/match` has now been called over HTTP by a signed-in applicant. **It did
+not 502.** `POLL_LIMIT_MS` does **not** need raising, so `src/lib/databricks.ts` is
+untouched by this branch.
+
+| call | body | status | wall clock (client) | `run.wall_clock_seconds` | model calls |
+|---|---|---|---|---|---|
+| **cold** (12.7 min workspace-wide idle) | `{"refresh":true}` | **200** | **74.9 s** | 58.8 s | 21 |
+| warm #1 | `{"refresh":true}` | 200 | 39.5 s | 38.5 s | 21 |
+| warm #2 | `{"refresh":true}` | 200 | 45.4 s | 43.0 s | 21 |
+| cached | *(empty body)* | 200 | 2.9 s / 2.7 s | — | **0** |
+
+The cold penalty is ~30 s on top of warm, which matches the documented 20-30 s
+serverless wake. The 16 s gap between the cold client number (74.9 s) and the
+handler's own (58.8 s) is `requireRole()`: the auth lookup is the statement that
+pays the wake, before `runMatch()` starts its clock.
+
+**Why POLL_LIMIT_MS is fine, from the cold run's own statements** — the limit is per
+STATEMENT, not per run, so the run total was never the risk:
+
+```
+first statement (auth lookup, wakes the warehouse)  14,151 ms
+slowest statement (rerank, 20 ai_query calls)       18,813 ms
+POLL_LIMIT_MS                                       90,000 ms   -> 71.2 s headroom
+statements over the limit                           0 of 13
+```
+
+Across 1,188 statements pulled from query history, the slowest single statement in
+any match run was 24,929 ms. Nothing is close to 90 s.
+
+Real signed-in run: **20 matches, top score 85 %**, score range 0-85, every row
+carrying a reason (0 scores without one). `candidates_total` 16,206 embedded US
+postings; the 3-day freshness window cut that to 344-346; cosine took a 200 shortlist.
+
+**Sponsorship before/after** — via `scripts/match-run.mjs --goals`, which merges in
+memory and persists nothing, so no `goals` row was written or changed:
+
+| goals override | eligible after gate | dropped ineligible |
+|---|---|---|
+| `{"work_authorization":"US citizen","sponsorship_required":"false"}` | 200 | **0** |
+| `{"sponsorship_required":"true"}` (the STRING, as the API delivers it) | 195 | **5** |
+
+Of the 5: **3 carry a sponsorship-specific reason** ("Posting states it will not
+sponsor a visa; profile says \"needs visa sponsorship\"" — Vanta ×3) and 2 carry the
+stricter citizenship reason (Astranis ×2). The string `"true"` was read correctly,
+and the reason renders the readable phrase rather than a column dump.
+
+### Found while measuring: a `written = 0` run shadows the last good one
+
+`readCachedRun()` takes the newest finished run and JOINs `match_evaluations` on its
+`run_id`. An operator run with `--no-persist` finishes cleanly with `written = 0` and
+no evaluation rows, so the JOIN returns nothing, the function returns `null`, and the
+product shows "no cached run" for up to 45 minutes while a perfectly good result is
+still stored under the previous `run_id`. Reproduced exactly: the dashboard rendered
+zero matches immediately after two `--no-persist` sponsorship runs, and rendered all
+20 again after one persisting run.
+
+Not fixed here — `run.mjs` is outside this branch's file ownership, and in the product
+`persist` is always true, so only the operator CLI can trigger it. The fix is for the
+`latest` CTE to prefer the newest run that actually has evaluation rows. Left as a
+named defect rather than a silent one.
+
+---
+
 ## Step 1 — Prove the HTTP call survives, BEFORE touching any UI
 
 `/api/match` has never once been called over HTTP. This is the real risk and it is
