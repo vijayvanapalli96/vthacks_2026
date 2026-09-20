@@ -19,14 +19,32 @@
  *
  * Collapsed state is persisted by the parent, which owns the localStorage read.
  */
-import { ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CornerDownLeft, MapPin } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
-import type { TranscriptEntry } from '@/lib/voice-contract';
+import type { MatchBrief, TranscriptEntry, VoiceJobStatus } from '@/lib/voice-contract';
 
+import { MatchDigest } from './MatchDigest';
 import { TranscriptAction } from './TranscriptAction';
 
 export type TypedOption = { fieldKey: string; question: string };
+
+/**
+ * The words the agent WOULD have volunteered, when no conversation is open.
+ *
+ * This is the whole of "proactive without being creepy". When a match run lands and a
+ * conversation is already live, the agent says it. When one is not, the app shows the
+ * SAME SENTENCE as text with a button — it does not open a microphone to tell you
+ * something. See the note in VoiceAgent.tsx: ElevenLabs bills per conversation-minute
+ * and an unasked microphone is a consent problem before it is a billing one.
+ */
+export type ProactivePrompt = {
+  /** Exactly what the agent would have said. Not a paraphrase of it. */
+  text: string;
+  /** The primary thing to do about it, e.g. open the strongest match. */
+  actionLabel: string | null;
+  onAction: (() => void) | null;
+};
 
 export function TranscriptPanel({
   entries,
@@ -36,6 +54,16 @@ export function TranscriptPanel({
   onTypedAnswer,
   busy,
   note,
+  pageName,
+  matches,
+  matchesStale,
+  refreshing,
+  proactive,
+  onDismissProactive,
+  onRefreshMatches,
+  onOpenJob,
+  onExplainJob,
+  onSetJobStatus,
 }: {
   entries: TranscriptEntry[];
   options: TypedOption[];
@@ -44,6 +72,17 @@ export function TranscriptPanel({
   onTypedAnswer: (fieldKey: string, value: string) => Promise<void>;
   busy: boolean;
   note: string | null;
+  /** What the server says this page is. Never parsed from the URL in the browser. */
+  pageName: string | null;
+  matches: MatchBrief[];
+  matchesStale: boolean;
+  refreshing: boolean;
+  proactive: ProactivePrompt | null;
+  onDismissProactive: () => void;
+  onRefreshMatches: () => void;
+  onOpenJob: (jobId: string, target: 'job' | 'apply') => void;
+  onExplainJob: (jobId: string) => void;
+  onSetJobStatus: (jobId: string, status: VoiceJobStatus) => void;
 }) {
   const panelId = useId();
   const selectId = useId();
@@ -101,10 +140,38 @@ export function TranscriptPanel({
           <header className="vt-panel-head">
             <h2>Transcript</h2>
             <p>
-              Everything said, in order, and every change it made to your profile. Voice and typing
-              go to the same place.
+              Everything said and everything done, in order. Voice and typing go to the same
+              endpoints — there is no action here you can only reach with a microphone.
             </p>
+            {/* The agent's page awareness, shown rather than merely claimed. If the
+                agent is wrong about where you are, you can see that it is wrong. */}
+            {pageName ? (
+              <p className="vt-page" role="status">
+                <MapPin size={13} aria-hidden="true" />
+                <span>
+                  The agent knows you are on <strong>{pageName}</strong>.
+                </span>
+              </p>
+            ) : null}
           </header>
+
+          {/* Proactivity as TEXT when no conversation is open. Announced politely so a
+              screen-reader user is told matches landed without the focus being stolen. */}
+          {proactive ? (
+            <div className="vt-proactive" role="status">
+              <p>{proactive.text}</p>
+              <div className="vt-proactive-actions">
+                {proactive.actionLabel && proactive.onAction ? (
+                  <button type="button" className="vt-mini" onClick={proactive.onAction} disabled={busy}>
+                    {proactive.actionLabel}
+                  </button>
+                ) : null}
+                <button type="button" className="vt-mini vt-mini-quiet" onClick={onDismissProactive}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <ol className="vt-list" ref={listRef} aria-live="polite" aria-relevant="additions text">
             {entries.length === 0 ? (
@@ -130,6 +197,18 @@ export function TranscriptPanel({
               {note}
             </p>
           ) : null}
+
+          {/* Every spoken action has its button here, calling the same endpoint. */}
+          <MatchDigest
+            matches={matches}
+            stale={matchesStale}
+            refreshing={refreshing}
+            busy={busy}
+            onRefresh={onRefreshMatches}
+            onOpen={onOpenJob}
+            onExplain={onExplainJob}
+            onSetStatus={onSetJobStatus}
+          />
 
           <form className="vt-typed" onSubmit={submit}>
             <h3>Type an answer instead</h3>
@@ -171,9 +250,15 @@ export function TranscriptPanel({
       ) : (
         /* The panel is closed, so the list above is unmounted and announces nothing.
            This keeps turns audible without putting a hidden, focusable panel in the
-           tab order. */
+           tab order. The proactive prompt is announced here too: matches landing is
+           the one thing that happens without the user doing anything, so it is the
+           one thing that must not be silent behind a collapsed panel. */
         <p className="vt-sr-only" aria-live="polite">
-          {latest ? `${latest.role === 'action' ? 'Action' : latest.role === 'user' ? 'You said' : 'Agent said'}: ${latest.text}` : ''}
+          {proactive
+            ? `${proactive.text} Open the transcript to act on it.`
+            : latest
+              ? `${latest.role === 'action' ? 'Action' : latest.role === 'user' ? 'You said' : 'Agent said'}: ${latest.text}`
+              : ''}
         </p>
       )}
     </div>
