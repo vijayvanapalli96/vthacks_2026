@@ -34,6 +34,13 @@ export type AuditEvent = {
   job_id?: string | null;
   envelope?: { jti: string; aud: string; iat: number; exp: number } | null;
   counterparty_response?: { http_status: number; status?: string; receipt_id?: string } | null;
+  /**
+   * F7.9 — what the EMPLOYER concluded about US. The employer agent runs the
+   * same five-dimension check in the opposite direction before accepting an
+   * application, and returns its verdict in the receipt. Recording it is what
+   * makes the handshake provably mutual rather than mutual by assertion.
+   */
+  counterparty_verification?: { verdict: 'pass' | 'refuse'; dimensions: TrustDimension[] } | null;
   attack?: { id: string; label: string } | null;
 };
 
