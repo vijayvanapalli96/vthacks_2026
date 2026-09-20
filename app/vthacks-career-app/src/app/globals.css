@@ -451,6 +451,15 @@ main, [id] { scroll-margin-top: 100px; }
 /* Centred variant. The employer hero stays left-aligned, so this is a
    modifier rather than a change to .hero. */
 .hero--center { display: grid; justify-items: center; text-align: center; }
+
+/* A hero that introduces a WORKING SCREEN rather than a landing page. The board
+   or the interview room below is the thing; a full-height hero above it pushes
+   the actual content off the fold for no gain. Same type scale, less air, and
+   the trailing paragraph keeps its muted treatment without the 26px tail. */
+.hero-compact { padding: 28px 0 18px; }
+.hero-compact h1 { font-size: clamp(26px, 3.4vw, 34px); margin-bottom: 8px; }
+.hero-compact > p:not(.eyebrow) { font-size: 15px; margin: 0; max-width: 62ch; }
+
 .hero--center h1 { max-width: 20ch; }
 .hero--center > p:not(.eyebrow) { max-width: 52ch; }
 

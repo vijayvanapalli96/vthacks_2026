@@ -52,17 +52,15 @@ export default async function PipelinePage() {
   return (
     <main>
       <ApplicantNav current="pipeline" />
-      <section className="hero">
+      {/* Trimmed: the how-it-works paragraph was three lines of explanation
+          above a board that demonstrates the same thing by existing. The
+          append-only promise still appears where it is actually relevant --
+          under the stage control on each card. */}
+      <section className="hero hero-compact">
         <p className="eyebrow">PIPELINE</p>
-        <h1>Every role you are chasing, and how long it has been waiting.</h1>
-        <p>
-          Set a stage and it is <strong>appended</strong> to this job&rsquo;s history — never overwritten. That is why the
-          board can tell you an application has sat for eleven days, and why changing your mind costs nothing: the
-          correction is just the next event. Marking a stage works from the keyboard alone; there is no drag and drop to
-          get stuck in.
-        </p>
+        <h1>Roles you are chasing</h1>
         <p className="pipe-muted">
-          Roles come from <Link href="/applicant/jobs">Jobs</Link>. Your agent&rsquo;s verification decisions live in{' '}
+          From <Link href="/applicant/jobs">Jobs</Link>. Verification decisions live in{' '}
           <Link href="/applicant/activity">Activity</Link>.
         </p>
       </section>

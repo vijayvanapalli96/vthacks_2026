@@ -320,20 +320,17 @@
    is what carries the "this records something" meaning, not the styling. */
 .pipe-rehearse-button {
   font: inherit;
-  padding: 8px 14px;
-  border: 1px solid var(--ink);
-  background: var(--ink);
-  color: var(--paper);
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
   cursor: pointer;
 }
 
-/* The pending state is carried by the LABEL ("Preparing the room…"), not by a
-   spinner: a moving graphic with no text is nothing to a screen reader, and
-   aria-busy alone is not announced by every combination. The cursor and the
-   dimming are the sighted reinforcement, never the only signal. */
 .pipe-rehearse-button[disabled] {
   cursor: progress;
-  opacity: 0.65;
+  opacity: 0.6;
 }
 
 .pipe-rehearse-hint {
