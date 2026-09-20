@@ -17,6 +17,29 @@ services:
       PORT: "8788"
     restart: unless-stopped
 
+  # Playwright ATS worker. Note what is absent: no `ports:` block and no vhost in
+  # the Caddyfile. It is reachable only from the other services on this network.
+  # Driving a headless browser at a caller-supplied URL is an open proxy if you
+  # expose it, and it would let a stranger borrow the hirewire.biz identity.
+  ats:
+    build:
+      context: ./agents
+      dockerfile: ats/Dockerfile
+    environment:
+      ATS_WORKER_PORT: "8789"
+      APPLICANT_ANS_NAME: ans://v1.0.0.applicant.hirewire.biz
+      ATS_ARTIFACT_DIR: /app/work/ats
+      AUDIT_LOG_PATH: /app/audit/events.jsonl
+      # Required. Unset, the worker rejects every request.
+      ATS_WORKER_TOKEN: ${ATS_WORKER_TOKEN:?set ATS_WORKER_TOKEN in infra/vultr/.env}
+      # The kill switch. Leave this false to deploy a box that physically cannot
+      # send an application, only prepare one for review.
+      ATS_ALLOW_SUBMIT: ${ATS_ALLOW_SUBMIT:-false}
+    volumes:
+      - ats_work:/app/work/ats
+      - ats_audit:/app/audit
+    restart: unless-stopped
+
   caddy:
     image: caddy:2.10-alpine
     depends_on:
@@ -35,3 +58,5 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  ats_work:
+  ats_audit:
