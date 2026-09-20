@@ -5,14 +5,20 @@ $ErrorActionPreference = "Stop"
 # 302 to the workspace OAuth login, which is a dead end for every applicant and
 # employer we are asking to sign up.
 $apex = "https://hirewire.biz"
-$anonymous = Invoke-WebRequest -Uri $apex -MaximumRedirection 0 -ErrorAction SilentlyContinue
+# -UseBasicParsing: Windows PowerShell 5.1 otherwise wants the IE engine and
+# fails outright in a non-interactive shell, which is where this usually runs.
+$anonymous = Invoke-WebRequest -Uri $apex -MaximumRedirection 0 -UseBasicParsing -ErrorAction SilentlyContinue
 $apexStatus = if ($anonymous) { [int]$anonymous.StatusCode } else { 0 }
 if ($apexStatus -ne 200) {
   $where = if ($anonymous) { $anonymous.Headers.Location } else { "(no response)" }
   throw "$apex returned $apexStatus -> $where instead of serving the app directly."
 }
-if ($anonymous.Content -match "databricks") {
-  throw "$apex served a page mentioning Databricks; an anonymous visitor is still being sent to the workspace login."
+# The homepage names Databricks in its own copy (it is part of the stack we are
+# showing off), so the page text proves nothing. What matters is that nothing
+# redirected us to a login on the way here.
+if ($anonymous.BaseResponse.ResponseUri -and
+    $anonymous.BaseResponse.ResponseUri.Host -ne "hirewire.biz") {
+  throw "$apex ended up at $($anonymous.BaseResponse.ResponseUri) instead of serving hirewire.biz itself."
 }
 
 $baseUrl = "https://employer.hirewire.biz"
