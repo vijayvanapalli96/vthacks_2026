@@ -129,6 +129,16 @@ function VoiceAgentShell() {
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * The SPEAKER, not the microphone — the nose is drawn as a speaker cone and
+   * that is what it should do. It is plain local state because output volume is
+   * a playback preference, not an operation on a live session: you can silence
+   * the agent before it has said anything, and useConversation applies `volume`
+   * whenever a session does start. conversation.setMuted, by contrast, is
+   * setMicMuted underneath and only means something while connected — that one
+   * stays on the hidden keyboard control.
+   */
+  const [speakerMuted, setSpeakerMuted] = useState(false);
 
   const open = useSyncExternalStore(subscribeTranscript, transcriptSnapshot, transcriptServerSnapshot);
 
@@ -290,6 +300,7 @@ function VoiceAgentShell() {
   );
 
   const conversation = useConversation({
+    volume: speakerMuted ? 0 : 1,
     clientTools,
     onConnect: ({ conversationId: id }) => {
       conversationId.current = id;
@@ -386,6 +397,16 @@ function VoiceAgentShell() {
     conversation.endSession();
   }, [conversation]);
 
+  const toggleSpeaker = useCallback(() => {
+    setSpeakerMuted((wasMuted) => {
+      const next = !wasMuted;
+      // Applied live if there is a session; the `volume` option above covers the
+      // case where there is not one yet.
+      conversation.setVolume({ volume: next ? 0 : 1 });
+      return next;
+    });
+  }, [conversation]);
+
   const toggleMute = useCallback(() => {
     conversation.setMuted(!conversation.isMuted);
   }, [conversation]);
@@ -405,6 +426,7 @@ function VoiceAgentShell() {
         status={status}
         isSpeaking={conversation.isSpeaking}
         isMuted={conversation.isMuted}
+        speakerMuted={speakerMuted}
         gapsRemaining={gapsRemaining}
         unavailableReason={unavailable}
         busy={busy}
@@ -420,11 +442,9 @@ function VoiceAgentShell() {
           <AgentFaceLive
             mood={visualState}
             size={120}
-            muted={conversation.isMuted}
-            // Always drawn, only clickable while there is something to mute. A
-            // control that appears only after you connect is one nobody finds.
+            muted={speakerMuted}
             nose
-            onNose={status === 'connected' ? toggleMute : undefined}
+            onNose={toggleSpeaker}
           />
         }
       />

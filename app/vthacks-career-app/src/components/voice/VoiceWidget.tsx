@@ -48,6 +48,7 @@ export function VoiceWidget({
   status,
   isSpeaking,
   isMuted,
+  speakerMuted,
   gapsRemaining,
   unavailableReason,
   busy,
@@ -59,7 +60,10 @@ export function VoiceWidget({
 }: {
   status: VoiceStatus;
   isSpeaking: boolean;
+  /** The microphone. */
   isMuted: boolean;
+  /** The speaker — what the nose toggles. */
+  speakerMuted: boolean;
   gapsRemaining: number | null;
   unavailableReason: string | null;
   busy: boolean;
@@ -160,6 +164,12 @@ export function VoiceWidget({
             corner{connected ? ', M to mute' : ''}. Or drag it with the mouse.
           </span>
         </button>
+
+        {speakerMuted ? (
+          <p className="vw-caption" role="status">
+            Speaker muted — click the nose
+          </p>
+        ) : null}
 
         {/* The nose is a mesh inside a canvas: a pointer can hit it, a keyboard and
             a screen reader cannot. This is the same action as a real control, in
