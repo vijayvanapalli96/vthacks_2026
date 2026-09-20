@@ -29,7 +29,7 @@
  * the agent has stopped talking and is waiting for you.
  */
 
-import { useConversation } from '@elevenlabs/react';
+import { ConversationProvider, useConversation } from '@elevenlabs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 type Props = {
@@ -39,7 +39,27 @@ type Props = {
   onAgentLine?: (text: string) => void;
 };
 
-export function InterviewVoice({ signedUrl, dynamicVariables, onAgentLine }: Props) {
+/**
+ * The provider owns the conversation singleton; the panel owns our state.
+ *
+ * THIS SPLIT IS NOT OPTIONAL. `useConversation` throws "must be used within a
+ * ConversationProvider" on render, and because it throws during render rather
+ * than returning null, the whole route dies — the room showed "This page
+ * couldn't load" the moment the interview started and the panel mounted. The
+ * server logs were clean, because nothing was wrong on the server.
+ *
+ * VoiceAgent.tsx has the same two-component shape for the same reason and says
+ * so; this file was written without it and shipped the crash.
+ */
+export function InterviewVoice(props: Props) {
+  return (
+    <ConversationProvider>
+      <InterviewVoicePanel {...props} />
+    </ConversationProvider>
+  );
+}
+
+function InterviewVoicePanel({ signedUrl, dynamicVariables, onAgentLine }: Props) {
   const [failed, setFailed] = useState<string | null>(null);
 
   // useConversation returns a fresh object every render, so anything read inside

@@ -207,7 +207,7 @@ export async function geminiQuestions(input: QuestionInputs): Promise<InterviewQ
   const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
   if (!text.trim()) throw new GeminiError('Gemini returned an empty candidate.');
 
-  return validate(parseJsonObject(text));
+  return validate(parseJsonObject(text), text);
 }
 
 function prompt(input: QuestionInputs): string {
@@ -273,9 +273,21 @@ type RawQuestion = { kind?: unknown; text?: unknown; because?: unknown; looks_li
  * end up shipping a question that says "undefined". One bad entry sends the whole set
  * back and the floor takes over — which the room then says on screen.
  */
-function validate(parsed: unknown): InterviewQuestion[] {
-  const list = (parsed as { questions?: unknown })?.questions;
+function validate(parsed: unknown, raw: string): InterviewQuestion[] {
+  // A BARE ARRAY IS ACCEPTED. The prompt asks for {"questions": [...]} and the
+  // model usually obliges, but "return JSON" and "return JSON in this exact
+  // wrapper" are different instruction-following problems and the cheap tier is
+  // likelier to drop the wrapper. Rejecting a good list over its envelope sends a
+  // student to the deterministic questions for nothing.
+  const list = Array.isArray(parsed) ? parsed : (parsed as { questions?: unknown })?.questions;
+
   if (!Array.isArray(list) || list.length < 3) {
+    // The raw head, server log only. Production has been hitting this on every
+    // single room open ("0 questions") with nothing to diagnose from: an empty
+    // array, a different wrapper key and a refusal all produce the same count.
+    // Never returned to the browser — the student gets the deterministic
+    // questions and a sentence saying Gemini did not write them.
+    console.warn('[interview] unusable question set from Gemini. First 400 chars:', raw.slice(0, 400));
     throw new GeminiError(`Gemini returned ${Array.isArray(list) ? list.length : 0} questions; needed at least 3.`);
   }
 
