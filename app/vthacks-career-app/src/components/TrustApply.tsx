@@ -21,9 +21,6 @@ type ApplyResult = {
   audit_id: string | null;
   spoken_reason: string;
   match_explanation?: { score: number; verdict: string; reasons: string[] };
-  // F7.9 -- what the EMPLOYER concluded about US, from its receipt.
-  counterparty_verification?: { verdict: 'pass' | 'refuse'; dimensions: Dimension[] } | null;
-  counterparty_reason?: string | null;
 };
 
 type Phase =
@@ -449,39 +446,6 @@ export function TrustApply({
                 </>
               ) : null}
             </dl>
-            {phase.result.counterparty_verification ? (
-              <section className="trust-mutual" aria-labelledby="mutual-heading">
-                <h3 id="mutual-heading">
-                  <ShieldCheck size={16} aria-hidden="true" /> They verified us too
-                </h3>
-                <p className="trust-reason">
-                  {phase.result.counterparty_reason ??
-                    'The employer agent independently checked our applicant agent before accepting.'}
-                </p>
-                {/* The same five dimensions, scored in the opposite direction. This
-                    is the answer to "isn't this just spam?" -- an employer that
-                    accepts from anyone has not verified anyone. */}
-                <ul className="trust-dimensions">
-                  {phase.result.counterparty_verification.dimensions.map((dimension) => {
-                    const meets = dimension.score >= MIN_DIMENSION;
-                    return (
-                      <li key={dimension.name} className={meets ? 'meets' : 'below'}>
-                        <div className="trust-dim-head">
-                          <strong>{dimension.name}</strong>
-                          <span>
-                            {dimension.score} / 100 · {meets ? 'meets' : 'below'} the {MIN_DIMENSION} minimum
-                          </span>
-                        </div>
-                        <div className="trust-bar" aria-hidden="true">
-                          <span style={{ width: `${Math.max(2, dimension.score)}%` }} />
-                        </div>
-                        <p>{dimension.reason}</p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            ) : null}
             <button type="button" className="secondary" onClick={() => setPhase({ kind: 'idle' })}>
               Start over
             </button>
