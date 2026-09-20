@@ -3,7 +3,7 @@
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
-import { AgentFace } from './AgentFace';
+import { AgentFaceLive } from './AgentFaceLive';
 
 
 type Stage = {
@@ -161,7 +161,7 @@ function Card({ stage }: { stage: Stage }) {
           /* The turn. At the moment the copy says we built it, show the thing
              itself rather than a photograph of an idea. */
           <div className="stage__agent">
-            <AgentFace mood="happy" size={240} />
+            <AgentFaceLive mood="happy" size={240} />
           </div>
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element -- the file may not

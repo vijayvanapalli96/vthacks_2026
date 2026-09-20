@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
-import { AgentFace, type FaceMood } from './AgentFace';
+import type { FaceMood } from './AgentFace';
+import { AgentFaceLive } from './AgentFaceLive';
 
 /** A short loop of the states the agent really goes through on a job
  *  application, so the homepage shows the product rather than a mascot. */
@@ -28,7 +29,7 @@ export function AgentGreeter() {
 
   return (
     <div className="greeter">
-      <AgentFace mood={step.mood} />
+      <AgentFaceLive mood={step.mood} size={260} />
       <p className={`greeter__caption${step.mood === 'refusing' ? ' is-failure' : ''}${step.mood === 'happy' ? ' is-success' : ''}`}>
         {step.caption}
       </p>

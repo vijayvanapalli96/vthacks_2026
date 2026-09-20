@@ -27,17 +27,21 @@ export type ElevenLabsConfig = { agentId: string; apiKey: string };
  *
  * Returns a reason string rather than throwing because a missing agent id is a
  * legitimate deployment state — the typed fallback still works — and the UI has to
- * say WHY the microphone is unavailable instead of silently offering a dead button.
+ * say THAT the microphone is unavailable instead of silently offering a dead button.
+ * The reason is deliberately vague to the visitor and specific in the server log:
+ * which environment variable is missing is our problem, not theirs.
  */
 export function elevenLabsConfig(): { config: ElevenLabsConfig } | { reason: string } {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   const agentId = process.env.ELEVENLABS_AGENT_ID;
 
   if (!apiKey) {
-    return { reason: 'ELEVENLABS_API_KEY is not set on the server, so no voice session can be created. You can still type your answers below.' };
+    console.warn('[voice] ELEVENLABS_API_KEY is not set; the microphone is disabled.');
+    return { reason: 'Voice is not switched on for this deployment. You can still type your answers below.' };
   }
   if (!agentId) {
-    return { reason: 'ELEVENLABS_AGENT_ID is not set, so there is no agent to connect to. Run `npm run voice:agent` to create one. You can still type your answers below.' };
+    console.warn('[voice] ELEVENLABS_AGENT_ID is not set; run `npm run voice:agent` to create one.');
+    return { reason: 'Voice is not switched on for this deployment. You can still type your answers below.' };
   }
   return { config: { agentId, apiKey } };
 }

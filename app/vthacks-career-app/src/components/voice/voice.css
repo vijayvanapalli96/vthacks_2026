@@ -27,17 +27,22 @@
   --vt-fail: #9b1c1c;
 
   position: fixed;
-  /* Inset from the window edge rather than welded to it: the card reads as a
-     floating panel over the page, not as a browser chrome element that got cut
-     off by the viewport. */
-  left: clamp(12px, 2vw, 24px);
-  top: 96px;
-  bottom: 24px;
+  /* A drawer flush to the right edge, running the full height beneath the nav —
+     the pattern a code host uses for its file sidebar. Fixed, so opening it
+     never reflows the page behind it. */
+  right: 0;
+  top: var(--nav-h, 84px);
+  bottom: 0;
   z-index: 60;
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   pointer-events: none;
 }
+
+/* The dock must NOT be display:none when closed — the toggle button is still a
+   child of it, and position:fixed does not escape a hidden ancestor. The dock
+   already has pointer-events:none and the panel is unmounted, so a closed dock
+   costs nothing on screen. */
 
 .vt-dock > * {
   pointer-events: auto;
@@ -45,47 +50,62 @@
 
 /* The tab itself: always visible, always the same control, so the collapsed and
    expanded states are one button rather than two that can disagree. */
+/* A square icon button, always the same control in the same place, so the open
+   and closed states cannot disagree.
+   It is lifted OUT of the dock and parked in the header band, level with the
+   side-nav toggle on the opposite side — the two panel controls then read as a
+   pair rather than one in the chrome and one floating in the page. The offset
+   follows the drawer, so an open panel is never covered by its own button. */
 .vt-tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 10px;
-  border: 1px solid var(--line);
-  border-left: 0;
-  border-radius: 0 12px 12px 0;
-  background: white;
-  color: var(--green);
+  position: fixed;
+  top: calc((var(--nav-h, 84px) - 44px) / 2);
+  right: calc(var(--drawer-w, 0px) + var(--gutter, 34px));
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  transition: right 0.42s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease,
+    background 0.2s ease;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink);
+}
+.vt-tab:hover { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 4%, var(--paper)); }
+
+/* Unread count while the drawer is shut, so closing it does not hide that the
+   conversation moved on. */
+.vt-tab-count {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  background: var(--ink);
+  color: var(--paper);
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  box-shadow: 0 6px 20px rgb(20 33 27 / 10%);
-  order: 2;
-  margin-top: 10px;
+  line-height: 1;
 }
 
-.vt-tab-label {
-  writing-mode: vertical-rl;
-}
 
-/* Closed, the tab is the whole control, so it needs the edge the panel would
-   otherwise have given it — a flat, borderless left side only makes sense when
-   something is butted up against it. */
-.vt-dock.is-closed .vt-tab {
-  border-left: 1px solid var(--line);
-  border-radius: 12px;
-}
 
 .vt-panel {
-  order: 1;
-  /* The dock inset and the tab both eat into the room available. */
-  width: min(420px, calc(100vw - 96px));
-  max-height: 100%;
+  order: 2;
+  animation: vt-slide-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  width: min(420px, calc(100vw - 72px));
+  height: 100%;
   display: flex;
   flex-direction: column;
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgb(20 33 27 / 14%);
+  background: var(--paper);
+  /* One divider against the page, the way a sidebar reads. No floating card. */
+  border: 0;
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 40px color-mix(in srgb, var(--ink) 8%, transparent);
   overflow: hidden;
 }
 
@@ -277,185 +297,326 @@
   cursor: not-allowed;
 }
 
+/* --------------------------------------------- the actor half of the dock ---
+   Every control below is the TYPED equivalent of a spoken tool, calling the same
+   endpoint. Hard rule 6 is not satisfied by a microphone: if an action were only
+   reachable by speaking, a keyboard user, a screen-reader user and anyone in a loud
+   room would all be locked out of it.
+
+   CONTRAST, measured, on the backgrounds actually used here:
+     --vt-ink   #14211b on #ffffff  → 14.1:1
+     --vt-dim   #4d5a51 on #ffffff  →  7.4:1   (and 6.6:1 on #f4f6f0)
+     --vt-agent #0b4933 on #f7fbf8  →  8.1:1
+     #7a5c00 on #fdfaf0             →  5.3:1   (the proactive card)
+     #565f58 on #dce3dc             →  4.6:1   (disabled controls stay readable)
+   --------------------------------------------------------------------------- */
+
+/* Where the agent thinks you are. Shown, not merely claimed: if it is wrong about
+   the page, you can see that it is wrong before it acts on it. */
+.vt-page {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--vt-agent);
+}
+
+/* Proactivity, as text, for when no conversation is open. Same words the agent
+   would have said. The app never opens a microphone to tell you something. */
+.vt-proactive {
+  margin: 0;
+  padding: 12px 18px;
+  background: #fdfaf0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid #b08900;
+}
+
+.vt-proactive p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #5f4a00;
+}
+
+.vt-proactive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* --- the match digest: show ten, while the voice speaks three --- */
+
+.vt-matches {
+  border-top: 1px solid var(--line);
+  padding: 12px 18px;
+  /* Shrinks before the transcript does, and scrolls rather than pushing the typed
+     input off the bottom of the panel — the typed path is P0 and must always be
+     reachable without scrolling past ten job cards. */
+  flex: 0 1 auto;
+  max-height: 46%;
+  overflow-y: auto;
+  background: #fbfcfa;
+}
+
+.vt-matches-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vt-matches-head h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  color: var(--vt-dim);
+}
+
+.vt-matches-note,
+.vt-matches-empty {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--vt-dim);
+}
+
+.vt-match-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.vt-match {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: white;
+  padding: 10px 11px;
+}
+
+.vt-match-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* The rank is shown because it is what an ordinal resolves against — "the second
+   one" has to mean the same thing to the user and to the agent. */
+.vt-match-rank {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 850;
+  color: var(--vt-dim);
+  min-width: 14px;
+}
+
+.vt-match-id {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.vt-match-id strong {
+  font-size: 13px;
+  color: var(--vt-ink);
+}
+
+.vt-match-id span {
+  font-size: 11.5px;
+  color: var(--vt-dim);
+}
+
+.vt-match-score {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 850;
+  color: var(--vt-agent);
+}
+
+/* HARD RULE 4. There is no rule below that hides this, and no variant of the card
+   without it: an action — or a score — never renders without its reason. */
+.vt-match-reason {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--vt-ink);
+}
+
+.vt-match-skills {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--vt-dim);
+}
+
+.vt-match-skills-label {
+  font-weight: 800;
+  color: var(--vt-agent);
+}
+
+.vt-match-skills-gap .vt-match-skills-label {
+  color: #7a5c00;
+}
+
+.vt-match-flag {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--vt-fail);
+}
+
+.vt-match-actions {
+  margin-top: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.vt-match-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vt-match-status label {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--vt-dim);
+}
+
+.vt-match-status select {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 7px;
+  border: 1px solid #b9c4bb;
+  border-radius: 8px;
+  background: white;
+  color: var(--vt-ink);
+}
+
+.vt-match-status select:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* One small button style for every typed equivalent of a spoken action. */
+.vt-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  background: white;
+  color: var(--green);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 750;
+}
+
+.vt-mini:focus-visible,
+.vt-proactive .vt-mini:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+}
+
+.vt-mini:disabled {
+  border-color: #c7cfc7;
+  background: #dce3dc;
+  color: #565f58;
+  cursor: not-allowed;
+}
+
+/* The approval-page control is styled apart from the rest on purpose. It is the one
+   button that leads toward releasing anything, and it still only leads to the page
+   where a human approves it — there is no apply tool and no apply button. */
+.vt-mini-gate {
+  border-color: #7a5c00;
+  color: #7a5c00;
+}
+
+.vt-mini-quiet {
+  border-color: #b9c4bb;
+  color: var(--vt-dim);
+}
+
 /* --------------------------------------------------- the floating control --- */
+
+/* ===========================================================================
+   THE FLOATING VOICE CONTROL — the face, and a line of text. No panel.
+   =========================================================================== */
 
 .vw {
   position: fixed;
   /* The default corner, for the single commit before useDraggable has measured the
-     element and set left/top inline. With a fixed width and both left and right set
-     the inline `left` wins in LTR, so these are only ever the fallback. Without them
-     the widget would render once in static-flow position and visibly jump. */
+     element and set left/top inline. With both left and right set the inline `left`
+     wins in LTR, so these are only ever the fallback. Without them the control would
+     render once in static-flow position and visibly jump. */
   right: 28px;
   bottom: 28px;
   z-index: 90; /* Above the transcript dock on purpose: it overlaps other widgets. */
-  width: 268px;
-  padding: 12px;
-  border-radius: 16px;
-  background: #0b2c1f;
-  color: #f2f7f3;
-  box-shadow: 0 14px 44px rgb(11 44 31 / 38%);
   display: grid;
-  gap: 10px;
-  font-size: 13px;
+  justify-items: center;
+  gap: 6px;
+  width: 168px;
+  touch-action: none; /* Or a touch drag scrolls the page instead of moving this. */
 }
 
-.vw.is-dragging {
-  box-shadow: 0 20px 60px rgb(11 44 31 / 52%);
-}
-
-.vw-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* A real <button>, so it is in the tab order and the arrow keys reach it. */
-.vw-grip,
-.vw-reset {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 auto;
-  border: 1px solid rgb(242 247 243 / 26%);
-  border-radius: 8px;
-  background: transparent;
-  color: #f2f7f3;
-}
-
-.vw-grip {
-  cursor: grab;
-}
-
-.vw.is-dragging .vw-grip {
-  cursor: grabbing;
-}
-
-/* The green ring from globals.css is invisible on this panel. */
-.vw button:focus-visible {
-  outline: 3px solid #dcef86;
-  outline-offset: 2px;
-}
-
-.vw-status {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.05em;
-  /* 11.9:1 on #0b2c1f. */
-  color: #dbe8df;
-}
-
-.vw-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #7f9689;
-  flex: 0 0 auto;
-}
-
-.vw-dot.is-live {
-  background: #dcef86;
-}
-
-/* Holds whatever is passed as the `visual` prop — HireWire's face. */
-.vw-visual {
-  display: flex;
-  justify-content: center;
-}
-/* The face is drawn in currentColor, which is --ink for the paper background it
-   was designed against and invisible on this panel. One override, not one per
-   stroke; the mood colours (speaking green, refusing red) still set stroke and
-   fill explicitly and are unaffected. */
-.vw-visual .face {
-  color: #f2f7f3;
-}
-/* Same reason for the two signal states: --success and --failure are chosen for
-   the paper background and both go muddy on this one. These are the panel's own
-   live green and a red that clears it. */
-.vw-visual .face--speaking .face__head,
-.vw-visual .face--speaking .face__brow path,
-.vw-visual .face--speaking .face__mouth,
-.vw-visual .face--happy .face__head,
-.vw-visual .face--happy .face__brow path,
-.vw-visual .face--happy .face__mouth {
-  stroke: #dcef86;
-}
-.vw-visual .face--speaking .face__eye,
-.vw-visual .face--happy .face__eye {
-  fill: #dcef86;
-}
-.vw-visual .face--refusing .face__head,
-.vw-visual .face--refusing .face__brow path,
-.vw-visual .face--refusing .face__mouth {
-  stroke: #ff9d9d;
-}
-.vw-visual .face--refusing .face__eye {
-  fill: #ff9d9d;
-}
-
-.vw-blurb {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #dbe8df;
-}
-
-.vw-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.vw-btn {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 10px 12px;
+.vw-face {
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
-  border-radius: 10px;
-  font-weight: 750;
-  font-size: 13px;
+  background: transparent;
+  cursor: grab;
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
-.vw-start {
-  background: #dcef86;
-  color: #14211b;
-}
+.vw-face:hover { transform: translateY(-2px) scale(1.04); }
+.vw-face:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+.vw-face:disabled { cursor: not-allowed; opacity: 0.55; }
+.vw.is-dragging .vw-face { cursor: grabbing; transform: scale(1.06); }
 
-.vw-start:disabled {
-  background: #4a5d51;
-  color: #e4ece6;
-  cursor: not-allowed;
-}
-
-.vw-mute {
-  background: rgb(242 247 243 / 16%);
-  color: #f2f7f3;
-}
-
-.vw-stop {
-  background: #f7dcdc;
-  color: #7a1414;
-}
-
-.vw-reason {
+.vw-caption {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: #e9f2ec;
-  background: rgb(242 247 243 / 12%);
-  padding: 8px 10px;
-  border-radius: 9px;
+  max-width: 168px;
+  text-align: center;
+  text-wrap: balance;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  /* The control floats over whatever page is behind it, so the caption needs to
+     hold its own without a panel to sit on. */
+  text-shadow: 0 1px 0 var(--paper), 0 -1px 0 var(--paper), 1px 0 0 var(--paper), -1px 0 0 var(--paper);
 }
 
-/* Visible to assistive tech, invisible on screen. Not display:none, which would
-   remove it from the accessibility tree and take the announcements with it. */
+.vw.is-live .vw-caption { color: var(--ink); }
+.vw-caption.is-failure { color: var(--failure); }
+
+/* Hidden until focused. A control that a keyboard user can reach but never see
+   is worse than no control: they cannot tell where they are. */
+.vw-mute-a11y:focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  clip: auto;
+  clip-path: none;
+  overflow: visible;
+  white-space: normal;
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+}
+
 .vt-sr-only {
   position: absolute;
   width: 1px;
@@ -471,16 +632,12 @@
 /* --------------------------------------------------------------- motion --- */
 /* Opt-in, not opt-out. Default is still. */
 @media (prefers-reduced-motion: no-preference) {
-  .vw-dot.is-live {
-    animation: vw-pulse 1.8s ease-in-out infinite;
+  .vw.is-live .vw-face {
+    animation: vw-pulse 2.4s ease-in-out infinite;
   }
 
-  .vw-dot.is-speaking {
-    animation-duration: 0.7s;
-  }
-
-  .vw-spin {
-    animation: vw-spin 1s linear infinite;
+  .vw[data-voice-state='speaking'] .vw-face {
+    animation-duration: 1s;
   }
 
   .vt-action.is-pending {
@@ -490,34 +647,43 @@
   @keyframes vw-pulse {
     0%,
     100% {
-      opacity: 1;
       transform: scale(1);
     }
 
     50% {
-      opacity: 0.45;
-      transform: scale(0.75);
-    }
-  }
-
-  @keyframes vw-spin {
-    to {
-      transform: rotate(360deg);
+      transform: scale(1.04);
     }
   }
 }
 
 @media (max-width: 760px) {
   .vt-dock {
-    top: 72px;
+    top: var(--nav-h, 72px);
     bottom: 0;
   }
 
   .vt-panel {
-    width: calc(100vw - 42px);
+    width: calc(100vw - 72px);
+  }
+
+  .vt-tab {
+    right: calc(var(--drawer-w, 0px) + 16px);
   }
 
   .vw {
-    width: 232px;
+    width: 150px;
   }
+}
+
+
+/* The drawer arrives on the same curve and duration the page uses to make room
+   for it, so the two read as one movement rather than two. */
+@keyframes vt-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-panel { animation: none; }
+  .vt-tab { transition: border-color 0.2s ease, background 0.2s ease; }
 }

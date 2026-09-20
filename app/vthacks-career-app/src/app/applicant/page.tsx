@@ -5,11 +5,13 @@ import { redirect } from 'next/navigation';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { IntakeProgress } from '@/components/IntakeProgress';
 import { JobVerificationList } from '@/components/JobVerificationList';
+import { MatchList } from '@/components/MatchList';
+import { MatchRunButton } from '@/components/MatchRunButton';
 import { Reveal } from '@/components/Reveal';
-import { VoiceAgent } from '@/components/voice/VoiceAgent';
 import { applicantJobVerificationMemory } from '@/lib/audit';
 import { intakeGate } from '@/lib/intake';
 import { DEMO_JOB, listJobs } from '@/lib/jobs';
+import { readMatches } from '@/lib/match-read';
 import { requireRole } from '@/lib/session';
 
 import './intake/intake.css';
@@ -40,13 +42,25 @@ export default async function ApplicantDashboard() {
   const user = await requireRole('applicant');
   const { nextStep, needsAnalysis } = await intakeGate(user.id);
   if (nextStep) redirect(nextStep);
-  // Real postings only (CLAUDE.md rule 7). The demo row is our own ANS employer
-  // agent and is labelled as such.
-  const [{ jobs }, verificationMemory] = await Promise.all([
+  /**
+   * Three independent reads, issued together.
+   *
+   * `readMatches` is the CHEAP one: it reads the last cached match run, so it costs
+   * zero model calls and does not run the agent. This page deliberately does NOT
+   * auto-run a match — that would be a forty-second page load and 21 model calls
+   * for anyone who merely opened their dashboard. The automatic run happens once,
+   * in IntakeProgress, when intake finishes.
+   *
+   * The posting list is still fetched unconditionally, because it is the fallback
+   * for an account with no run yet AND the carrier of the labelled ANS demo row.
+   */
+  const [{ jobs }, verificationMemory, matches] = await Promise.all([
     listJobs(3),
     applicantJobVerificationMemory(user.id),
+    readMatches(user.id),
   ]);
   const queue = [DEMO_JOB, ...jobs].slice(0, 4);
+  const hasRankedMatches = matches.state === 'ok' && matches.matches.length > 0;
 
   return (
     <main id="main">
@@ -106,29 +120,56 @@ export default async function ApplicantDashboard() {
         <header>
           <div>
             <small>MATCH QUEUE</small>
-            <h2>Jobs worth your attention</h2>
+            <h2>{hasRankedMatches ? 'Scored against what you actually know' : 'Jobs worth your attention'}</h2>
           </div>
           <BriefcaseBusiness aria-hidden="true" />
         </header>
-        <JobVerificationList jobs={queue} initialMemory={verificationMemory} />
-        {queue.length <= 1 ? (
-          <p className="job-empty">
-            Real postings appear here as the discovery pipeline fills them in.{' '}
-            <Link href="/applicant/jobs">See all jobs</Link>.
-          </p>
-        ) : null}
+
+        {/* MatchList renders nothing for state:'none' and an honest alert for
+            state:'error', so the posting list below is never asked to stand in for
+            a failure it knows nothing about. */}
+        <MatchList result={matches} limit={5} />
+
+        {hasRankedMatches ? (
+          <>
+            <p className="job-empty">
+              <Link href="/applicant/jobs">See every scored role, and the postings behind them</Link>.
+            </p>
+            {/* The ANS verification path stays reachable from the dashboard whatever
+                the match agent said. It is our own employer agent and it says so. */}
+            <JobVerificationList jobs={[DEMO_JOB]} initialMemory={verificationMemory} />
+          </>
+        ) : (
+          <>
+            <JobVerificationList jobs={queue} initialMemory={verificationMemory} />
+            {queue.length <= 1 ? (
+              <p className="job-empty">
+                Real postings appear here as the discovery pipeline fills them in.{' '}
+                <Link href="/applicant/jobs">See all jobs</Link>.
+              </p>
+            ) : null}
+            {/* No cached run inside the 45-minute window. The postings above are a
+                plain list in posted order, NOT a ranking — so the honest offer is a
+                button that says what it will do, not a silent auto-run. */}
+            <MatchRunButton label="Score these against my profile" />
+          </>
+        )}
       </Reveal>
 
-      {/* Last in the DOM, so tab order reaches the page content before the floating
-          control rather than making every keyboard user pass through it first. It
-          connects nothing until asked.
+      {/* THE VOICE DOCK IS NOT MOUNTED HERE ANY MORE.
+          It moved to app/applicant/layout.tsx (voice lane, PR #29) so the
+          conversation survives navigating between /applicant and /applicant/jobs —
+          a page-level mount tears the WebSocket down on every route change, which
+          is the one thing a live conversation cannot survive.
 
-          This is the ONE voice surface on the page. <VoiceConsole /> used to render
-          here too; it called navigator.mediaDevices.getUserMedia itself and its
-          buttons were a state-picker harness that talked to no endpoint, so two
-          microphone grabs competed on one page. VoiceAgent owns the only stream now,
-          and HireWire's face rides along as the widget's visual. */}
-      <VoiceAgent />
+          Mounting it in both places is what the voice lane's
+          src/components/voice/mount-claim.ts exists to arbitrate, and two docks
+          briefly flashing on this page is the symptom it was written for. Removing
+          this render is the other half of that fix.
+
+          ORDERING, because it matters: this branch removes the mount, PR #29 adds
+          it to the layout. If this lands FIRST, /applicant has no voice dock until
+          #29 lands. Merge #29 first, or merge them together. */}
     </main>
   );
 }
