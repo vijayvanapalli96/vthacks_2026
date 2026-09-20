@@ -906,3 +906,20 @@ nav a[aria-current='page'] {
     animation: none;
   }
 }
+
+/* F7.9 — the employer's verification of us, shown under the receipt. Indented
+   and rule-led so it reads as the other side of the same handshake rather than
+   a second, unrelated verdict. */
+.trust-mutual {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hw-line);
+}
+
+.trust-mutual h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  font-size: 15px;
+}
