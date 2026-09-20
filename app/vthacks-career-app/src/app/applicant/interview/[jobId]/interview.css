@@ -232,3 +232,22 @@
 .iv-panel h2 {
   margin-top: 0;
 }
+
+/* --- Interviewer voice ---------------------------------------------------- */
+
+.iv-voice {
+  margin-top: 28px;
+  border-top: 1px solid var(--iv-hairline);
+  padding-top: 20px;
+}
+
+/* The canvas inherits `color` so the wave reads --ink out of the cascade and
+   follows the theme instead of hard-coding a colour. */
+.iv-wave {
+  color: var(--ink);
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  margin-bottom: 12px;
+}

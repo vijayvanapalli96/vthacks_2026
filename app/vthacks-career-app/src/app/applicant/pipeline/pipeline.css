@@ -345,3 +345,62 @@
   font-size: 0.85rem;
   margin: 4px 0 0;
 }
+
+/* --- The stripped card ---------------------------------------------------- */
+
+/* The primary action. A real button, because it writes a stage and prefetches a
+   session before it navigates — it is not a link wearing a border. */
+.pipe-rehearse-button {
+  font: inherit;
+  padding: 8px 14px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+}
+
+/* The pending state is carried by the LABEL ("Preparing the room…"), never by a
+   spinner alone: a moving graphic with no text is nothing to a screen reader. */
+.pipe-rehearse-button[disabled] {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.pipe-rehearse-hint {
+  display: block;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Everything the card used to shout at once. A native <details>, so it is
+   keyboard reachable and announced as expanded or collapsed for free. */
+.pipe-card-more {
+  margin-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
+  padding-top: 10px;
+}
+
+.pipe-card-more > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--pipe-muted);
+}
+
+.pipe-card-more > summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.pipe-card-more > * {
+  margin-top: 10px;
+}
+
+.pipe-note-label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.pipe-card-source {
+  font-size: 0.85rem;
+}

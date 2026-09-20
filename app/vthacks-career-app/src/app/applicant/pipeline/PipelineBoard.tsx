@@ -30,9 +30,13 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
-import { interviewUnlocked } from '@/lib/interview-contract';
+import {
+  interviewUnlocked,
+  putPreparedSession,
+  type InterviewSessionPayload,
+} from '@/lib/interview-contract';
 import {
   PIPELINE_STATUSES,
   STATUS_LABEL,
@@ -213,168 +217,171 @@ function Card({
   const stalled = stalledSentence(card);
   const router = useRouter();
 
-  /**
-   * Record the employer's reply, then open the room.
-   *
-   * Reuses `onChange`, which is the board's single write path to
-   * POST /api/pipeline/status — hard rule 5 again, no private implementation. The
-   * navigation waits for the write because the room re-checks the stage server-side
-   * and would otherwise greet a student with "not yet" in a race they cannot see.
-   * If the write fails, `onChange` puts the reason in the board's alert region and
-   * this stays put rather than walking them into a locked door.
-   */
-  /** See the comment on the title below: one honest destination per stage. */
-  const roleHref = interviewUnlocked(card.status)
-    ? `/applicant/interview/${encodeURIComponent(card.job_id)}`
-    : `/applicant/jobs/${encodeURIComponent(card.job_id)}`;
+  const [preparing, setPreparing] = useState(false);
+  const [navigating, startNavigation] = useTransition();
+  /** Saving a stage, preparing the room and loading the page are one wait to the person clicking. */
+  const busy = saving || preparing || navigating;
 
-  const replyAndRehearse = useCallback(async () => {
-    await onChange(card, 'interviewing');
-    router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`);
+  /**
+   * PREPARE THE ROOM, THEN SWITCH TO IT.
+   *
+   * The room used to be opened cold: navigate, and only once the page had mounted
+   * did it ask for a session — a cold warehouse read plus a model call, spent
+   * looking at an empty room. The wait now happens here, on a button that says it
+   * is working, and the room opens with its questions already in hand.
+   *
+   * The payload is handed over in sessionStorage rather than a query parameter,
+   * because it carries a signed conversation credential and a URL gets logged,
+   * copied and shared. The room CONSUMES it, so a session is never minted twice:
+   * each mint writes a telemetry row and spends a Gemini call.
+   *
+   * A FAILED PREFETCH STILL NAVIGATES — the room asks for its own session when
+   * there is no handoff, so the worst case is the behaviour we had before rather
+   * than a dead button. Only a failed STAGE write stops it, because the room's
+   * server-side gate would then turn the student away at the door.
+   */
+  const startInterview = useCallback(async () => {
+    setPreparing(true);
+    try {
+      if (card.status === 'applied') await onChange(card, 'interviewing');
+      try {
+        const response = await fetch(`/api/interview/${encodeURIComponent(card.job_id)}/session`, {
+          cache: 'no-store',
+        });
+        if (response.ok) putPreparedSession(card.job_id, (await response.json()) as InterviewSessionPayload);
+      } catch {
+        // Offline, or the warehouse said no. The room will ask for itself.
+      }
+      startNavigation(() => router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`));
+    } finally {
+      setPreparing(false);
+    }
   }, [card, onChange, router]);
 
   return (
     <li className="pipe-card">
-      {/* CLICKING THE ROLE OPENS ITS MENU, which is the thing a card on a board is
-          expected to do and previously did not: the title used to be an outbound
-          link to the original posting, so the one obvious click left the product.
+      {/* THE CARD IS THE ROLE AND THE ACTION. Everything else folds away.
 
-          WHERE IT GOES DEPENDS ON THE STAGE, because there is only one honest
-          destination per stage. At Interviewing or Offer the rehearsal exists, so
-          it goes straight to the interview room. Everywhere else it goes to the
-          job page, which carries the document toolbox and the interview panel —
-          sending an Applied card into the room would land on "not yet", and a
-          click that reaches a locked door is worse than one that never offered.
+          It had grown to nine things competing for one glance: title, company,
+          an outbound posting link, a match score, a reason paragraph, an age, an
+          event count, a stage select with its own explanatory line, and a note
+          box. Every one of them earns its place SOMEWHERE — none of them earns
+          being the first thing you read on a board you are scanning.
 
-          NOT A WHOLE-CARD CLICK TARGET. The card holds a <select>, a <textarea>
-          and a button; wrapping all of that in a link nests interactive elements,
-          which breaks keyboard navigation and makes a screen reader announce the
-          lot as one control. Hard rule 6. The title is the target, the posting
-          keeps its own link below, and both are reachable by Tab in reading
-          order. */}
+          So: the role, and one button. The rest lives in a disclosure, which
+          keeps it a single keystroke away, keyboard reachable and announced, and
+          costs nothing to ignore. Nothing was deleted.
+
+          The title opens the role's own page, always. It previously changed
+          destination with the stage, which meant the same gesture did two
+          different things on two cards in the same column. */}
       <p className="pipe-card-title">
-        <Link href={roleHref}>
+        <Link href={`/applicant/jobs/${encodeURIComponent(card.job_id)}`}>
           {card.title ?? 'Untitled role'}
-          <span className="sr-only">
-            {' '}
-            at {card.company ?? 'this company'} &mdash;{' '}
-            {interviewUnlocked(card.status) ? 'open the mock interview room' : 'open this role and its tools'}
-          </span>
+          <span className="sr-only"> at {card.company ?? 'this company'} — open this role and its tools</span>
         </Link>
       </p>
       <p className="pipe-card-company">
         {card.company ?? 'Company not recorded'}
         {card.location ? <span className="pipe-muted"> · {card.location}</span> : null}
       </p>
-      {card.source_url ? (
-        <p className="pipe-muted pipe-card-source">
-          <a href={card.source_url} target="_blank" rel="noreferrer">
-            Original posting
-            <span className="sr-only"> for {card.title ?? 'this role'}, opens in a new tab</span>
-          </a>
-        </p>
-      ) : null}
 
-      {/* Score and reason only when the match cache has them. A pipeline card is
-          useful without a score, so there is no "—" placeholder to read past. */}
-      {card.match_score !== null ? (
-        <p className="pipe-card-score">
-          Match {Math.round(card.match_score)} out of 100
-          {card.match_reason ? <span className="pipe-card-reason">{card.match_reason}</span> : null}
-        </p>
-      ) : null}
-
-      <p className="pipe-muted pipe-card-age">
-        In {STATUS_LABEL[card.status]} {daysPhrase(card.days_in_stage)}
-        {card.days_tracked !== null && card.days_tracked !== card.days_in_stage
-          ? `, tracked ${daysPhrase(card.days_tracked)}`
-          : ''}
-        {/* events_total on screen is the append-only proof made legible: the row
-            count grows, the card does not fork. */}
-        {card.events_total > 1 ? ` · ${card.events_total} events logged` : ''}
-      </p>
-
+      {/* The one sentence worth interrupting for: this has been sitting. */}
       {stalled ? <p className="pipe-card-stalled">{stalled}</p> : null}
-      {card.note ? <p className="pipe-card-note">“{card.note}”</p> : null}
 
-      {/* The one thing this board could never offer: something to DO the moment an
-          employer replies.
-          
-          TWO SHAPES, ONE DESTINATION. On a card that is already Interviewing or
-          Offer it is a plain link. On an APPLIED card it is a button that records
-          the reply first and then opens the room, because the interview room is
-          gated on the stage and a link that lands on "not yet" is a dead end.
-          
-          The button says what it writes. It is the same append-only event the
-          <select> above produces — one more row in the log, not a silent edit —
-          and the label has to make that obvious, because a student who has not
-          actually heard back must not click it by accident. Nothing below Applied
-          gets it: rehearsing for an interview nobody offered is anxiety with a
-          button on it. */}
-      {interviewUnlocked(card.status) ? (
-        <p className="pipe-card-rehearse">
-          <Link href={`/applicant/interview/${encodeURIComponent(card.job_id)}`}>
-            Begin interview
-            <span className="sr-only">
-              {' '}
-              for {card.title ?? 'this role'} at {card.company ?? 'this company'}
-            </span>
-          </Link>
-        </p>
-      ) : card.status === 'applied' ? (
+      {/* THE ACTION. Applied records the reply first, through the board's single
+          write path, and says so. Saved and below get nothing — rehearsing for an
+          interview nobody offered is anxiety with a button on it. */}
+      {interviewUnlocked(card.status) || card.status === 'applied' ? (
         <p className="pipe-card-rehearse">
           <button
             type="button"
             className="pipe-rehearse-button"
-            disabled={saving}
-            aria-busy={saving}
-            onClick={() => void replyAndRehearse()}
+            disabled={busy}
+            aria-busy={busy}
+            onClick={() => void startInterview()}
           >
-            They replied &mdash; begin interview
+            {busy ? 'Preparing the room…' : 'Start mock interview'}
             <span className="sr-only">
               {' '}
-              for {card.title ?? 'this role'} at {card.company ?? 'this company'}. This marks the role as
-              Interviewing on your board and opens the mock interview room.
+              for {card.title ?? 'this role'} at {card.company ?? 'this company'}
+              {card.status === 'applied'
+                ? '. This marks the role as Interviewing on your board and opens the mock interview room.'
+                : '. Opens the mock interview room.'}
             </span>
           </button>
-          <span className="pipe-muted pipe-rehearse-hint">Marks this Interviewing, then opens the room.</span>
+          {card.status === 'applied' && !busy ? (
+            <span className="pipe-muted pipe-rehearse-hint">Marks this Interviewing first.</span>
+          ) : null}
         </p>
       ) : null}
 
-      <div className="pipe-field">
-        {/* A real label, visible, associated by htmlFor. It names the JOB as well
-            as the control, because "Stage" repeated down a column tells a
-            screen-reader user nothing about which job they are changing. */}
-        <label htmlFor={selectId}>
-          Stage<span className="sr-only"> for {card.title ?? 'this role'} at {card.company ?? 'this company'}</span>
-        </label>
-        <select
-          id={selectId}
-          ref={registerRef}
-          className="pipe-select"
-          value={card.status}
-          aria-busy={saving}
-          aria-describedby={noteId}
-          onChange={(event) => {
-            void onChange(card, event.target.value as PipelineStatus, note || undefined);
-          }}
-        >
-          {PIPELINE_STATUSES.map((stage) => (
-            <option key={stage} value={stage}>
-              {STATUS_LABEL[stage]}
-            </option>
-          ))}
-        </select>
-        <p id={noteId} className="pipe-muted pipe-field-hint">
-          {saving ? 'Saving…' : 'Changing this appends an event. Nothing is overwritten.'}
-        </p>
-      </div>
+      <details className="pipe-card-more">
+        <summary>
+          Details and stage
+          <span className="sr-only"> for {card.title ?? 'this role'} at {card.company ?? 'this company'}</span>
+        </summary>
 
-      {/* Notes are optional and folded away, so the primary keyboard path is
-          exactly two stops per card: the title link, then the stage select. */}
-      <details className="pipe-note-box">
-        <summary>Add a note</summary>
-        <label htmlFor={`${noteId}-input`}>Note for {card.title ?? 'this role'}</label>
+        {card.match_score !== null ? (
+          <p className="pipe-card-score">
+            Match {Math.round(card.match_score)} out of 100
+            {card.match_reason ? <span className="pipe-card-reason">{card.match_reason}</span> : null}
+          </p>
+        ) : null}
+
+        <p className="pipe-muted pipe-card-age">
+          In {STATUS_LABEL[card.status]} {daysPhrase(card.days_in_stage)}
+          {card.days_tracked !== null && card.days_tracked !== card.days_in_stage
+            ? `, tracked ${daysPhrase(card.days_tracked)}`
+            : ''}
+          {/* events_total on screen is the append-only proof made legible: the
+              row count grows, the card does not fork. */}
+          {card.events_total > 1 ? ` · ${card.events_total} events logged` : ''}
+        </p>
+
+        {card.note ? <p className="pipe-card-note">“{card.note}”</p> : null}
+
+        {card.source_url ? (
+          <p className="pipe-muted pipe-card-source">
+            <a href={card.source_url} target="_blank" rel="noreferrer">
+              Original posting
+              <span className="sr-only"> for {card.title ?? 'this role'}, opens in a new tab</span>
+            </a>
+          </p>
+        ) : null}
+
+        <div className="pipe-field">
+          {/* A real label, visible, associated by htmlFor. It names the JOB as
+              well as the control, because "Stage" repeated down a list tells a
+              screen-reader user nothing about which job they are changing. */}
+          <label htmlFor={selectId}>
+            Stage<span className="sr-only"> for {card.title ?? 'this role'} at {card.company ?? 'this company'}</span>
+          </label>
+          <select
+            id={selectId}
+            ref={registerRef}
+            className="pipe-select"
+            value={card.status}
+            aria-busy={saving}
+            aria-describedby={noteId}
+            onChange={(event) => {
+              void onChange(card, event.target.value as PipelineStatus, note || undefined);
+            }}
+          >
+            {PIPELINE_STATUSES.map((stage) => (
+              <option key={stage} value={stage}>
+                {STATUS_LABEL[stage]}
+              </option>
+            ))}
+          </select>
+          <p id={noteId} className="pipe-muted pipe-field-hint">
+            {saving ? 'Saving…' : 'Changing this appends an event. Nothing is overwritten.'}
+          </p>
+        </div>
+
+        <label className="pipe-note-label" htmlFor={`${noteId}-input`}>
+          Note for {card.title ?? 'this role'}
+        </label>
         <textarea
           id={`${noteId}-input`}
           value={note}
