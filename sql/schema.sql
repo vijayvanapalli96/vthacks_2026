@@ -655,3 +655,161 @@ ALTER TABLE workspace.vthacks_2026.match_evaluations ADD COLUMNS (
 -- the right shape; it was simply EMPTY. scripts/embed-jobs.mjs fills it:
 -- 16,206 rows, 1024-dim, from 16,207 job_snapshots (one row has an empty
 -- description_text and is skipped, not failed).
+
+-- ---------------------------------------------------------------------------
+-- SECTION 8 — the application pipeline. See docs/PIPELINE_PLAN.md.
+--
+-- The user-facing feature: a board tracking every job through
+--   saved -> applied -> interviewing -> offer -> accepted, with rejected and
+--   withdrawn as exits.
+--
+-- EVENT-SOURCED, NOT A STATUS COLUMN. Changing a status APPENDS a row to
+-- application_events; the current stage is the latest_application_state view
+-- over it. Never UPDATE, never DELETE an event. This is the same shape as
+-- profile_memory + profile_current (SECTION 3), which is the house pattern, and
+-- it buys three things for free:
+--   * undo is just another event;
+--   * "6 days in Applied with no reply" is event_at arithmetic, not a cron job;
+--   * the history IS the audit trail, which is this product's thesis.
+--
+-- There is deliberately NO `saved_jobs` table and NO `applications` table.
+-- "Saved" is stage one of this pipeline, not a separate concept; a second store
+-- for the same fact is worse than a missing feature.
+--
+-- APPLY THIS WITH `node scripts/apply-pipeline-schema.mjs`, NOT BY HAND.
+-- `ADD COLUMNS IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` are BOTH parse
+-- errors on this warehouse, so the ALTER below is NOT idempotent — the rest of
+-- this file is. That script DESCRIBEs first and skips the ALTER if the columns
+-- are already there, which makes SECTION 8 as a whole safe to re-run.
+-- ---------------------------------------------------------------------------
+
+-- application_events already existed (SECTION 1), was completely empty, and had
+-- no writers. This feature is its first producer, so there is nothing to
+-- migrate. Two additive columns; NOT IDEMPOTENT, see the note above.
+--
+-- user_id is the whole reason for the ALTER: the table had no per-user column
+-- and a pipeline board is per-user.
+ALTER TABLE workspace.vthacks_2026.application_events ADD COLUMNS (
+  user_id STRING COMMENT 'users.user_id — the pipeline is per-user',
+  note    STRING COMMENT 'the user''s own words about this stage'
+);
+
+-- The event_type vocabulary WIDENS; no DDL is needed for that, because
+-- event_type is a STRING. SECTION 1 documents
+--   viewed | tailored | verified | refused | submitted | callback | rejected
+-- and all seven stay valid. This feature adds the stage vocabulary:
+--
+--   stage (user-facing)  event_type       note
+--   -------------------  ---------------  ------------------------------------
+--   Saved                saved            new
+--   Applied              applied          new; the pre-existing `submitted`
+--                                         (A2A apply path) implies it
+--   Interviewing         interviewing     new; `callback` implies it
+--   Offer                offer            new — the EMPLOYER's decision
+--   Accepted             accepted         new — the USER's decision
+--   Rejected             rejected         already documented
+--   Withdrawn            withdrawn        new
+--
+-- "Success" is TWO stages on purpose. An offer you declined is not a success,
+-- and collapsing offer+accepted into one column would overstate the outcome.
+--
+-- viewed | tailored | verified | refused are activity on a job, NOT stages.
+-- They are excluded by the view below so that merely viewing a job you already
+-- marked "interviewing" cannot demote it.
+--
+-- Because event_type is unconstrained at the storage layer, the whitelist lives
+-- in CODE: PIPELINE_STATUSES in app/vthacks-career-app/src/lib/pipeline.ts,
+-- mirroring the FIELDS idiom in src/lib/voice.ts. An unknown status is a 400,
+-- not a silently-written junk row. Unity Catalog CHECK/PRIMARY KEY constraints
+-- would not help here: they are INFORMATIONAL and Delta does not enforce them.
+
+-- latest_application_state — REPLACED, not created.
+--
+-- CORRECTION TO docs/PIPELINE_PLAN.md: that plan asserts this view "DOES NOT
+-- EXIST" and that CLAUDE.md is wrong to claim it. Checked against the live
+-- workspace on 2026-09-19 via the Unity Catalog API: the view DOES exist,
+-- created 2026-09-19T13:41Z by vijayvanapalli96@gmail.com, with exactly the
+-- shape docs/FEATURE_LIST.md records — (application_id, job_id, current_state,
+-- event_source, state_changed_at), QUALIFY ROW_NUMBER() PARTITION BY
+-- application_id. CLAUDE.md was right; the plan was wrong. Nothing in the repo
+-- reads it (grep: zero hits outside docs), and the table under it is empty.
+--
+-- It is replaced rather than left alone because partitioning by application_id
+-- with no user_id cannot serve a per-user board. The definition below is a
+-- SUPERSET: application_id, job_id, current_state, event_source and
+-- state_changed_at keep their old names and types, so a consumer written
+-- against the documented shape still resolves. Three things change:
+--
+--   1. PARTITION BY (user_id, job_id) instead of application_id. For every row
+--      this feature writes the two are EQUIVALENT, because application_id is
+--      derived as sha256(user_id|job_id) — see applicationId() in
+--      src/lib/pipeline.ts. So this is a widening, not a reinterpretation.
+--   2. submitted -> applied and callback -> interviewing are NORMALISED, so a
+--      stage set by the A2A apply path lands on the board instead of being a
+--      row nobody renders.
+--   3. Non-stage activity is EXCLUDED (see above).
+--
+-- The tiebreak is (event_at DESC, event_id DESC), NOT event_at alone. Two
+-- events in the same second are likely — a click and a voice tool firing
+-- together — and a view with a non-deterministic winner makes the board flicker
+-- between renders. event_id is a UUID, so the tiebreak is arbitrary but STABLE,
+-- which is the property that matters.
+--
+-- first_seen_at and events_total come from window functions over the same
+-- partition, so "7 days in Applied, no response" and "this job has 3 events"
+-- cost no extra query. events_total > 1 with one view row is the append-only
+-- proof.
+CREATE OR REPLACE VIEW workspace.vthacks_2026.latest_application_state (
+  user_id          COMMENT 'users.user_id. The pipeline is per-user.',
+  job_id           COMMENT 'job_snapshots.job_id',
+  application_id   COMMENT 'sha256(user_id|job_id) for rows this app writes',
+  current_state    COMMENT 'Normalised stage: saved|applied|interviewing|offer|accepted|rejected|withdrawn',
+  event_type       COMMENT 'The raw event_type as written, before normalisation',
+  event_source     COMMENT 'ui | voice | (older vocabulary: user|gmail|workflow|integration)',
+  state_changed_at COMMENT 'When the current stage was entered',
+  note             COMMENT 'The user''s own words about this stage, if any',
+  metadata_json    COMMENT 'Writer-supplied context, incl. previous_status',
+  event_id         COMMENT 'The winning event. Also the deterministic tiebreak.',
+  first_seen_at    COMMENT 'event_at of the FIRST pipeline event for this (user, job)',
+  events_total     COMMENT 'Pipeline events for this (user, job). >1 with one row here proves the append.'
+) AS
+SELECT user_id,
+       job_id,
+       application_id,
+       CASE event_type
+         WHEN 'submitted' THEN 'applied'
+         WHEN 'callback'  THEN 'interviewing'
+         ELSE event_type
+       END AS current_state,
+       event_type,
+       event_source,
+       event_at AS state_changed_at,
+       note,
+       metadata_json,
+       event_id,
+       first_seen_at,
+       events_total
+  FROM (
+    SELECT e.*,
+           MIN(e.event_at) OVER (PARTITION BY e.user_id, e.job_id) AS first_seen_at,
+           COUNT(1)        OVER (PARTITION BY e.user_id, e.job_id) AS events_total,
+           ROW_NUMBER()    OVER (
+             PARTITION BY e.user_id, e.job_id
+             ORDER BY e.event_at DESC, e.event_id DESC
+           ) AS rn
+      FROM workspace.vthacks_2026.application_events e
+     WHERE e.user_id    IS NOT NULL
+       AND e.job_id     IS NOT NULL
+       AND e.event_type IN ('saved', 'applied', 'interviewing', 'offer', 'accepted',
+                            'rejected', 'withdrawn', 'submitted', 'callback')
+  )
+ WHERE rn = 1;
+
+-- STATED GAP, hard rule 8: TigerData. CLAUDE.md's stack list and
+-- docs/FEATURE_LIST.md F9.1 both describe application_events as a TigerData
+-- hypertable with continuous aggregates, mirrored into Delta by "one helper
+-- that writes both". TigerData is wired to NOTHING in this repo — no
+-- connection string, no client, no env key. This feature writes Delta ONLY.
+-- The board's "days in stage" arithmetic and the funnel counts are computed
+-- from the Delta rows. Nothing here depends on TigerData and nothing here
+-- starts it.

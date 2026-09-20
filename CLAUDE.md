@@ -62,11 +62,21 @@ High-value lifts — check here before writing anything from scratch:
   (Vultr) — ANS has to be able to reach it. These are two different hosts on
   purpose; don't try to serve the agent from Databricks Apps.
 - **Data plane** Databricks `workspace.vthacks_2026` (Delta + UC Volumes) ·
-  TigerData (`application_events` hypertable + continuous aggregates) ·
   MongoDB Atlas (`jd_raw`, `a2a_audit`).
   The schema already exists with `job_snapshots`, `match_evaluations`,
   `application_events`, `voice_events`, `email_classifications`, and the
   `latest_application_state` view. **Extend it; do not build a parallel schema.**
+  **TigerData is NOT wired to anything** — no connection string, no client, no env
+  key. Earlier revisions of this file listed it here as the primary store for an
+  `application_events` hypertable with continuous aggregates; that was a plan, not
+  a fact, and `docs/FEATURE_LIST.md` F9.1 still describes it that way. The
+  application pipeline writes Delta only (`sql/schema.sql` §8) and does its
+  time-in-stage arithmetic there. Say so rather than claiming the hypertable —
+  hard rule 8.
+  `latest_application_state` is real and was verified on the live workspace on
+  2026-09-19, but §8 **replaced** its definition: it now resolves one stage per
+  `(user_id, job_id)` rather than per `application_id`, because the pipeline is
+  per-user. It is a superset — every old column keeps its name and type.
 - **Models** `ai_query()` in plain SQL for embeddings and bulk scoring (no
   external key, no rate limit); Gemini for multimodal PDF understanding and
   function-calling tool routing. Keep that split clean — it's how judges from both

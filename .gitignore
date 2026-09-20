@@ -28,5 +28,10 @@ work/
 outputs/
 agents/audit/*.jsonl
 
+# transpile output from scripts/verify-pipeline*.mjs and prove-pipeline-live.mjs,
+# which run the app's real TypeScript through the app's own tsc
+.tmp-pipeline/
+.tmp-pipeline-a11y/
+
 # os
 .DS_Store
