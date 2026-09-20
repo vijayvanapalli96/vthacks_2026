@@ -15,6 +15,9 @@
   --hw-success-wash: color-mix(in srgb, var(--hw-success) 9%, transparent);
   --hw-success-line: color-mix(in srgb, var(--hw-success) 38%, transparent);
   --hw-failure-wash: color-mix(in srgb, var(--hw-failure) 9%, transparent);
+  /* The "real company" tier is deliberately quiet: neutral ink, outline only,
+     no success green. It must never read as equal to a verified agent. */
+  --hw-known-line: color-mix(in srgb, currentColor 22%, transparent);
 }
 
 .sr-only {
@@ -428,12 +431,25 @@ nav a[aria-current='page'] {
 }
 
 .job-tag.verified-tag,
+.job-tag.known-tag,
 .job-tag.checking-tag,
 .job-tag.refused-tag {
   display: inline-flex;
   grid-auto-flow: column;
   align-items: center;
   gap: 5px;
+}
+
+/* The strongest claim we make, so it carries the only solid outline. */
+.job-tag.verified-tag {
+  border: 1px solid var(--hw-success-line);
+}
+
+.job-tag.known-tag {
+  background: transparent;
+  border: 1px solid var(--hw-known-line);
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .job-tag.checking-tag {
@@ -460,7 +476,43 @@ nav a[aria-current='page'] {
   color: var(--hw-success);
 }
 
+.job-verification-note.is-known_employer {
+  color: var(--muted);
+}
+
 .job-verification-note.is-refused {
+  color: var(--hw-failure);
+}
+
+.job-signals {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+.job-signals li {
+  padding-left: 15px;
+  position: relative;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* Marks are decorative; the sentence carries the meaning for a screen reader. */
+.job-signals li::before {
+  position: absolute;
+  left: 0;
+  font-weight: 800;
+}
+
+.job-signals li.is-pass::before {
+  content: "¹3";
+  color: var(--hw-success);
+}
+
+.job-signals li.is-fail::before {
+  content: "¹7";
   color: var(--hw-failure);
 }
 

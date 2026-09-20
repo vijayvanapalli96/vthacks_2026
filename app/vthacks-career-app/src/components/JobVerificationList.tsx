@@ -1,16 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, Loader2, ShieldAlert } from 'lucide-react';
+import { BadgeCheck, Check, Loader2, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 
 import type { Job } from '@/lib/jobs';
 
+type Signal = { name: string; passed: boolean; reason: string };
+
 type Memory = {
-  status: 'verified' | 'refused';
+  /**
+   * Three outcomes, not two. `verified` means ANS attested the employer's agent
+   * and we checked its certificate. `known_employer` means no agent exists —
+   * which today is true of almost every company — but the posting came from the
+   * company's own ATS and it operates its domain. Only `verified` may send data.
+   */
+  status: 'verified' | 'known_employer' | 'refused';
   ansName: string;
   reason: string;
   checkedAt: string;
+  signals?: Signal[];
 };
 
 type State = Memory | { status: 'checking'; ansName: ''; reason: ''; checkedAt: '' };
@@ -50,15 +59,22 @@ export function JobVerificationList({
         error?: string;
         agent?: { ans_name?: string };
         verification?: { verdict?: 'pass' | 'refuse'; spoken_reason?: string };
+        company?: { tier?: 'agent_verified' | 'known_employer' | 'unverified'; signals?: Signal[] };
       };
       if (!response.ok || !payload.verification) throw new Error(payload.error ?? 'Verification failed.');
+      const status = payload.verification?.verdict === 'pass'
+        ? 'verified'
+        : payload.company?.tier === 'known_employer'
+          ? 'known_employer'
+          : 'refused';
       setMemory((current) => ({
         ...current,
         [job.job_id]: {
-          status: payload.verification?.verdict === 'pass' ? 'verified' : 'refused',
+          status,
           ansName: payload.agent?.ans_name ?? '',
           reason: payload.verification?.spoken_reason ?? 'Verification finished.',
           checkedAt: new Date().toISOString(),
+          signals: payload.company?.signals,
         },
       }));
     } catch (error) {
@@ -97,7 +113,9 @@ export function JobVerificationList({
                 </small>
               </span>
               {state?.status === 'verified' ? (
-                <span className="job-tag verified-tag"><Check size={13} aria-hidden="true" /> Employer verified</span>
+                <span className="job-tag verified-tag"><BadgeCheck size={13} aria-hidden="true" /> Verified agent</span>
+              ) : state?.status === 'known_employer' ? (
+                <span className="job-tag known-tag"><Check size={13} aria-hidden="true" /> Real company</span>
               ) : state?.status === 'checking' ? (
                 <span className="job-tag checking-tag"><Loader2 size={13} className="spin" aria-hidden="true" /> Checking</span>
               ) : state?.status === 'refused' ? (
@@ -111,7 +129,19 @@ export function JobVerificationList({
             </button>
             {state ? (
               <div className={`job-verification-note is-${state.status}`} id={`verification-${job.job_id}`} role="status">
-                <span>{state.status === 'checking' ? 'Checking GoDaddy ANS in the background…' : state.reason}</span>
+                <span>
+                  {state.status === 'checking' ? 'Checking GoDaddy ANS in the background…' : state.reason}
+                  {/* A badge without its evidence is just a claim. Rule 4. */}
+                  {state.status !== 'checking' && state.signals?.length ? (
+                    <ul className="job-signals">
+                      {state.signals.map((signal) => (
+                        <li key={signal.name} className={signal.passed ? 'is-pass' : 'is-fail'}>
+                          {signal.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </span>
                 {state.status === 'verified' && host ? (
                   <Link href={`/applicant/apply?host=${encodeURIComponent(host)}&job=${encodeURIComponent(job.job_id)}`}>
                     Review and apply

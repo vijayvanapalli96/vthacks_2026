@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server';
 import { auth } from '../../../../auth';
 import { recordAudit } from '../../../../lib/audit';
 import { discoverEmployerAgent } from '../../../../lib/ans/discovery';
+import { assessCompany } from '../../../../lib/ans/legitimacy';
 import { failedTrustDimensions } from '../../../../lib/ans/policy';
 import { APPLICANT_ANS_NAME } from '../../../../lib/ans/production';
 import { saveJobAgentLink } from '../../../../lib/ans/store';
-import { getJob, guessEmployerDomain } from '../../../../lib/jobs';
+import { employerDomainFromPosting, getJob, guessEmployerDomain } from '../../../../lib/jobs';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,12 +61,24 @@ export async function POST(request: Request) {
         dimensions: result.dimensions,
         spoken_reason: result.spoken_reason,
       },
+      // The strongest tier: a registered agent whose certificate we checked.
+      company: { tier: 'agent_verified', signals: [], summary: result.spoken_reason },
       persisted: Boolean(auditId),
       link_persisted: linkPersisted,
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'Employer agent discovery failed.';
-    const spokenReason = `${job.company_name} could not be verified through the Agent Name Service. ${reason}`;
+    // No ANS agent is the norm today, not a red flag, so fall back to asking
+    // whether this is a real employer at all. It never unlocks sending data:
+    // fields_released stays empty and the verdict stays a refusal.
+    const company = await assessCompany({
+      postedDomain: employerDomainFromPosting(job),
+      source: job.source,
+      companyName: job.company_name,
+    });
+    const spokenReason = company.tier === 'known_employer'
+      ? company.summary
+      : `${job.company_name} could not be verified through the Agent Name Service. ${reason}`;
     const subject = `employer.${employerDomain}`;
     const dimensions = failedTrustDimensions(reason);
     const auditId = await recordAudit({
@@ -87,6 +100,7 @@ export async function POST(request: Request) {
       employer_domain: employerDomain,
       agent: { ans_name: subject },
       verification: { verdict: 'refuse', dimensions, spoken_reason: spokenReason },
+      company,
       persisted: Boolean(auditId),
     });
   }
