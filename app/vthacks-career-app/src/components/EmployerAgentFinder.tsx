@@ -80,8 +80,8 @@ export function EmployerAgentFinder({
       </header>
       <div className="trust-body">
         <p className="muted">
-          Your agent looks up <code>employer.{domain || 'their-domain'}</code> in GoDaddy&apos;s Agent Name Service. Only an
-          exact, active registration counts.
+          Your agent looks up <code>employer.{domain || 'their-domain'}</code> in GoDaddy&apos;s Agent Name Service, then
+          the apex and the other subdomains employers register under. Only an exact, active registration counts.
         </p>
         <div className="field">
           <label htmlFor={inputId}>Employer domain</label>

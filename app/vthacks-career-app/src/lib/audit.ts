@@ -112,6 +112,52 @@ export async function recentAudits(filter: { userId?: string; limit?: number } =
   }
 }
 
+export type EmployerInbox = {
+  applications: AuditDocument[];
+  counts: { applications: number; invitationsSent: number; refused: number };
+};
+
+/**
+ * The employer dashboard's own view of the audit log: handshakes that named this
+ * employer agent, plus the ones it started itself.
+ *
+ * There are no candidate names here on purpose — the audit log records agent
+ * identities and which fields were released, never their values. An employer
+ * sees who applied as an ANS name until the candidate's agent releases more.
+ *
+ * Returns null when MongoDB is not configured, so the page can say so rather
+ * than print a zero it cannot stand behind.
+ */
+export async function employerInbox(
+  employerAnsName: string,
+  limit = 12,
+): Promise<EmployerInbox | null> {
+  try {
+    const audit = await collection();
+    if (!audit) return null;
+    const inbound = { kind: 'apply' as const, subject: employerAnsName };
+    const [applications, applicationCount, invitationsSent, refused] = await Promise.all([
+      audit
+        .find(inbound, { projection: { _id: 0 } })
+        .sort({ at: -1 })
+        .limit(Math.min(limit, 50))
+        .toArray(),
+      audit.countDocuments({ ...inbound, outcome: 'submitted' }),
+      audit.countDocuments({ kind: 'invitation', verifier: employerAnsName, outcome: 'invitation_sent' }),
+      // Either side walking away: an applicant agent that would not send to us,
+      // or an agent we refused to invite.
+      audit.countDocuments({
+        verdict: 'refuse',
+        $or: [{ subject: employerAnsName }, { verifier: employerAnsName }],
+      }),
+    ]);
+    return { applications, counts: { applications: applicationCount, invitationsSent, refused } };
+  } catch (error) {
+    console.error('Could not read the employer audit view', error);
+    return null;
+  }
+}
+
 /** The non-secret claims of a compact JWS we signed, for the audit record. */
 export function envelopeClaims(jws: string): AuditEvent['envelope'] {
   try {
