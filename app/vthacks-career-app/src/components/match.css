@@ -1,0 +1,350 @@
+/* MatchList — the ranked matches with the percentage.
+
+   COLOURS COME FROM TOKENS, NEVER LITERALS, same rule as apply.css. The
+   fallbacks are here so this file works even on a page that does not import
+   apply.css; they are the values globals.css defines today.
+
+   ONE DELIBERATE DEPARTURE: this file does not use --muted for body-sized text.
+   --muted is ink at 62% over paper, which measures 4.34:1 — under the 4.5:1 the
+   project treats as a hard rule rather than a preference. --match-meta is ink at
+   78%, which measures 7.0:1 on the same background. The 62% token stays correct
+   for the uppercase eyebrows it was designed for; it is not correct for a
+   sentence a student has to read. */
+
+:root {
+  --match-ink: var(--ink, #0b2545);
+  --match-paper: var(--paper, #eef4ed);
+  --match-success: var(--success, #3b6064);
+  --match-failure: var(--failure, #8c2f39);
+  --match-line: var(--line, color-mix(in srgb, currentColor 12%, transparent));
+  --match-wash: var(--wash, color-mix(in srgb, currentColor 3.5%, transparent));
+  --match-meta: color-mix(in srgb, var(--match-ink) 78%, transparent);
+  --match-success-wash: color-mix(in srgb, var(--match-success) 10%, transparent);
+  --match-strong-wash: color-mix(in srgb, var(--match-success) 14%, transparent);
+}
+
+/* Duplicated from apply.css on purpose: MatchList must not depend on which page
+   imported which stylesheet for its visually-hidden text to stay hidden. */
+.match-wrap .sr-only,
+.match-empty .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.match-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.match-row {
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--match-line);
+}
+
+.match-list li:last-child {
+  border-bottom: 0;
+}
+
+/* --- the head row: who, and the number ---------------------------------- */
+
+.match-head {
+  display: grid;
+  grid-template-columns: 30px 1fr minmax(150px, auto);
+  gap: 16px;
+  align-items: start;
+}
+
+.match-rank {
+  font-size: 15px;
+  color: var(--match-meta);
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-who {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.match-who strong {
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+.match-who small {
+  color: var(--match-meta);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.match-score {
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+  text-align: right;
+}
+
+.match-score-digits {
+  font-size: 30px;
+  line-height: 1;
+  color: var(--match-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The word, as text. This is what carries the score when colour is unavailable —
+   it is never the only cue, and never the cue that is removed to save space. */
+.match-score-word {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--match-wash);
+  color: var(--match-ink);
+}
+
+.match-score-word.is-strong {
+  background: var(--match-strong-wash);
+  color: var(--match-success);
+}
+
+.match-meter {
+  display: block;
+  width: 150px;
+  height: 7px;
+  background: var(--match-line);
+}
+
+.match-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--match-meta);
+}
+
+.match-meter-fill.is-strong {
+  background: var(--match-success);
+}
+
+/* --- the sentence that must always be there ----------------------------- */
+
+.match-reason {
+  margin: 0;
+  grid-column: 1 / -1;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--match-ink);
+  max-width: 78ch;
+}
+
+.match-caution {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--match-failure);
+  background: color-mix(in srgb, var(--match-failure) 7%, transparent);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--match-ink);
+  max-width: 78ch;
+}
+
+/* --- skills ------------------------------------------------------------- */
+
+.match-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+}
+
+.match-skillset h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--match-meta);
+  font-weight: 400;
+}
+
+.match-skillset ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.match-chip {
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 13px;
+  border: 1px solid transparent;
+  color: var(--match-ink);
+}
+
+.match-chip.is-have {
+  background: var(--match-success-wash);
+  color: var(--match-success);
+}
+
+/* A skill you do not have yet is not an error, so it is not red. The dashed
+   outline distinguishes it without colour doing the work. */
+.match-chip.is-gap {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--match-line);
+}
+
+.match-chip.is-course {
+  background: var(--match-wash);
+}
+
+/* --- per-row small print ------------------------------------------------ */
+
+.match-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--match-meta);
+}
+
+.match-meta a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--match-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.match-meta a:focus-visible,
+.match-removed summary:focus-visible {
+  outline: 3px solid var(--match-success);
+  outline-offset: 3px;
+}
+
+/* --- footer: provenance and the removed roles --------------------------- */
+
+.match-footer {
+  display: grid;
+  gap: 12px;
+  padding: 18px 22px 20px;
+  border-top: 1px solid var(--match-line);
+}
+
+.match-provenance {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--match-meta);
+  max-width: 82ch;
+}
+
+.match-removed summary {
+  cursor: pointer;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: var(--match-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.match-removed ul {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.match-removed li {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.55;
+  padding-left: 12px;
+  border-left: 2px solid var(--match-line);
+}
+
+.match-removed li span {
+  color: var(--match-meta);
+}
+
+.match-removed p {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--match-meta);
+  max-width: 82ch;
+}
+
+.match-more {
+  padding: 14px 22px 0;
+}
+
+/* --- the manual run control --------------------------------------------- */
+
+.match-run {
+  display: grid;
+  gap: 10px;
+  padding: 18px 22px;
+  border-top: 1px solid var(--match-line);
+  justify-items: start;
+}
+
+.match-run-status:empty {
+  display: none;
+}
+
+.match-run-status {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--match-meta);
+  max-width: 82ch;
+}
+
+/* --- the two non-list states -------------------------------------------- */
+
+.match-problem {
+  margin: 0;
+  padding: 16px 22px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--match-ink);
+  border-left: 3px solid var(--match-failure);
+  background: color-mix(in srgb, var(--match-failure) 6%, transparent);
+}
+
+.match-empty p {
+  margin: 0;
+  padding: 18px 22px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--match-ink);
+}
+
+@media (max-width: 720px) {
+  .match-head {
+    grid-template-columns: 24px 1fr;
+  }
+
+  .match-score {
+    grid-column: 2;
+    justify-items: start;
+    text-align: left;
+  }
+}
