@@ -35,6 +35,7 @@
 import { getGeminiKey } from '@/lib/extract/gemini';
 import { parseJsonObject } from '@/lib/extract/json';
 import { extractedProfileSchema, type ExtractedProfile } from '@/lib/extract/types';
+import { ENDPOINT, geminiModelFor } from '../extract/gemini';
 
 /**
  * Same alias as the resume extractor, for the same reason: the pinned
@@ -49,8 +50,19 @@ import { extractedProfileSchema, type ExtractedProfile } from '@/lib/extract/typ
  */
 export const ENRICH_MODEL = process.env.GEMINI_MODEL ?? 'gemini-flash-latest';
 
-const ENDPOINT = (model: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+/** The model this key can actually reach — Vertex does not publish the AI Studio aliases. */
+const currentEnrichModel = () =>
+  geminiModelFor(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ?? '');
+
+// Shared with extract/gemini.ts so an AI Studio key and a Vertex Express key do
+// not have to be configured twice, and cannot disagree about which host to call.
+//
+// CAVEAT: the grounding tool below is `google_search`, which is the AI Studio
+// spelling. Vertex publishes grounding under a different shape, so on a Vertex
+// key this call may be rejected for the TOOL rather than the endpoint. Resume
+// extraction is the path that matters and it uses no tools; if enrichment fails
+// on a Vertex key, that is why, and it degrades to a stated reason rather than
+// a crash (see the caller).
 
 /** What the resume already told us, used purely to identify the right person. */
 export type EnrichSeed = {
@@ -175,7 +187,7 @@ type GeminiResponse = {
 };
 
 const defaultTransport: EnrichTransport = async (body, key) => {
-  const response = await fetch(ENDPOINT(ENRICH_MODEL), {
+  const response = await fetch(ENDPOINT(currentEnrichModel(), key), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     cache: 'no-store',
@@ -293,7 +305,7 @@ export async function enrichFromPublicWeb(
 
   return {
     profile,
-    model: ENRICH_MODEL,
+    model: currentEnrichModel(),
     evidence: typeof raw.evidence === 'string' && raw.evidence.trim() ? raw.evidence.trim() : 'not stated',
     sources: [...new Set(sources)],
     warnings,

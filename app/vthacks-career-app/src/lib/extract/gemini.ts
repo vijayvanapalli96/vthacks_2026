@@ -25,8 +25,39 @@ import { parseJsonObject } from './json';
  */
 export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-flash-latest';
 
-const ENDPOINT = (model: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+/**
+ * TWO PRODUCTS, TWO ENDPOINTS, ONE ENV VAR.
+ *
+ * An AI Studio key (`AIzaSy...`) talks to generativelanguage.googleapis.com and
+ * is billed against AI Studio's PREPAID pool. A Vertex AI Express key (`AQ.`,
+ * created in Cloud Console and bound to a service account) talks to
+ * aiplatform.googleapis.com and is billed against GCP — including Free Trial
+ * credit, which is a different wallet entirely.
+ *
+ * They are not interchangeable and the failure is confusing: an `AQ.` key
+ * returns 200 from /v1beta/models on the AI Studio host and then 402 on
+ * generateContent, which reads like "out of credit" rather than "wrong
+ * product". Detecting the prefix is what stops an hour disappearing into that.
+ */
+export type GeminiFlavor = 'aistudio' | 'vertex-express';
+
+export function geminiFlavor(key: string): GeminiFlavor {
+  return key.startsWith('AQ.') ? 'vertex-express' : 'aistudio';
+}
+
+/**
+ * `gemini-flash-latest` is an AI Studio ALIAS and is not published on Vertex, so
+ * carrying one default across both would 404 half the time.
+ */
+export function geminiModelFor(key: string): string {
+  if (process.env.GEMINI_MODEL) return process.env.GEMINI_MODEL;
+  return geminiFlavor(key) === 'vertex-express' ? 'gemini-2.0-flash' : GEMINI_MODEL;
+}
+
+export const ENDPOINT = (model: string, key: string) =>
+  geminiFlavor(key) === 'vertex-express'
+    ? `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 export class GeminiError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -70,7 +101,8 @@ export async function extractWithGemini(pdfBytes: Uint8Array): Promise<Extractio
     throw new GeminiError('GOOGLE_GENERATIVE_AI_API_KEY is not set.');
   }
 
-  const response = await fetch(ENDPOINT(GEMINI_MODEL), {
+  const model = geminiModelFor(key);
+  const response = await fetch(ENDPOINT(model, key), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     cache: 'no-store',
@@ -111,7 +143,7 @@ export async function extractWithGemini(pdfBytes: Uint8Array): Promise<Extractio
 
   const profile = extractedProfileSchema.parse(parseJsonObject(text));
 
-  return { profile, provider: 'gemini', model: GEMINI_MODEL, warnings: [] };
+  return { profile, provider: 'gemini', model, warnings: [] };
 }
 
 function toBase64(bytes: Uint8Array): string {
