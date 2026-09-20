@@ -215,7 +215,14 @@ export function resolveSponsorshipNeed(goals) {
   return {
     needsSponsorship: asBool,
     isCitizen: asBool ? false : fromText.isCitizen,
-    raw: fromText.raw ?? `goals.sponsorship_required = ${asBool}`,
+    // `raw` is interpolated into a reason string a STUDENT reads, so it has to be
+    // a phrase and not a column dump. The first version emitted
+    // `goals.sponsorship_required = true`, which produced the sentence 'profile
+    // states work authorization "goals.sponsorship_required = true"' on a real
+    // run — accurate, and unreadable.
+    raw:
+      fromText.raw ??
+      (asBool ? 'needs visa sponsorship' : 'does not need visa sponsorship'),
   };
 }
 
@@ -295,7 +302,7 @@ export function evaluateEligibility(job, goals) {
     if (auth.isCitizen === false) {
       return {
         eligibility: FAIL,
-        reason: `Posting requires US citizenship; profile states work authorization "${auth.raw}".`,
+        reason: `Posting requires US citizenship; profile says "${auth.raw}".`,
       };
     }
     return {
@@ -315,7 +322,7 @@ export function evaluateEligibility(job, goals) {
     if (auth.needsSponsorship === true) {
       return {
         eligibility: FAIL,
-        reason: `Posting states it will not sponsor a visa; profile states work authorization "${auth.raw}", which needs sponsorship.`,
+        reason: `Posting states it will not sponsor a visa; profile says "${auth.raw}".`,
       };
     }
     if (auth.needsSponsorship === null) {

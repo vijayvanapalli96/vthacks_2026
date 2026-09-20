@@ -143,7 +143,13 @@ export async function readCachedRun(sql, userId, ttlMinutes = CACHE_TTL_MINUTES)
        FROM latest l
        JOIN ${FQ}.match_evaluations m ON m.run_id = l.run_id
        LEFT JOIN ${FQ}.job_snapshots s ON s.job_id = m.job_id
-      ORDER BY m.retrieval_rank`,
+      -- Must match rerank.mjs's sort EXACTLY. It did not, and that is a bug a
+      -- consumer would experience as "/api/match returns a different order the
+      -- second time you call it": the fresh path sorts by the model's score and
+      -- the cached path was sorting by retrieval_rank, so Gusto/75 led a cached
+      -- response while Pinterest/85 led an identical fresh one. A cache that
+      -- reorders is not a cache.
+      ORDER BY m.overall_score DESC, m.retrieval_rank`,
     [
       { name: 'user_id', value: userId },
       { name: 'ttl', value: String(ttlMinutes), type: 'DOUBLE' },
