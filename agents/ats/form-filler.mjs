@@ -245,6 +245,31 @@ export async function discover({ jobUrl, browserFactory, now = () => new Date().
         return null;
       };
 
+      /**
+       * THE GROUP QUESTION FOR A RADIO OR CHECKBOX.
+       *
+       * A radio's own label is the OPTION ("Under 30"), not the question ("What
+       * is your age range?"). That matters twice over: a model cannot answer an
+       * option shorn of its question, and the app's refusal filter matches on the
+       * label, so a demographic question would have sailed straight past a guard
+       * looking for the word "age". Found on a real Ashby form, which asks
+       * exactly that.
+       */
+      const groupQuestion = (element) => {
+        const fieldset = element.closest("fieldset");
+        const legend = fieldset?.querySelector("legend");
+        if (legend?.innerText?.trim()) return legend.innerText.trim();
+        const group = element.closest('[role="radiogroup"], [role="group"]');
+        const labelledBy = group?.getAttribute("aria-labelledby");
+        if (labelledBy) {
+          const target = document.getElementById(labelledBy);
+          if (target?.innerText?.trim()) return target.innerText.trim();
+        }
+        const ariaLabel = group?.getAttribute("aria-label");
+        if (ariaLabel?.trim()) return ariaLabel.trim();
+        return "";
+      };
+
       const out = [];
       for (const element of document.querySelectorAll("input, textarea, select")) {
         const type = (element.getAttribute("type") || element.tagName).toLowerCase();
@@ -259,9 +284,14 @@ export async function discover({ jobUrl, browserFactory, now = () => new Date().
             : undefined;
 
         const maxLengthAttribute = Number(element.getAttribute("maxlength"));
+        // "What is your age range? — Under 30" rather than "Under 30".
+        const own = labelFor(element);
+        const question = ["radio", "checkbox"].includes(type) ? groupQuestion(element) : "";
+        const label = question && !own.startsWith(question) ? `${question} — ${own}` : own;
+
         out.push({
           selector,
-          label: labelFor(element).slice(0, 300),
+          label: label.slice(0, 300),
           type,
           required: element.hasAttribute("required") || element.getAttribute("aria-required") === "true",
           options,
