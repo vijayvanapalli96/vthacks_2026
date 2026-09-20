@@ -31,7 +31,7 @@
 import { ConversationProvider, useConversation } from '@elevenlabs/react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { AgentFace } from '@/components/AgentFace';
+import { AgentFaceLive } from '@/components/AgentFaceLive';
 import type {
   TranscriptEntry,
   VoiceAnswerResponse,
@@ -413,7 +413,7 @@ function VoiceAgentShell() {
            AgentFace — the same five states, so visualState still hands straight
            over with no translation layer. <VoiceConsole /> is out of
            applicant/page.tsx, so the SDK owns the only microphone on the page. */
-        visual={<AgentFace mood={visualState} size={120} />}
+        visual={<AgentFaceLive mood={visualState} size={120} />}
       />
     </>
   );
