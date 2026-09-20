@@ -587,6 +587,15 @@ nav a[aria-current='page'] {
   margin: 0 0 4px;
 }
 
+.job-prepared-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 10px 0 4px;
+  border: 1px solid var(--hw-line);
+  border-radius: var(--hw-radius);
+}
+
 .job-empty {
   margin: 0;
   padding: 18px 22px;

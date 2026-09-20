@@ -203,6 +203,19 @@ if ($googleId -and $googleSecret) {
 # The app calls the ATS worker over the compose network and needs the same
 # shared token the worker checks. It lives in infra/vultr/.env, which is where
 # the worker's own compose variables already are.
+# Voice. Optional like Google: src/lib/elevenlabs.ts disables the microphone and
+# says why when either is missing, rather than offering a dead button. Both are
+# needed - a key without an agent id has nothing to connect to.
+$voiceKey = Get-OptionalHirewireSecret "elevenlabs-api-key"
+$voiceAgent = Get-OptionalHirewireSecret "elevenlabs-agent-id"
+if ($voiceKey -and $voiceAgent) {
+  $appEnv += (ConvertTo-EnvLine "ELEVENLABS_API_KEY" $voiceKey)
+  $appEnv += (ConvertTo-EnvLine "ELEVENLABS_AGENT_ID" $voiceAgent)
+  Write-Host "Voice: configured."
+} else {
+  Write-Host "Voice: not configured (needs elevenlabs-api-key and elevenlabs-agent-id in the hirewire scope). The microphone stays disabled and says why."
+}
+
 $atsEnvFile = Join-Path $PSScriptRoot ".env"
 if (Test-Path -LiteralPath $atsEnvFile) {
   $atsToken = (Get-Content -LiteralPath $atsEnvFile |
