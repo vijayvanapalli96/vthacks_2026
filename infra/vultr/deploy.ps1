@@ -255,7 +255,19 @@ if ($LASTEXITCODE -ne 0) { throw "Could not upload the deployment archive." }
 # Docker writes progress to stderr; fold it into stdout so Windows PowerShell 5.1
 # does not treat build progress as a failure. The exit code still decides success.
 $composeProfile = if ($IncludeAts) { "--profile ats " } else { "" }
-ssh @identityArgs $destination "tar -xzf /tmp/hirewire-vultr.tgz -C /opt/hirewire && chmod 600 /opt/hirewire/certs/employer.key /opt/hirewire/certs/applicant.key /opt/hirewire/app.env && cd /opt/hirewire && docker compose ${composeProfile}up -d --build --quiet-pull 2>&1"
+# tar OVERWRITES but never DELETES, so a directory on the server accumulates
+# files from every tree anyone has ever deployed from. On 2026-09-20 that broke
+# the build: a teammate's deploy left behind files importing `jpeg-js` and
+# `interviewerConfig`, neither of which exists anywhere in main, and every later
+# deploy layered on top without removing them. The build compiled the union and
+# failed on imports nobody could find in the repo.
+#
+# So clear what this run is about to replace, and ONLY that. `app` is staged on
+# every run. `agents` and `certs` are NOT staged under -AppOnly -- removing them
+# there would delete the live ANS key material and take both agents down.
+# /opt/hirewire/app.env is a FILE, untouched by removing the `app` directory.
+$purge = if ($AppOnly) { "rm -rf /opt/hirewire/app" } else { "rm -rf /opt/hirewire/app /opt/hirewire/agents" }
+ssh @identityArgs $destination "$purge && tar -xzf /tmp/hirewire-vultr.tgz -C /opt/hirewire && chmod 600 /opt/hirewire/certs/employer.key /opt/hirewire/certs/applicant.key /opt/hirewire/app.env && cd /opt/hirewire && docker compose ${composeProfile}up -d --build --quiet-pull 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "Remote Docker deployment failed." }
 
 Write-Host "App and both agents deployed."
