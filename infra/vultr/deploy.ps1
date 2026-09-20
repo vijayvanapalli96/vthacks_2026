@@ -196,14 +196,16 @@ $appEnv = @(
   (ConvertTo-EnvLine "MONGODB_URI" (Get-HirewireSecret "mongodb-uri"))
 )
 
-# The interview room and the voice agent. ALL OPTIONAL, each independently: a
-# missing one degrades to a stated reason on screen rather than a crash, which is
-# the whole contract those features are built to. elevenlabs-api-key serves BOTH
-# personas and Scribe speech-to-text; the two agent ids are separate agents on
-# purpose (see interviewerConfig() in src/lib/elevenlabs.ts).
+# The mock interview room's own keys. ALL OPTIONAL, each independently: a missing
+# one degrades to a stated reason on screen rather than a crash, which is the
+# contract that feature is built to.
+#
+# ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID are deliberately NOT in this list —
+# the Voice block below already carries them, and it pairs them because a key
+# without an agent id has nothing to connect to. The same key also serves Scribe
+# speech-to-text and persona 2, so the interviewer agent id below is useless
+# without that block having run.
 foreach ($pair in @(
-    @{ Secret = "elevenlabs-api-key"; Env = "ELEVENLABS_API_KEY" },
-    @{ Secret = "elevenlabs-agent-id"; Env = "ELEVENLABS_AGENT_ID" },
     @{ Secret = "elevenlabs-interviewer-agent-id"; Env = "ELEVENLABS_INTERVIEWER_AGENT_ID" },
     @{ Secret = "presage-api-key"; Env = "PRESAGE_API_KEY" },
     @{ Secret = "google-generative-ai-api-key"; Env = "GOOGLE_GENERATIVE_AI_API_KEY" }
