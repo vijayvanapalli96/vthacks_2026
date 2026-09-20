@@ -4,8 +4,10 @@ import { redirect } from 'next/navigation';
 
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { IntakeProgress } from '@/components/IntakeProgress';
+import { JobVerificationList } from '@/components/JobVerificationList';
 import { Reveal } from '@/components/Reveal';
 import { VoiceAgent } from '@/components/voice/VoiceAgent';
+import { applicantJobVerificationMemory } from '@/lib/audit';
 import { intakeGate } from '@/lib/intake';
 import { DEMO_JOB, listJobs } from '@/lib/jobs';
 import { requireRole } from '@/lib/session';
@@ -40,7 +42,10 @@ export default async function ApplicantDashboard() {
   if (nextStep) redirect(nextStep);
   // Real postings only (CLAUDE.md rule 7). The demo row is our own ANS employer
   // agent and is labelled as such.
-  const { jobs } = await listJobs(3);
+  const [{ jobs }, verificationMemory] = await Promise.all([
+    listJobs(3),
+    applicantJobVerificationMemory(user.id),
+  ]);
   const queue = [DEMO_JOB, ...jobs].slice(0, 4);
 
   return (
@@ -105,25 +110,7 @@ export default async function ApplicantDashboard() {
           </div>
           <BriefcaseBusiness aria-hidden="true" />
         </header>
-        <ul className="job-list">
-          {queue.map((job) => (
-            <li key={job.job_id}>
-              <Link href={`/applicant/jobs/${encodeURIComponent(job.job_id)}`} className="job-row">
-                <span>
-                  <strong>{job.job_title}</strong>
-                  <small>
-                    {job.company_name}
-                    {job.location_text ? ` · ${job.location_text}` : ''}
-                  </small>
-                </span>
-                <span className={job.demo ? 'job-tag' : 'job-tag muted-tag'}>
-                  {job.demo ? 'Demo ANS agent' : (job.source ?? 'posting')}
-                </span>
-                <ArrowRight size={17} aria-hidden="true" />
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <JobVerificationList jobs={queue} initialMemory={verificationMemory} />
         {queue.length <= 1 ? (
           <p className="job-empty">
             Real postings appear here as the discovery pipeline fills them in.{' '}

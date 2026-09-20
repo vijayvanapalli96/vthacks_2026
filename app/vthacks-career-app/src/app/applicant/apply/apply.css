@@ -378,6 +378,22 @@ nav a[aria-current='page'] {
   background: var(--hw-wash);
 }
 
+.job-row-button {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--hw-line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.job-row-button:disabled {
+  cursor: wait;
+  opacity: 0.8;
+}
+
 .job-row span {
   display: grid;
   gap: 3px;
@@ -409,6 +425,48 @@ nav a[aria-current='page'] {
 .job-tag.muted-tag {
   background: var(--hw-wash);
   color: var(--muted);
+}
+
+.job-tag.verified-tag,
+.job-tag.checking-tag,
+.job-tag.refused-tag {
+  display: inline-flex;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.job-tag.checking-tag {
+  background: var(--hw-wash);
+  color: var(--muted);
+}
+
+.job-tag.refused-tag {
+  background: var(--hw-failure-wash);
+  color: var(--hw-failure);
+}
+
+.job-verification-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 22px 14px;
+  border-bottom: 1px solid var(--hw-line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.job-verification-note.is-verified {
+  color: var(--hw-success);
+}
+
+.job-verification-note.is-refused {
+  color: var(--hw-failure);
+}
+
+.job-verification-note a {
+  flex: 0 0 auto;
+  font-weight: 800;
 }
 
 .job-empty {
