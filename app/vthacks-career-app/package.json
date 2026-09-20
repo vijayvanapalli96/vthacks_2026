@@ -8,7 +8,8 @@
     "start": "next build && node server.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "voice:agent": "node scripts/provision-voice-agent.mjs"
+    "voice:agent": "node scripts/provision-voice-agent.mjs",
+    "voice:smoke": "node scripts/voice-actions-smoke.mjs"
   },
   "dependencies": {
     "@elevenlabs/react": "^1.15.2",
