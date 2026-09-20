@@ -13,7 +13,44 @@
 .intake-shell {
   max-width: 720px;
   margin: 0 auto;
-  padding: 64px 0 80px;
+  padding: 32px 0;
+  /* Centred in the VIEWPORT, not in the column — the text stays left-aligned like
+     the rest of the app. These two screens have no nav and one thing to do, so the
+     stack sits in the middle of the window instead of hanging off the top edge.
+     `min-height` and not `height`: when the content is taller than the window (the
+     LinkedIn step, on a short laptop) the box grows, justify-content has no free
+     space left to distribute, and the top of the content stays reachable. Setting
+     `height` there would centre the overflow and cut the heading off above the
+     scroll origin.
+     The 96px is `main`'s own padding-bottom from globals.css, subtracted so a full
+     window does not produce a scrollbar. */
+  min-height: calc(100svh - 96px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Sits in the form's action row beside Next and Skip, so every way off the
+   screen is in one place. Same treatment as .ghost — it is the same weight of
+   decision. */
+.intake-back {
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.intake-back:hover { color: var(--ink); }
+.intake-back:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* Position in the flow. Deliberately NOT .eyebrow: that class is tracked-out
+   uppercase, which is the right voice for a field label and the wrong one for a
+   sentence a person reads to find out how much is left. */
+.intake-step {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
 }
 
 .intake-shell h1 {
@@ -50,7 +87,13 @@
 
 .intake-form .field { display: grid; gap: 20px; }
 
-.intake-form label {
+/* SCOPED TO `.field >` ON PURPOSE. As a bare `.intake-form label` this styled every
+   label in the form, and the drop plane is a <label> — so the tracked-out uppercase
+   field-label treatment inherited straight into the drop prompt, the size constraint
+   and the "Choose a file" cue, and "Replace" (also a label) got it directly. Field
+   labels live inside `.field`; the drop plane's labels do not, and they are click
+   surfaces rather than names for a control. */
+.intake-form .field > label {
   font-size: 14px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -71,61 +114,214 @@
 .intake-form input[type='url']:hover,
 .intake-form input[type='url']:focus { border-color: var(--ink); }
 
-/* No frame. The button carries the affordance and the filename sits beside it,
-   which is all a file input needs to be understood. */
-.intake-form input[type='file'] {
-  font: inherit;
-  font-size: 17px;
-  width: 100%;
-  padding: 0;
-  background: transparent;
-  border: 0;
+.intake-form input[aria-invalid='true'] { border-color: var(--failure); }
+
+/* --- Drop plane: a hairline field you can throw a file at ----------------- */
+/* Not a card. No radius (the reset forbids it), no fill at rest, no shadow —
+   a perimeter of the same hairline the rest of the form separates with, sized
+   generously enough to be an obvious target. The drag state is the one moment
+   this component is allowed to be loud, and it spends it on a 3.5% ink wash. */
+
+.drop-field { display: grid; gap: 20px; }
+
+.drop-label {
+  display: block;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--muted);
-  cursor: pointer;
-  padding: 4px 0;
-}
-.intake-form input[type='file']::file-selector-button {
-  font: inherit;
-  font-size: 17px;
-  margin-right: 16px;
-  padding: 12px 20px;
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  color: var(--ink);
-  letter-spacing: 0.03em;
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-.intake-form input[type='file']:hover::file-selector-button {
-  border-color: var(--ink);
 }
 
-.intake-form input[aria-invalid='true'] { border-color: var(--failure); }
+/* Clipped, NOT display:none — it has to stay in the tab order, because the
+   picker is otherwise unreachable without a mouse. */
+.drop-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  /* Belt and braces over the clip, because what is being hidden is a native
+     control the browser draws from its own shadow DOM ("Choose File — No file
+     chosen") and every engine sizes that differently. Opacity does not affect
+     focusability the way visibility or display would. */
+  opacity: 0;
+}
+
+/* A translucent plate, no border at all. The target reads as an area because it
+   is TINTED, not because it is fenced — which is how it stays quiet while still
+   being obviously a place you can drop something. Every step below is the same
+   ink the page is set in, at a different strength, so this introduces no colour.
+   Square, because the global reset forbids a radius. */
+.drop {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 40px 32px;
+  border: 0;
+  background: var(--wash);
+  /* An explicit override of `*, *::before, *::after { border-radius: 0 }` in
+     globals.css — the one place in the app that softens a container, because a
+     hard-cornered plate was the wrong shape for the thing you drop a file onto.
+     Any class beats the universal selector, so this needs no !important. */
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.drop:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+
+/* Ordered weakest-claim first, because every one of these is a single class on
+   .drop and therefore identical in specificity — the cascade is doing the
+   arbitration, so the sequence IS the rule. A file is chosen (success), unless
+   something is being dragged over it (ink), unless the server rejected it
+   (failure).
+   State is carried by the FILL, not by a frame: same ink the page is set in, or
+   the system's own two signal colours, at a low percentage. The two rings that
+   remain are inset shadows so they follow the radius and reflow nothing, and
+   both are momentary — one while a file is over the plate, one while an error is
+   on screen. Nothing at rest has an edge. */
+.drop.is-filled {
+  background: color-mix(in srgb, var(--success) 9%, transparent);
+  cursor: default; /* filled renders a <div>, not a <label> — not a click target */
+}
+.drop.is-over {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.drop.is-invalid {
+  background: color-mix(in srgb, var(--failure) 8%, transparent);
+  box-shadow: inset 0 0 0 1px var(--failure);
+}
+.drop.is-disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* The pointer user's focus ring for an input they cannot see. */
+.drop-input:focus-visible + .drop {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* The prompt, and then the filename — which is the largest thing on the plane
+   once there is one, because at that point the user's own document is the
+   subject and everything else is metadata. */
+.drop-headline {
+  margin: 0;
+  font-size: clamp(22px, 2.4vw, 27px);
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.drop-meta {
+  display: block;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.drop-actions { display: flex; align-items: center; gap: 24px; margin-top: 4px; }
+
+/* Underlined text, not a bordered rectangle. The plane is already the click
+   target; this only has to name what clicking does. */
+.drop-cue {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  margin-top: 4px;
+  border: 0;
+  color: var(--ink);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+.drop:hover .drop-cue { color: var(--success); }
+.drop-actions .drop-cue { margin-top: 0; }
+
+.drop-remove {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.drop-remove:hover { color: var(--failure); }
+.drop-remove:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* Announced, never shown: the visible filename lives inside a <label>, whose
+   changing text screen readers do not reliably read out. */
+.drop-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop, .drop-cue { transition: none; }
+}
+
+@media (max-width: 560px) {
+  .drop { padding: 34px 20px; }
+}
 
 .intake-form small {
   color: var(--muted);
   font-size: 16px;
   line-height: 1.55;
   letter-spacing: 0;
-  margin-top: 4px;
+  /* globals.css styles the bare `small` element as a tracked-out uppercase label
+     (`.eyebrow, small { text-transform: uppercase }`). This rule already undid the
+     tracking and the size but never the transform, so these hints — full sentences,
+     not labels — were rendering as ALL CAPS. Resetting it here rather than in
+     globals.css, because a one-word `small` elsewhere may well want the label
+     treatment; a paragraph never does. */
+  text-transform: none;
+  max-width: 62ch;
+  margin: 4px 0 0;
 }
 
-.intake-form .actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.intake-form .actions {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin-top: 6px;
+}
 
+/* Both actions are text. Hierarchy comes from ink versus muted and from size —
+   not from wrapping the important one in a filled rectangle, which is the only
+   box this form had left. */
 .intake-form .primary {
-  padding: 13px 20px;
-  border: 1px solid var(--ink);
-  background: var(--ink);
-  color: var(--paper);
-  letter-spacing: 0.03em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  text-decoration: underline;
+  text-underline-offset: 5px;
 }
-.intake-form .primary:hover { background: var(--success); border-color: var(--success); }
+.intake-form .primary:hover { color: var(--success); }
 
 .intake-form .ghost {
-  padding: 13px 18px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--muted);
+  font-size: 16px;
   letter-spacing: 0.02em;
   text-decoration: underline;
   text-underline-offset: 4px;
@@ -136,6 +332,20 @@
 
 .intake-form .status:empty { display: none; }
 .intake-form .status { margin: 0; font-size: 16px; color: var(--success); }
+
+/* Announced, never shown. See components/IntakeStatus.tsx for why it exists at
+   all when nothing renders it: a sighted user watches the form settle, a screen
+   reader user gets this instead. */
+.status-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
 /* --- Outcome: a rule and a colour, not a tinted box ---------------------- */
 
@@ -169,9 +379,13 @@
 
 .progress { display: grid; gap: 22px; }
 
+/* NO border-top. `.setup-band .muted` above already closes with a rule, so this
+   drew a second one a gap below it and the log opened with a double break. Same
+   at the other end: the final .progress-line carries a border-bottom, so
+   .progress-done must not add one either. One rule per boundary. */
 .progress-log {
   background: transparent;
-  border-top: 1px solid var(--line);
+  border: 0;
   padding: 0;
   margin: 0;
   list-style: none;
@@ -194,12 +408,17 @@
 .progress-body strong { font-size: 18px; font-weight: 400; }
 
 /* Model names, byte counts and honest caveats live here, so it stays legible
-   rather than decorative. */
+   rather than decorative — which is what `letter-spacing: 0` was reaching for and
+   `text-transform: none` is what it actually needed. Without the second one,
+   globals.css's `.eyebrow, small { text-transform: uppercase }` was rendering
+   every detail line as "55 KB FROM THE UNITY CATALOG VOLUME." Third place in this
+   file the same omission has surfaced; see the note on `.intake-form small`. */
 .progress-body small {
   font-size: 16px;
   line-height: 1.55;
   color: var(--muted);
   letter-spacing: 0;
+  text-transform: none;
   overflow-wrap: anywhere;
 }
 .progress-line.is-warn .progress-body small { color: var(--failure); }
@@ -223,52 +442,86 @@
 .progress-error {
   background: transparent;
   border: 0;
-  border-top: 1px solid var(--line-strong);
   padding: 22px 0 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 14px;
 }
-.progress-error { border-top-color: var(--failure); }
+/* The error block keeps a rule, because it is an interruption rather than the
+   next thing in a sequence, and the colour is carrying meaning. */
+.progress-error { border-top: 1px solid var(--failure); }
 
 .progress-done p,
 .progress-error p { flex: 1 1 100%; margin: 0; font-size: 17px; line-height: 1.6; }
 .progress-error p { color: var(--failure); }
 
+/* Text, not boxes — same treatment as the intake form's actions, for the same
+   reason: globals.css says a box never, and a filled rectangle was the only one
+   left on this screen. */
 .progress-done a, .progress-error a,
 .progress-done button, .progress-error button {
   display: inline-flex;
   align-items: center;
   font: inherit;
-  font-size: 17px;
-  letter-spacing: 0.03em;
-  padding: 13px 22px;
-  border: 1px solid var(--line-strong);
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: var(--ink);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 5px;
   cursor: pointer;
-  transition: border-color 0.2s ease;
+  transition: color 0.16s ease;
 }
 .progress-done a:hover, .progress-error a:hover,
-.progress-done button:hover, .progress-error button:hover { border-color: var(--ink); }
-
-.progress-done a.primary, .progress-error a.primary,
-.progress-done button.primary, .progress-error button.primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
-}
-.progress-done a.primary:hover, .progress-done button.primary:hover {
-  background: var(--success);
-  border-color: var(--success);
-}
+.progress-done button:hover, .progress-error button:hover { color: var(--success); }
 
 .progress-done a:focus-visible, .progress-error a:focus-visible,
 .progress-done button:focus-visible, .progress-error button:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
+}
+
+/* --- The reading screen: nothing but the log ----------------------------- */
+/* `#analysis-only` is emitted by app/applicant/page.tsx and ONLY on the branch
+   that renders the intake log. It is a marker, not a style hook, which is why it
+   carries no rules of its own.
+
+   The voice dock lives in app/applicant/layout.tsx, above this page in the tree,
+   so the page cannot unmount it — and a client-side flag would let it paint for a
+   frame before disappearing. A selector on server-rendered markup is true in the
+   first byte of HTML, so there is nothing to flash.
+
+   `:has()` on `body` raises specificity to (1,0,1) via the id argument, which is
+   how these beat `html[data-transcript='open']` (0,1,1) in globals.css without
+   depending on which stylesheet Next happens to emit second. The padding reset
+   matters: TranscriptPanel is only HIDDEN, so it still sets data-transcript and
+   would otherwise leave 420px of dead gutter beside the log. */
+body:has(#analysis-only) .vw,
+body:has(#analysis-only) .vt-dock {
+  display: none;
+}
+
+body:has(#analysis-only) {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+/* Centred in the window, since it is the only thing on the page.
+   `min-height` rather than `height`, for the reason given on .intake-shell: this
+   log GROWS, and once it is taller than the window the box grows with it,
+   justify-content runs out of free space to distribute, and the first line stays
+   reachable instead of being centred up past the scroll origin.
+   The id beats .setup-band's `display: grid` and padding; its max-width and auto
+   margins are not overridden and still apply. */
+#analysis-only {
+  min-height: calc(100svh - 96px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 32px 0;
 }
 
 /* --- Setup band: the dashboard's first-run state ------------------------- */

@@ -15,6 +15,7 @@
  */
 import { notFound } from 'next/navigation';
 
+import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { getJob } from '@/lib/jobs';
 import { requireRole } from '@/lib/session';
@@ -42,7 +43,7 @@ export default async function InterviewPage({ params }: { params: Promise<{ jobI
 
   return (
     <main>
-      <ApplicantNav current="pipeline" />
+      <ApplicantNav current="pipeline" account={<AccountButton />} />
       <section className="hero">
         <p className="eyebrow">MOCK INTERVIEW</p>
         <h1>

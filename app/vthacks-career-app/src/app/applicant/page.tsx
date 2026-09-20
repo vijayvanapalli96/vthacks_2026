@@ -1,7 +1,8 @@
-import { ArrowRight, BriefcaseBusiness, ShieldCheck } from 'lucide-react';
+import { BriefcaseBusiness } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { IntakeProgress } from '@/components/IntakeProgress';
 import { JobVerificationList } from '@/components/JobVerificationList';
@@ -37,11 +38,59 @@ import './apply/apply.css';
  * fixture values with nothing behind them, presented as this user's own numbers and
  * this user's own files — hard rule 7, and the first thing a judge would click. The
  * match queue below stays because it now reads real postings.
+ *
+ * ALSO GONE, BY REQUEST: the centred "Find the right role / Stay in control" hero,
+ * and the handshake panel whose two buttons were the only links in the product to
+ * the preset ANS hosts — employer.hirewire.biz (verified) and fraud.webmesh.ai
+ * (impostor). /applicant/apply is still in the side nav, but TrustApply takes its
+ * host as a fixed prop with no input, so the IMPOSTOR path is now reachable only by
+ * typing the query string. If the refusal demo is being shown, that entry point has
+ * to come back somewhere — see the note in the handover.
  */
 export default async function ApplicantDashboard() {
   const user = await requireRole('applicant');
   const { nextStep, needsAnalysis } = await intakeGate(user.id);
   if (nextStep) redirect(nextStep);
+
+  /**
+   * THE READING SCREEN IS ITS OWN SCREEN, even though it shares this URL.
+   *
+   * It returns early and renders NOTHING but the log: no nav, no handshake panel, no
+   * match queue, and — via the `#analysis-only` hook in intake.css — not the
+   * layout-level voice dock either. Watching the profile get built is the entire job of
+   * this moment, and a workspace laid out behind it is furniture for a room the user
+   * cannot use yet.
+   *
+   * Returning before the three reads below is not just tidiness: listJobs,
+   * applicantJobVerificationMemory and readMatches are three round trips whose results
+   * this branch never renders, and they were being paid for on the slowest page in the
+   * product.
+   *
+   * Hiding the dock with CSS rather than unmounting it is deliberate. The flag has to
+   * be true during SSR or the dock paints for one frame and then vanishes, and a server
+   * component cannot reach into the layout to remove a sibling. A selector on markup
+   * that only this branch emits is true in the very first byte of HTML.
+   *
+   * No <Reveal>: an entrance animation on a screen the user did not navigate to, which
+   * then sits still for a minute, is motion for its own sake. The log lines arriving
+   * are the only movement this screen needs.
+   */
+  if (needsAnalysis) {
+    return (
+      <main id="main">
+        <section id="analysis-only" className="setup-band">
+          <p className="eyebrow">SETTING UP YOUR WORKSPACE</p>
+          <h1>Reading everything you gave me.</h1>
+          <p className="muted">
+            Pulling your resume apart into skills, roles and coursework, and writing down what
+            I find. Here it is as it happens.
+          </p>
+          <IntakeProgress />
+        </section>
+      </main>
+    );
+  }
+
   /**
    * Three independent reads, issued together.
    *
@@ -64,55 +113,10 @@ export default async function ApplicantDashboard() {
 
   return (
     <main id="main">
-      <ApplicantNav current="overview" />
+      <ApplicantNav current="overview" account={<AccountButton />} />
 
-      {needsAnalysis ? (
-        <Reveal as="section" className="setup-band">
-          <p className="eyebrow">SETTING UP YOUR WORKSPACE</p>
-          <h1>Reading everything you gave me.</h1>
-          <p className="muted">
-            Reading your resume and LinkedIn together, so gaps in one get filled by the other.
-            Here is what I find as I go.
-          </p>
-          <IntakeProgress />
-        </Reveal>
-      ) : (
-        <Reveal as="section" className="hero hero--center">
-          <p className="eyebrow">APPLICATION COMMAND CENTER</p>
-          <h1>
-            Find the right role.
-            <br />
-            Stay in control.
-          </h1>
-          <p>
-            Evaluate opportunities, create evidence-backed materials, and approve every external
-            action.
-          </p>
-          <Link className="primary" href="/applicant/jobs">
-            Review best match <ArrowRight size={18} aria-hidden="true" />
-          </Link>
-        </Reveal>
-      )}
-
-      <Reveal as="section" className="panel handshake" index={1}>
-        <div>
-          <small>BEFORE ANYTHING IS SENT</small>
-          <h2>Your agent proves who is asking</h2>
-          <p>
-            Every application goes through a live check against GoDaddy&apos;s Agent Name Service. Try a verified
-            employer, then an impostor.
-          </p>
-        </div>
-        <div className="handshake-actions">
-          <Link className="primary" href="/applicant/apply?host=employer.hirewire.biz">
-            <ShieldCheck size={18} aria-hidden="true" /> Verified employer
-          </Link>
-          <Link className="secondary" href="/applicant/apply?host=fraud.webmesh.ai">
-            Impostor agent
-          </Link>
-        </div>
-      </Reveal>
-
+      {/* No needsAnalysis branch here any more — that case returned early above with a
+          bare screen of its own, so everything below is the settled workspace. */}
       {/* Full width rather than in the old two-column .grid: the "approval required"
           aside that used to fill the narrow column is gone, and one panel sitting in
           a 1.6fr slot beside 0.85fr of nothing reads as a layout bug. */}

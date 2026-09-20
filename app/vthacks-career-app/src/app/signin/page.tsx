@@ -16,11 +16,12 @@ export default async function SignInPage({
 
   return (
     <main className="auth-shell">
-      <section className="auth-card panel">
+      {/* `panel` was inert here: .auth-card is declared later in globals.css and
+          zeroes the same padding, so the class only added noise. */}
+      <section className="auth-card">
         <h1>Sign in</h1>
         <p className="muted">
-          Your agent never releases a document or any personal detail until you approve it and the
-          other side proves who it is.
+          Nothing leaves your hands until you approve it and the other side proves who it is.
         </p>
 
         {error === 'google-unavailable' ? (
@@ -31,12 +32,10 @@ export default async function SignInPage({
 
         <SignInForm />
 
-        {google ? (
-          <>
-            <p className="divider">or</p>
-            <GoogleSignInForm />
-          </>
-        ) : null}
+        {/* No "or" rule between the two. The Google control is visibly lighter
+            than the primary bar, so the alternative reads as an alternative
+            without a label and two hairlines saying so. */}
+        {google ? <GoogleSignInForm /> : null}
 
         <p className="muted">
           No account yet? <Link href="/signup">Create one</Link>.

@@ -11,6 +11,7 @@
  */
 import Link from 'next/link';
 
+import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { hasDatabricks, sql } from '@/lib/databricks';
 import { readBoard, readMatchMap } from '@/lib/pipeline';
@@ -51,7 +52,7 @@ export default async function PipelinePage() {
 
   return (
     <main>
-      <ApplicantNav current="pipeline" />
+      <ApplicantNav current="pipeline" account={<AccountButton />} />
       <section className="hero">
         <p className="eyebrow">PIPELINE</p>
         <h1>Every role you are chasing, and how long it has been waiting.</h1>

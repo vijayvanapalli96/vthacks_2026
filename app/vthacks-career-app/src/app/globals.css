@@ -25,10 +25,28 @@
   --drawer-w: 0px;
   --nav-w: 0px;
   --vw-avail: calc(100vw - var(--drawer-w) - var(--nav-w));
+
+  /* Distance from the edge of the available window to the page's text column.
+     Full-bleed blocks use it to line their contents back up with the column. */
+  --page-inset: max(var(--gutter), calc((var(--vw-avail) - 1280px) / 2 + var(--gutter)));
+
+  /* The auth screens' two buttons are rounded, by request. Deliberate local
+     exception to the no-radius rule at the top of this file — it applies to the
+     sign-in and sign-up controls only, which is why it is a token rather than a
+     change to the `*` reset. */
+  --control-radius: 10px;
 }
 
 html[data-transcript='open'] { --drawer-w: min(420px, calc(100vw - 72px)); }
+
+/* Collapsed is a rail, not nothing: the nav holds its own toggle now that there
+   is no top bar, so it always keeps enough width to show it. The attribute is
+   absent entirely on pages with no side nav, where --nav-w stays 0. */
 html[data-sidenav='open'] { --nav-w: 248px; }
+html[data-sidenav='closed'] { --nav-w: 56px; }
+
+/* The top bar is gone, so nothing else is holding the first block off the top. */
+html[data-sidenav] main { padding-top: 34px; }
 
 /* The push itself. On body, so main's auto margins re-centre inside what is
    left rather than the content simply being clipped. */
@@ -94,12 +112,15 @@ nav {
   background: var(--paper);
   font-size: 17px;
 }
+/* Full-bleed paper, and no rule. The backing itself has to stay — the nav is
+   sticky, so without it the page scrolls through the wordmark — but the hairline
+   beneath it is gone: the first section's own top border does that work, and two
+   rules 84px apart read as a seam. */
 nav::before {
   content: '';
   position: absolute;
   inset: 0 calc(50% - var(--vw-avail) / 2);
   background: var(--paper);
-  border-bottom: 1px solid var(--line);
   z-index: -1;
 }
 nav strong { margin-right: auto; font-size: 27px; letter-spacing: 0.02em; }
@@ -256,6 +277,31 @@ main, [id] { scroll-margin-top: 100px; }
 }
 .why__a p { font-size: clamp(19px, 1.6vw, 23px); }
 .why__a p:last-child { margin-bottom: 0; }
+.why__a strong { font-weight: 400; color: var(--ink); }
+
+/* --- What else it does: a list, not a feature grid ---------------------- */
+/* Six short lines under the Why. Two columns of three, each line separated by
+   the same hairline every other row on this page uses. */
+
+.skills__label { margin: 40px 0 0; font-size: 14px; }
+
+.skills {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 44px;
+}
+/* 19px is the floor of .why__a's own clamp, so these read as a continuation of
+   the paragraph above rather than as fine print under it. */
+.skills li {
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink);
+}
 .path .eyebrow { margin-top: 10px; }
 .path__body { font-size: 18px; margin-bottom: 26px; }
 
@@ -273,57 +319,66 @@ main, [id] { scroll-margin-top: 100px; }
 }
 .path__cta:hover { border-color: var(--ink); gap: 15px; }
 
-/* --- Inverted band: the rail through the Why ---------------------------- */
-/* Redefining the four tokens in scope flips everything downstream — --line,
-   --muted and --wash are alpha mixes of --ink, so they recompute for free.
-   The signal colours are swapped for their navy-safe tints: #3b6064 and
-   #8c2f39 measure 2.23:1 and 1.89:1 on navy, which is unreadable. These are
-   4.76:1 and 5.08:1. */
-
-.rail {
-  --paper: #0b2545;
-  --ink: #eef4ed;
-  --success: #7a9494;
-  --failure: #b8888a;
-  position: relative;
-  color: var(--ink);
-}
-
-/* Full-bleed backing, the same trick the nav uses. */
-.rail::before {
-  content: '';
-  position: absolute;
-  inset: 0 calc(50% - var(--vw-avail) / 2);
-  background: #0b2545;
-  z-index: -1;
-  transition: inset 0.42s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
 /* --- Architecture rail: vertical scroll drives horizontal travel --------- */
 /* The section is N viewports tall; the inner panel pins and the track slides.
    Under reduced motion this whole mechanism is replaced by a plain stack — see
-   the early return in ArchitectureRail.tsx. */
+   the early return in ArchitectureRail.tsx.
 
-.rail { position: relative; }
+   This band used to be inverted — navy ground, paper ink — with the four colour
+   tokens redefined in scope. It is paper now, like everything else. The section
+   separates itself with a rule, a pinned heading and cards that run off the edge
+   of the screen, which is the same vocabulary the rest of the page uses. */
 
+.rail { position: relative; border-top: 1px solid var(--line); }
+
+/* Full-bleed, so a card can leave the screen at the real edge rather than
+   stopping short at the text column — that overhang is what makes it read as a
+   carousel with somewhere left to go. Same measure the nav and marquee use. */
 .rail__pin {
   position: sticky;
   top: var(--nav-h);
   height: calc(100svh - var(--nav-h));
+  width: var(--vw-avail);
+  margin-left: calc(50% - var(--vw-avail) / 2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
+/* The head re-centres itself inside the full-bleed pin so the heading still sits
+   on the page's text column. */
+.rail__head {
+  position: relative;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 30px var(--gutter) 22px;
+  display: flex;
+  align-items: baseline;
+  gap: 28px;
+}
+
+/* The rule is a pseudo-element rather than a border so it sits inside the
+   gutter, exactly where the progress fill that replaces it will sit. A border
+   would run the full bleed and the fill would stop short of it. */
+.rail__head::after {
+  content: '';
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: 0;
+  height: 1px;
+  background: var(--line);
+}
+
 .rail__title {
+  flex: 1;
   font-size: clamp(30px, 3.6vw, 48px);
   font-style: italic;
   font-weight: 700;
   -webkit-text-stroke: 0.3px var(--ink);
   letter-spacing: -0.015em;
-  padding: 30px 0 22px;
-  border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
   display: flex;
   align-items: baseline;
   gap: 24px;
@@ -338,13 +393,42 @@ main, [id] { scroll-margin-top: 100px; }
   color: var(--muted);
 }
 
+/* Which beat you are on. Tabular so the glyphs do not shuffle as it counts. */
+.rail__beat {
+  margin: 0;
+  flex: none;
+  font-size: 16px;
+  letter-spacing: 0.16em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rail__beat span { color: var(--muted); }
+
+/* The progress indicator IS the hairline under the heading, filling in. No
+   widget, no track, no thumb — the rule was already there. */
+.rail__progress {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: 0;
+  height: 2px;
+  background: var(--ink);
+  transform-origin: left center;
+}
+
 .rail__track {
   display: flex;
   align-items: center;
-  gap: clamp(56px, 9vw, 170px);
+  gap: clamp(48px, 7vw, 140px);
   flex: 1;
+  /* Lead the first card in at the text column, not the screen edge. Margin on
+     the last card rather than padding-right, because a flex container's right
+     padding is not reliably counted in scrollWidth — and scrollWidth is what
+     ArchitectureRail measures the travel from. */
+  padding-left: var(--page-inset);
   will-change: transform;
 }
+.rail__track .stage:last-child { margin-right: var(--page-inset); }
 
 /* Proportions taken from the reference: a card is roughly a third of the
    viewport wide, the gap is roughly a tenth, and the card is centred in the
@@ -376,13 +460,14 @@ main, [id] { scroll-margin-top: 100px; }
   letter-spacing: -0.01em;
   margin: 0 0 4px;
 }
+/* This carried a synthesized bold when the band was navy, to hold up against
+   the dark ground. On paper it just reads as shouting, so it is plain again. */
 .stage__caption p {
   margin: 0;
   font-size: 19px;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.03em;
   color: var(--ink);
-  -webkit-text-stroke: 0.3px currentColor;
 }
 
 
@@ -391,7 +476,8 @@ main, [id] { scroll-margin-top: 100px; }
 
 /* Reduced motion: a stack, not a rail. */
 .rail--static { padding: 80px 0; border-top: 1px solid var(--line); }
-.rail--static .rail__title { padding-top: 0; }
+.rail--static .rail__head { padding: 0 0 22px; max-width: none; }
+.rail--static .rail__head::after { left: 0; right: 0; }
 .rail__stack { display: grid; gap: 0; }
 .rail--static .rail__stack { gap: 20px; }
 .rail--static .stage { flex: none; }
@@ -400,6 +486,8 @@ main, [id] { scroll-margin-top: 100px; }
 @media (max-width: 760px) {
   .stage { flex: 0 0 84vw; }
   .stage__card { height: min(64vh, 520px); padding: 28px 24px; }
+  .rail__head { flex-wrap: wrap; gap: 10px 20px; padding-top: 22px; }
+  .rail__beat { order: -1; width: 100%; }
 }
 
 /* --- Feature marquee ---------------------------------------------------- */
@@ -571,7 +659,14 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 }
 .auth-card .muted { font-size: 17px; }
 .auth-card .muted a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.auth-card > .muted:first-of-type { padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+
+/* Space, not a rule. The first field's own label already opens the form, so a
+   hairline here was a third horizontal line on a screen that has two. */
+.auth-card > .muted:first-of-type { margin-bottom: 44px; }
+
+/* The cross-link is underlined text and so is the Google control directly above
+   it. Without this they sat close enough to read as one pair of options. */
+.auth-card > p:last-of-type { margin-top: 44px; }
 
 .field { display: grid; gap: 7px; margin-bottom: 18px; }
 .field label { font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
@@ -593,19 +688,42 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 .field-error, .auth-error { color: var(--failure); font-size: 16px; margin: 0; }
 .auth-error { border-left: 2px solid var(--failure); padding: 4px 0 4px 14px; margin-bottom: 22px; }
 
-.auth-form button, .auth-card button { width: 100%; justify-content: center; margin-top: 6px; }
+/* Scoped to .auth-form, not to the whole card. The only button outside the form
+   is the Google control, and it is deliberately NOT a full-width block. */
+.auth-form button { width: 100%; justify-content: center; margin-top: 6px; }
 
-.divider {
-  display: flex;
+/* --- The two auth buttons ------------------------------------------------ */
+/* A matched pair, both rounded: the primary filled, the provider outlined. The
+   radius is scoped to these two controls — .primary is used across the product
+   and stays square everywhere else. */
+
+.auth-form .primary, .auth-alt { border-radius: var(--control-radius); }
+
+.auth-alt {
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
-  color: var(--muted);
-  font-size: 14px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  margin: 28px 0;
+  justify-content: center;
+  gap: 11px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 13px 19px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  font-size: 17px;
+  letter-spacing: 0.03em;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
-.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.auth-alt:hover { border-color: var(--ink); background: var(--wash); }
+.auth-alt:active { transform: translateY(1px); }
+
+/* Google's mark ships its own four brand colours, so it must not inherit the
+   page's ink the way every other icon here does. */
+.auth-alt svg { flex: none; width: 18px; height: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-alt:active { transform: none; }
+}
 
 /* --- Role pathway (signup) ---------------------------------------------- */
 
@@ -721,60 +839,44 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
   footer { align-items: flex-start; flex-wrap: wrap; }
 }
 
-/* --- Inverted band: force paper on every descendant --------------------- */
-/* The token swap on .rail/.why already does this by inheritance, but state it
-   outright so nothing can inherit navy-on-navy. Muted text keeps its alpha so
-   the hierarchy survives. */
-
-.rail, .rail * { color: #eef4ed; }
-
-.rail .stage__n,
-/* Captions are the brightest thing in the block — a track judge scans for
-   these. Paper, not the success tint, which reads blue against navy. */
-.rail .stage__caption p { color: #eef4ed; }
-
-.rail .stage__card { border-color: color-mix(in srgb, #eef4ed 16%, transparent); }
-.rail .stage:hover .stage__card { border-color: #eef4ed; }
-.rail__title { border-bottom-color: color-mix(in srgb, #eef4ed 18%, transparent); }
-
-/* --- Story cards: an image, with the words beneath it -------------------- */
+/* --- Story cards: a live diagram, with the words beneath it -------------- */
 
 .stage__card {
   order: 1;
-  /* The art is 3:2 landscape. A tall frame would crop the sides off every one
-     of them, so the frame matches the source instead. */
+  /* The drawings are authored on a 3:2 canvas, so the frame matches rather than
+     letterboxing every one of them. */
   aspect-ratio: 3 / 2;
   width: 100%;
   border: 1px solid var(--line);
   overflow: hidden;
-  transition: border-color 0.25s ease;
-  /* Behind the image while it loads, and in any letterboxing. Literal paper
-     rather than var(--paper), which is redefined to navy inside this band. */
-  background: #eef4ed;
+  transition: border-color 0.25s ease, background 0.25s ease;
+  /* The card is the same paper as the page, lifted by the faintest wash — the
+     separation is the hairline, not a fill. Same measure as a hovered job row. */
+  background: var(--wash);
 }
-.stage:hover .stage__card { border-color: var(--ink); }
+.stage:hover .stage__card { border-color: var(--ink); background: transparent; }
 
-/* Card 04 holds the agent rather than a photograph. */
-.stage__agent {
+/* Every drawing is `currentColor` throughout, so one declaration here colours
+   every stroke and fill inside it. */
+.stage__art {
   width: 100%;
   height: 100%;
   display: grid;
   place-items: center;
-  background: #eef4ed;
+  color: var(--ink);
+  padding: 26px 30px;
 }
-.stage__agent .face__head,
-.stage__agent .face__brow path,
-.stage__agent .face__mouth { stroke: #0b2545; }
-.stage__agent .face__eye { fill: #0b2545; }
 
-.stage__card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+.art { width: 100%; height: 100%; display: block; overflow: visible; }
+.art text {
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  fill: currentColor;
+  opacity: 0.55;
 }
-.stage:hover .stage__card img { transform: scale(1.03); }
+.art__said { font-size: 13px; letter-spacing: 0.01em; opacity: 0.8; }
+.art__glyph { font-size: 52px; letter-spacing: 0; opacity: 0.8; }
 
 .stage__caption { order: 2; }
 
@@ -782,12 +884,18 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
   display: flex;
   align-items: baseline;
   gap: 14px;
-  margin: 0 0 10px;
   font-size: 14px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
 }
+
+/* The beat number and act label are a label FOR the title, not part of it, so
+   they get real air beneath rather than sitting on the headline.
+   Scoped through .stage__caption deliberately: `.stage__caption p { margin: 0 }`
+   above is (0,1,1) and outranks a bare `.stage__act` at (0,1,0), so a margin
+   declared there is silently dropped — which is why this gap was 0 before. */
+.stage__caption .stage__act { margin: 0 0 20px; }
 .stage__act span {
   padding-right: 14px;
   border-right: 1px solid currentColor;
@@ -812,9 +920,6 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
   max-width: 42ch;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .stage:hover .stage__card img { transform: none; }
-}
 
 /* ===========================================================================
    VERIFIED-APPLY PANEL (applicant dashboard)
@@ -866,67 +971,67 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
    WORKSPACE SIDE NAV — a left drawer, mirroring the transcript on the right
    =========================================================================== */
 
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  height: var(--nav-h);
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  background: var(--paper);
-}
-.topbar::before {
-  content: '';
-  position: absolute;
-  inset: 0 calc(50% - var(--vw-avail) / 2);
-  background: var(--paper);
-  border-bottom: 1px solid var(--line);
-  z-index: -1;
-  transition: inset 0.42s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.topbar__toggle {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid var(--line-strong);
-  background: transparent;
-  color: var(--ink);
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-.topbar__toggle:hover {
-  border-color: var(--ink);
-  background: color-mix(in srgb, var(--ink) 4%, transparent);
-}
+/* --- The side nav: a rail that widens, not a drawer that vanishes --------- */
+/* No .topbar any more. It existed only to hold the toggle, so when the header
+   went the toggle moved in here — which means this element can never be hidden,
+   or the control that reopens it would be inside the thing it hides. */
 
 .sidenav {
   position: fixed;
   left: 0;
-  top: var(--nav-h);
+  top: 0;
   bottom: 0;
   z-index: 60;
   width: var(--nav-w);
   display: flex;
   flex-direction: column;
-  padding: 26px 18px 22px;
+  padding: 16px 0 22px;
   background: var(--paper);
   border-right: 1px solid var(--line);
+  /* Clips the labels mid-collapse instead of letting them spill over the page. */
+  overflow: hidden;
+  transition: width 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The one control that survives the collapse. Centred in the rail so it does not
+   jump sideways as the nav widens. */
+.sidenav__toggle {
+  flex: none;
+  /* Pinned to the left edge so it stays on the same x in both states. Left to
+     stretch, it re-centres itself as the nav widens and the icon slides. */
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.sidenav__toggle:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.sidenav__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 248px;
+  padding: 12px 18px 0;
   overflow-y: auto;
-  animation: sidenav-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* `hidden` sets display:none only at the browser-default level, so the
-   display:flex above beat it and the drawer stayed on screen, clipped to zero
-   width by --nav-w with its text still poking out. Anything that sets an
-   explicit display must opt back out. */
-.sidenav[hidden] { display: none; }
+   display:flex above beat it and the labels stayed on screen, clipped to the rail
+   width with their text poking out. Anything that sets an explicit display must
+   opt back out. */
+.sidenav__body[hidden] { display: none; }
 
-@keyframes sidenav-in {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+@media (prefers-reduced-motion: reduce) {
+  .sidenav { transition: none; }
 }
 
 .sidenav__label {
@@ -969,14 +1074,349 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 }
 .sidenav__foot button { width: 100%; text-align: left; padding: 11px 10px; }
 
-@media (prefers-reduced-motion: reduce) {
-  .sidenav { animation: none; }
-  .topbar::before { transition: none; }
+/* Narrow windows cannot afford to give up 248px, so an OPEN nav overlays instead
+   of pushing: the page still gives up the rail, and the expanded panel sits on
+   top of its own content. */
+@media (max-width: 900px) {
+  html[data-sidenav='open'] { --nav-w: 56px; }
+  .sidenav.is-open {
+    width: 248px;
+    box-shadow: 18px 0 40px color-mix(in srgb, var(--ink) 12%, transparent);
+  }
 }
 
-/* Narrow windows cannot afford to give up 248px, so the nav overlays instead
-   of pushing — the page keeps its full width and the drawer sits on top. */
+/* ===========================================================================
+   SCROLLBARS — hidden everywhere, scrolling untouched
+   Only the painted bar goes. Wheel, trackpad, touch, Page Up/Down, Home/End,
+   space and the arrow keys all behave exactly as before, which is what keeps
+   hard rule 6 intact: nothing here is reachable only by dragging a bar.
+
+   `clip` and not `hidden` on the horizontal axis. `hidden` would make <html> a
+   scroll container and silently break every position:sticky in this file — the
+   nav, the topbar and the whole architecture rail. `clip` does not.
+
+   The overflow existed because the full-bleed tricks above measure in 100vw,
+   which includes the vertical scrollbar; with the bar gone the two agree, and
+   the clip is belt-and-braces for the rail's own transform.
+   =========================================================================== */
+
+html { overflow-x: clip; }
+
+html, body, * { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { width: 0; height: 0; }
+
+/* ===========================================================================
+   HOME — THE ARGUMENT
+   Three sections between the Why and the two pathways: what hiring costs the
+   country in hours, why so many of its doors are fake, and what replaces the
+   application. Same rules as everything above — type and hairlines, whitespace
+   first, never a card.
+   =========================================================================== */
+
+.argue { border-top: 1px solid var(--line); padding: 116px 0; }
+
+.argue__head {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 72px;
+  align-items: start;
+}
+
+/* The lead column runs two to four times the height of the heading beside it.
+   Pinning the heading turns what would be a column of dead paper into the
+   editorial device it looks like — the claim stays on screen while the argument
+   for it scrolls past. Released below 900px, where the two columns stack. */
+.argue__title { position: sticky; top: calc(var(--nav-h) + 52px); }
+
+.argue__title h2 {
+  font-size: clamp(34px, 4.4vw, 58px);
+  font-style: italic;
+  font-weight: 700;
+  -webkit-text-stroke: 0.4px var(--ink);
+  letter-spacing: -0.018em;
+  line-height: 1.06;
+  max-width: 17ch;
+}
+.argue__title .eyebrow { margin-bottom: 18px; }
+
+.argue__lead p {
+  color: var(--muted);
+  font-size: clamp(18px, 1.5vw, 21px);
+  line-height: 1.72;
+  max-width: 58ch;
+  margin: 0 0 22px;
+}
+.argue__lead p:last-child { margin-bottom: 0; }
+
+/* Forum ships one weight, so emphasis in body copy is colour, not weight —
+   synthesized bold at 18px is mush. */
+.argue__lead strong, .tally__u strong { font-weight: 400; color: var(--ink); }
+
+/* --- The count: the same week, lost twice ------------------------------- */
+/* Two columns, because the symmetry is the argument. Each multiplies down to a
+   weekly figure; both sums land on one baseline. Figure first, label under it,
+   so the eye never travels the width of the page to pair the two. */
+
+.count { margin-top: 76px; }
+
+.sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--line);
+}
+.side { display: flex; flex-direction: column; padding: 30px 52px 0 0; }
+.side + .side { padding-left: 52px; border-left: 1px solid var(--line); }
+
+.side__steps { margin: 26px 0 0; }
+.side__steps > div { padding-bottom: 28px; }
+
+.side__steps dt {
+  margin: 0;
+  font-size: clamp(30px, 3.2vw, 46px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.side__steps dd {
+  margin: 9px 0 0;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 38ch;
+}
+.side__note {
+  display: block;
+  margin-top: 9px;
+  font-size: 15.5px;
+  line-height: 1.55;
+  opacity: 0.78;
+}
+
+/* The line the column exists to produce. `margin-top: auto` is what keeps the
+   two sums on one baseline when one side has three steps and the other two. */
+.side__sum {
+  margin: auto 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--ink);
+  display: grid;
+  gap: 9px;
+}
+.side__sum strong {
+  font-size: clamp(32px, 3.5vw, 50px);
+  font-style: italic;
+  font-weight: 700;
+  -webkit-text-stroke: 0.3px var(--ink);
+  letter-spacing: -0.025em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.side__sum span { font-size: 17px; color: var(--muted); }
+
+/* --- The total, given a whole band to itself ----------------------------- */
+
+.tally {
+  /* Air above the total. It is the conclusion of the two columns, not the next
+     row of them, and butting it up against the sums made it read as one. */
+  margin-top: 60px;
+  padding: 46px 0 40px;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+.tally__n {
+  margin: 0;
+  font-size: clamp(42px, 9.2vw, 138px);
+  font-style: italic;
+  font-weight: 700;
+  -webkit-text-stroke: 0.7px var(--ink);
+  letter-spacing: -0.042em;
+  line-height: 0.92;
+  font-variant-numeric: tabular-nums;
+}
+.tally__u {
+  margin: 24px auto 0;
+  max-width: 48ch;
+  color: var(--muted);
+  font-size: clamp(17px, 1.5vw, 21px);
+  line-height: 1.55;
+}
+
+/* --- What the hours convert into ---------------------------------------- */
+
+/* Two conversions, not three. auto-fit rather than a fixed count so adding or
+   cutting one does not need a matching edit here. */
+.tolls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0;
+  /* Air between the total and what it converts into. They are two separate
+     claims, and running them together made the second read as a footnote. */
+  margin-top: 36px;
+}
+.tolls article { padding: 34px 40px 0 0; display: grid; gap: 14px; align-content: start; }
+.tolls article + article { padding-left: 40px; border-left: 1px solid var(--line); }
+.tolls strong {
+  font-size: clamp(27px, 3vw, 44px);
+  font-style: italic;
+  font-weight: 700;
+  -webkit-text-stroke: 0.3px var(--ink);
+  letter-spacing: -0.022em;
+  line-height: 1;
+}
+.tolls p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.62; }
+
+/* --- The release order (hard rule 3), as a ladder ----------------------- */
+/* Five gates, then the outcome. The outcome row is the only one in full ink,
+   and it is ruled top and bottom, because it is the only row where anything
+   about a person has actually left their hands. */
+
+.gate__label { margin: 42px 0 8px; }
+
+.gate {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 30ch;
+  counter-reset: gate;
+}
+.gate li {
+  display: flex;
+  align-items: baseline;
+  gap: 15px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+  font-size: 15.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  counter-increment: gate;
+}
+.gate li::before {
+  content: counter(gate, decimal-leading-zero);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--line-strong);
+}
+.gate .gate__last {
+  color: var(--ink);
+  border-top-color: var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+.gate .gate__last::before { content: '→'; color: var(--ink); letter-spacing: 0; }
+
+/* --- One handshake on the wire ------------------------------------------ */
+/* Was a flat two-column log: a label column and a line column, seven identical
+   rows. It listed the exchange rather than showing it. Now each turn sits on the
+   side of the page it came from, so the alternation does the work the "→" in
+   every label used to do, and a reader can see the volley without reading it.
+
+   One column with auto margins, NOT a two-column grid: with `grid-column` fixed
+   per side, sparse auto-placement pairs the first two turns onto one row and the
+   sequence stops being readable top to bottom. */
+
+.wire {
+  list-style: none;
+  margin: 68px 0 0;
+  padding: 34px 0 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 26px;
+}
+
+.wire__turn { display: grid; gap: 9px; max-width: 62%; }
+
+.wire__turn--you {
+  margin-right: auto;
+  padding-left: 20px;
+  border-left: 2px solid var(--ink);
+}
+.wire__turn--them {
+  margin-left: auto;
+  padding-right: 20px;
+  border-right: 2px solid var(--line-strong);
+  text-align: right;
+}
+
+.wire__who {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.wire__line { margin: 0; font-size: 18px; line-height: 1.55; }
+
+/* The one turn addressed to a human: hard rule 3's confirm step, given the full
+   width and the only ink rule in the block. */
+.wire__turn--human {
+  max-width: none;
+  margin-top: 16px;
+  padding-top: 30px;
+  border-top: 1px solid var(--ink);
+  justify-items: center;
+  text-align: center;
+}
+.wire__turn--human .wire__who { color: var(--ink); }
+.wire__turn--human .wire__line { font-size: clamp(20px, 1.9vw, 25px); }
+
+/* --- Two agents, and you ------------------------------------------------ */
+
+.duet {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-top: 68px;
+  border-top: 1px solid var(--line);
+}
+.duet article { padding: 34px 40px 0 0; }
+.duet article + article { padding-left: 40px; border-left: 1px solid var(--line); }
+.duet h3 {
+  font-size: clamp(20px, 1.9vw, 27px);
+  font-style: italic;
+  font-weight: 700;
+  -webkit-text-stroke: 0.25px var(--ink);
+  letter-spacing: -0.012em;
+  line-height: 1.15;
+  margin: 12px 0 13px;
+}
+.duet p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.65; }
+
+/* --- The argument, on narrow windows ------------------------------------ */
+
 @media (max-width: 900px) {
-  html[data-sidenav='open'] { --nav-w: 0px; }
-  .sidenav { width: 248px; box-shadow: 18px 0 40px color-mix(in srgb, var(--ink) 10%, transparent); }
+  .argue { padding: 76px 0; }
+  .argue__head { grid-template-columns: 1fr; gap: 26px; }
+  .argue__title { position: static; }
+  .argue__title h2 { max-width: none; }
+  .gate { max-width: none; }
+  .count { margin-top: 52px; }
+  .sides { grid-template-columns: 1fr; }
+  .side { padding: 28px 0 0; }
+  .side + .side { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
+  .side__sum { margin-top: 4px; }
+  .tolls, .duet { grid-template-columns: 1fr; }
+  .tolls article, .duet article { padding: 28px 0 0; }
+  .tolls article + article, .duet article + article {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .duet { margin-top: 48px; }
+}
+
+@media (max-width: 760px) {
+  .tally { padding: 34px 0 30px; }
+  .skills { grid-template-columns: 1fr; }
+
+  /* No room to stagger. Every turn goes full width and left-aligned; the speaker
+     is still distinguished by the weight of its rule. */
+  .wire__turn { max-width: none; }
+  .wire__turn--them {
+    margin-left: 0;
+    padding: 0 0 0 20px;
+    border-right: 0;
+    border-left: 2px solid var(--line-strong);
+    text-align: left;
+  }
 }
