@@ -48,6 +48,44 @@ public entrance. Databricks remains the data plane, reached with the
    .\infra\vultr\verify-public.ps1
    ```
 
+## Google sign-in
+
+The provider, the server action and the button are already built; they are gated
+on `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` (see `src/lib/providers.ts`). With the
+keys absent the button is hidden and email/password still works, so this is
+configuration, not code.
+
+1. In Google Cloud Console -> APIs & Services -> Credentials, create an
+   **OAuth 2.0 Client ID** of type **Web application**.
+2. Add this **exact** authorized redirect URI - Auth.js derives it from
+   `AUTH_URL`, and Google rejects anything that does not match character for
+   character:
+
+   ```
+   https://hirewire.biz/api/auth/callback/google
+   ```
+
+   Add `http://localhost:3000/api/auth/callback/google` too if you want the
+   button locally.
+3. Add `https://hirewire.biz` as an authorized JavaScript origin.
+4. Put the credentials in the `hirewire` secret scope, the same place every other
+   runtime secret lives, so they never touch the repo:
+
+   ```bash
+   databricks secrets put-secret hirewire google-client-id --string-value "<CLIENT_ID>" -p DEFAULT
+   databricks secrets put-secret hirewire google-client-secret --string-value "<CLIENT_SECRET>" -p DEFAULT
+   ```
+
+5. Redeploy. The script says which way it went:
+
+   ```
+   Google sign-in: configured.
+   ```
+
+While the app is on an unverified "Testing" OAuth consent screen, only accounts
+listed as test users can sign in. Publish the consent screen, or add every
+demo account as a test user, before anyone else tries it.
+
 Required public endpoints:
 
 - `GET https://hirewire.biz/` - 200, served directly, no redirect to any login

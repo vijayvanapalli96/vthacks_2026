@@ -126,6 +126,15 @@ $global:LASTEXITCODE = 0
 # One source of truth for the runtime secrets: the `hirewire` Databricks secret
 # scope, the same one the Databricks App reads. Written to a gitignored staging
 # file, shipped inside the archive, and never committed.
+# Google sign-in is optional by design: src/lib/providers.ts hides the button
+# when the client is not configured, so a missing key degrades to email/password
+# rather than to a button that throws when pressed.
+function Get-OptionalHirewireSecret([string]$key) {
+  $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile 2>$null | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0 -or -not $json) { $global:LASTEXITCODE = 0; return $null }
+  [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($json.value))
+}
+
 function Get-HirewireSecret([string]$key) {
   $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile | ConvertFrom-Json
   if ($LASTEXITCODE -ne 0) { throw "Could not read secret '$key' from scope 'hirewire'." }
@@ -152,6 +161,16 @@ $appEnv = @(
   (ConvertTo-EnvLine "EMPLOYER_IDENTITY_CERT" (Get-HirewireSecret "employer-identity-cert")),
   (ConvertTo-EnvLine "MONGODB_URI" (Get-HirewireSecret "mongodb-uri"))
 )
+
+$googleId = Get-OptionalHirewireSecret "google-client-id"
+$googleSecret = Get-OptionalHirewireSecret "google-client-secret"
+if ($googleId -and $googleSecret) {
+  $appEnv += (ConvertTo-EnvLine "AUTH_GOOGLE_ID" $googleId)
+  $appEnv += (ConvertTo-EnvLine "AUTH_GOOGLE_SECRET" $googleSecret)
+  Write-Host "Google sign-in: configured."
+} else {
+  Write-Host "Google sign-in: not configured (no google-client-id/google-client-secret in the hirewire scope). Email and password still work."
+}
 
 # Keys that never made it into the Databricks scope (ElevenLabs, Gemini, Google
 # OAuth) go in this gitignored file, one KEY=value per line. Absent is fine:
