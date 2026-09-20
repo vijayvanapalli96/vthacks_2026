@@ -66,6 +66,7 @@ async function collection(): Promise<Collection<AuditDocument> | null> {
       .createIndexes([
         { key: { at: -1 }, name: 'at' },
         { key: { user_id: 1, at: -1 }, name: 'user_at' },
+        { key: { user_id: 1, kind: 1, job_id: 1, at: -1 }, name: 'user_job_verification' },
         { key: { subject: 1, at: -1 }, name: 'subject_at' },
         { key: { verdict: 1, at: -1 }, name: 'verdict_at' },
         { key: { audit_id: 1 }, name: 'audit_id', unique: true },
@@ -109,6 +110,47 @@ export async function recentAudits(filter: { userId?: string; limit?: number } =
   } catch (error) {
     console.error('Could not read the A2A audit log', error);
     return null;
+  }
+}
+
+export type ApplicantJobVerificationMemory = {
+  status: 'verified' | 'refused';
+  ansName: string;
+  reason: string;
+  checkedAt: string;
+};
+
+/** Latest employer-verification result for each job selected by one applicant. */
+export async function applicantJobVerificationMemory(
+  userId: string,
+): Promise<Record<string, ApplicantJobVerificationMemory>> {
+  try {
+    const audit = await collection();
+    if (!audit) return {};
+    const events = await audit
+      .find({
+        user_id: userId,
+        kind: 'verify',
+        direction: 'applicant_to_employer',
+        job_id: { $type: 'string' },
+      }, { projection: { _id: 0 } })
+      .sort({ at: -1 })
+      .toArray();
+
+    const memory: Record<string, ApplicantJobVerificationMemory> = {};
+    for (const event of events) {
+      if (!event.job_id || memory[event.job_id]) continue;
+      memory[event.job_id] = {
+        status: event.verdict === 'pass' ? 'verified' : 'refused',
+        ansName: event.subject,
+        reason: event.spoken_reason,
+        checkedAt: event.at.toISOString(),
+      };
+    }
+    return memory;
+  } catch (error) {
+    console.error('Could not read applicant job-verification memory', error);
+    return {};
   }
 }
 
