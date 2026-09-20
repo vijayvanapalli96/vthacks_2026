@@ -63,6 +63,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
   const { jobId } = await params;
   const decoded = decodeURIComponent(jobId);
 
+  // ALL THREE READS AT ONCE. They were sequential — context, then artifacts,
+  // then the pipeline stage — and each is a Databricks statement at 0.6-1.1s
+  // against a warm warehouse, so the page cost three of them end to end for no
+  // reason: the last two need only the job id, which is in the URL. Started
+  // together they cost one.
+  const artifactsPromise = listArtifacts(sql, user.id, decoded).catch(() => [] as unknown[]);
+  const stagePromise = currentStage(user.id, decoded).catch(() => null);
+
   let context: Awaited<ReturnType<typeof loadContext>>;
   let loadError: string | null = null;
   try {
@@ -95,21 +103,16 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
 
   const { job, facts, cachedMatch } = context;
 
-  // Read-only and cheap. Serving it from the server means the history is present
-  // on first paint instead of appearing a second later.
-  let artifacts: Artifact[] = [];
-  try {
-    artifacts = (await listArtifacts(sql, user.id, job.job_id)) as Artifact[];
-  } catch {
-    // An empty history renders as "nothing yet", which is wrong but harmless; the
-    // client refetches after the first generation either way.
-  }
+  // Started above, awaited here. An empty history renders as "nothing yet",
+  // which is wrong but harmless; the client refetches after the first
+  // generation either way.
+  const artifacts = (await artifactsPromise) as Artifact[];
 
   const posted = formatDate(job.posted_at);
 
-  // One cheap read of the same view the board reads. A rehearsal is only offered
-  // once the employer has actually replied, so the page has to know the stage.
-  const stage = await currentStage(user.id, job.job_id).catch(() => null);
+  // The same view the board reads. A rehearsal is only offered once the employer
+  // has actually replied, so the page has to know the stage.
+  const stage = await stagePromise;
 
   return (
     <main>

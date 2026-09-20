@@ -72,12 +72,45 @@ function toUser(row: (string | null)[]): StoredUser {
 
 const SELECT_COLUMNS = 'user_id, email, name, password_hash, role, provider, created_at';
 
+/**
+ * THE HOTTEST READ IN THE APP, and the reason navigation felt slow.
+ *
+ * Auth.js runs the `jwt` callback on every `auth()` call, and that callback
+ * re-reads the store to pick up a role written at /continue. Each read is a
+ * Databricks Statement Execution round trip: measured at 0.6-1.1s against a
+ * WARM warehouse, for `SELECT 1`. Every page calls `requireRole` in its route
+ * group layout AND in the page itself, so two of those were on the critical
+ * path of every navigation before a single line of page data was read.
+ *
+ * So the row is held for a few seconds. Writes invalidate it explicitly rather
+ * than waiting for the TTL, which is what keeps the one case that matters —
+ * signing up, or switching role at /continue — instant and correct.
+ *
+ * SCOPE, stated because it is a real limit: this cache is per process. One
+ * container is what we run; with several, a role written on one would take up
+ * to TTL_MS to be seen by the others. Nothing here is a permission check —
+ * requireRole reads this row, but the row is the user's own, and a stale copy
+ * can only delay a workspace switch the user just asked for.
+ */
+const TTL_MS = 5_000;
+const userCache = new Map<string, { user: StoredUser | null; at: number }>();
+
+function invalidate(email: string): void {
+  userCache.delete(normalizeEmail(email));
+}
+
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
+  const normalized = normalizeEmail(email);
+  const hit = userCache.get(normalized);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.user;
+
   const { rows } = await sql(
     `SELECT ${SELECT_COLUMNS} FROM ${TABLE} WHERE email = :email ORDER BY created_at DESC LIMIT 1`,
-    [{ name: 'email', value: normalizeEmail(email) }],
+    [{ name: 'email', value: normalized }],
   );
-  return rows.length ? toUser(rows[0]) : null;
+  const user = rows.length ? toUser(rows[0]) : null;
+  userCache.set(normalized, { user, at: Date.now() });
+  return user;
 }
 
 export async function createUser(input: CreateUserInput): Promise<StoredUser> {
@@ -112,6 +145,8 @@ export async function createUser(input: CreateUserInput): Promise<StoredUser> {
     parameters,
   );
 
+  // The "no such user" answer from the check above is now wrong.
+  invalidate(user.email);
   return user;
 }
 
@@ -121,6 +156,9 @@ export async function setUserRole(email: string, role: Role): Promise<StoredUser
     { name: 'role', value: role },
     { name: 'email', value: normalized },
   ]);
+  // Before the re-read, so the next session callback sees the new role rather
+  // than the one this call just replaced.
+  invalidate(normalized);
   return findUserByEmail(normalized);
 }
 
