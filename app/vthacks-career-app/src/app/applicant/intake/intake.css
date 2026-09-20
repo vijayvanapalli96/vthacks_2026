@@ -1,376 +1,301 @@
-/* Intake pages. Shares the tokens in globals.css — no new colours, no new fonts. */
+/* ===========================================================================
+   INTAKE — resume, LinkedIn, and the reading step.
+
+   Uses the tokens in globals.css and adds nothing: no new colours, no new
+   fonts, no radius, no white, no boxes. Separation is whitespace first, a
+   hairline second.
+
+   This file previously predated the design system: it was full of white fills,
+   16px and 999px radii, hardcoded greens, and var(--green), which no longer
+   exists — those rules were silently dead.
+   =========================================================================== */
 
 .intake-shell {
   max-width: 720px;
   margin: 0 auto;
-  padding: 48px 0 64px;
+  padding: 64px 0 80px;
 }
 
-.intake-steps {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 28px;
-  font-size: 12px;
-  font-weight: 750;
-  letter-spacing: 0.04em;
-  color: #68746c;
+.intake-shell h1 {
+  font-size: clamp(38px, 4.6vw, 54px);
+  font-weight: 700;
+  font-style: italic;
+  -webkit-text-stroke: 0.4px var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 14px 0 18px;
 }
 
-/* The step list is an <ol> of <li>, not spans — an earlier selector said `span` and
-   silently matched nothing, so the current step was never highlighted. */
-.intake-steps li[aria-current='step'] {
-  color: var(--green);
+.intake-shell > .muted {
+  max-width: 60ch;
+  font-size: 18px;
+  line-height: 1.7;
+  margin: 0 0 12px;
 }
 
-.intake-steps li.is-done {
-  color: #267453;
-}
+/* The separator lives on the form, not on the intro copy, so a page without
+   intro copy still gets the rule. */
+
+/* --- Form: no card, underline-only fields -------------------------------- */
 
 .intake-form {
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 26px;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 34px 0 0;
+  margin-top: 22px;
   display: grid;
-  gap: 20px;
+  gap: 30px;
 }
 
-.intake-form .field {
-  display: grid;
-  gap: 7px;
-}
+.intake-form .field { display: grid; gap: 20px; }
 
 .intake-form label {
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.intake-form input[type='file'],
 .intake-form input[type='url'] {
   font: inherit;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--paper);
-  color: var(--ink);
+  font-size: 18px;
   width: 100%;
+  padding: 12px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--ink);
+  transition: border-color 0.2s ease;
+}
+.intake-form input[type='url']:hover,
+.intake-form input[type='url']:focus { border-color: var(--ink); }
+
+/* No frame. The button carries the affordance and the filename sits beside it,
+   which is all a file input needs to be understood. */
+.intake-form input[type='file'] {
+  font: inherit;
+  font-size: 17px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.intake-form input[type='file']::file-selector-button {
+  font: inherit;
+  font-size: 17px;
+  margin-right: 16px;
+  padding: 12px 20px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.intake-form input[type='file']:hover::file-selector-button {
+  border-color: var(--ink);
 }
 
-.intake-form input[aria-invalid='true'] {
-  border-color: #a4261d;
-}
+.intake-form input[aria-invalid='true'] { border-color: var(--failure); }
 
 .intake-form small {
-  color: #667269;
-  font-size: 12px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
   letter-spacing: 0;
-  font-weight: 500;
+  margin-top: 4px;
 }
 
-.intake-form .actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+.intake-form .actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 
 .intake-form .primary {
-  padding: 12px 18px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--green);
-  color: white;
-  font-weight: 750;
+  padding: 13px 20px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  letter-spacing: 0.03em;
 }
+.intake-form .primary:hover { background: var(--success); border-color: var(--success); }
 
 .intake-form .ghost {
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: white;
-  color: #3d4a42;
-  font-weight: 700;
+  padding: 13px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
+.intake-form .ghost:hover { color: var(--ink); }
 
-.intake-form button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.intake-form button:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* Reserve no space when empty so the live region does not push layout around. */
-.intake-form .status:empty {
-  display: none;
-}
+.intake-form .status:empty { display: none; }
+.intake-form .status { margin: 0; font-size: 16px; color: var(--success); }
 
-.intake-form .status {
-  margin: 0;
-  font-size: 12px;
-  color: #267453;
-  font-weight: 700;
-}
+/* --- Outcome: a rule and a colour, not a tinted box ---------------------- */
 
 .outcome {
   margin: 0;
-  padding: 16px 18px;
-  border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.55;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--line-strong);
+  font-size: 17px;
+  line-height: 1.65;
 }
 
-.outcome-error {
-  background: #fdeeec;
-  border: 1px solid #f0c4be;
-  /* 4.6:1 on this background. */
-  color: #8c1f17;
-  font-weight: 700;
-}
+.outcome-error { border-top-color: var(--failure); color: var(--failure); }
+.outcome-ok { border-top-color: var(--success); display: grid; gap: 12px; }
 
-.outcome-ok {
-  background: #e8f5ed;
-  border: 1px solid #cae5d5;
-  color: #1d4635;
-  display: grid;
-  gap: 10px;
-}
+.outcome-headline { margin: 0; font-size: 20px; }
+.outcome-facts { margin: 0; padding-left: 18px; display: grid; gap: 5px; color: var(--muted); }
+.outcome-warnings summary { cursor: pointer; color: var(--muted); }
+.outcome-warnings ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); }
+.outcome-next { margin: 0; }
+.outcome-next a { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
 
-.outcome-headline {
-  margin: 0;
-  font-weight: 800;
-}
-
-.outcome-facts {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 3px;
-}
-
-.outcome-warnings summary {
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.outcome-warnings ul {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  color: #3d4a42;
-}
-
-.outcome-next {
-  margin: 0;
-  font-weight: 750;
-}
-
-.outcome-next a {
-  color: var(--green);
-}
-
-/* Focus must stay obvious: the whole demo is run on the keyboard. */
 .intake-form :focus-visible,
 .outcome a:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
 }
 
-/* ------------------------------------------------------------------ progress */
-/* The reading step. A log, not a spinner: the user is waiting 30-60s and what the
-   system is doing with their data is the most interesting thing it has to show. */
+/* --- Reading step: a log, not a spinner ---------------------------------- */
+/* The user waits 30-60s, and what the system is doing with their data is the
+   most interesting thing it has to show. */
 
-.progress {
-  display: grid;
-  gap: 18px;
-}
+.progress { display: grid; gap: 22px; }
 
 .progress-log {
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 8px 0;
+  background: transparent;
+  border-top: 1px solid var(--line);
+  padding: 0;
   margin: 0;
   list-style: none;
 }
 
 .progress-line {
   display: grid;
-  grid-template-columns: 30px 1fr auto;
+  grid-template-columns: 26px 1fr auto;
   align-items: start;
-  gap: 10px;
-  padding: 11px 20px;
-  border-top: 1px solid #f0f2f0;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
 }
 
-.progress-line:first-child {
-  border-top: 0;
-}
+.progress-mark { line-height: 1.5; text-align: center; color: var(--success); }
+.progress-line.is-start .progress-mark { color: var(--muted); }
+.progress-line.is-warn .progress-mark { color: var(--failure); }
 
-.progress-mark {
-  font-weight: 800;
-  line-height: 1.5;
-  text-align: center;
-  color: #267453;
-}
+.progress-body { display: grid; gap: 4px; min-width: 0; }
+.progress-body strong { font-size: 18px; font-weight: 400; }
 
-.progress-line.is-start .progress-mark {
-  color: #68746c;
-}
-
-.progress-line.is-warn .progress-mark {
-  color: #9a5b16;
-}
-
-.progress-body {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.progress-body strong {
-  font-size: 14px;
-  font-weight: 650;
-}
-
-/* The detail line carries model names, byte counts and honest caveats, so it has to
-   stay legible rather than decorative: 4.5:1 against white. */
+/* Model names, byte counts and honest caveats live here, so it stays legible
+   rather than decorative. */
 .progress-body small {
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: #59635b;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--muted);
+  letter-spacing: 0;
   overflow-wrap: anywhere;
 }
-
-.progress-line.is-warn .progress-body small {
-  color: #7a4a12;
-}
+.progress-line.is-warn .progress-body small { color: var(--failure); }
 
 .progress-ms {
-  font-size: 12px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
-  color: #68746c;
-  padding-top: 2px;
+  color: var(--muted);
+  padding-top: 3px;
 }
 
-/* In-progress rows pulse so it is obvious which step is live. Animation only —
-   the state is also in the text, for anyone who cannot see it or has motion off. */
-.progress-line.is-start .progress-body strong {
-  animation: progress-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes progress-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
-}
-
+/* The live row pulses. Animation only — the state is in the text too, for
+   anyone who cannot see it or has motion off. */
+.progress-line.is-start .progress-body strong { animation: progress-pulse 1.4s ease-in-out infinite; }
+@keyframes progress-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) {
-  .progress-line.is-start .progress-body strong {
-    animation: none;
-  }
+  .progress-line.is-start .progress-body strong { animation: none; }
 }
 
 .progress-done,
 .progress-error {
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 20px;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+  padding: 22px 0 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
+.progress-error { border-top-color: var(--failure); }
 
 .progress-done p,
-.progress-error p {
-  flex: 1 1 100%;
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.55;
-}
+.progress-error p { flex: 1 1 100%; margin: 0; font-size: 17px; line-height: 1.6; }
+.progress-error p { color: var(--failure); }
 
-.progress-error {
-  border-color: #e6c9b4;
-  background: #fdf6f0;
-}
-
-.progress-done a,
-.progress-error a {
+.progress-done a, .progress-error a,
+.progress-done button, .progress-error button {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 10px 18px;
-  font-size: 14px;
-  font-weight: 650;
+  font: inherit;
+  font-size: 17px;
+  letter-spacing: 0.03em;
+  padding: 13px 22px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
   text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.progress-done a:hover, .progress-error a:hover,
+.progress-done button:hover, .progress-error button:hover { border-color: var(--ink); }
+
+.progress-done a.primary, .progress-error a.primary,
+.progress-done button.primary, .progress-error button.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.progress-done a.primary:hover, .progress-done button.primary:hover {
+  background: var(--success);
+  border-color: var(--success);
 }
 
-.progress-done a.primary,
-.progress-error a.primary {
-  background: var(--green);
-  color: white;
+.progress-done a:focus-visible, .progress-error a:focus-visible,
+.progress-done button:focus-visible, .progress-error button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
 }
 
-.progress-done a.ghost,
-.progress-error a.ghost {
-  border: 1px solid var(--line);
-  color: #2b332c;
-}
-
-.progress-done a:focus-visible,
-.progress-error a:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
-}
-
-/* ---------------------------------------------------------------- setup band */
-/* The first-run state of the dashboard. Replaces the hero while the analysis runs,
-   so onboarding finishes at /applicant instead of at a url the user should never
-   have had to look at. */
+/* --- Setup band: the dashboard's first-run state ------------------------- */
 
 .setup-band {
   max-width: 820px;
   margin: 0 auto;
-  padding: 40px 0 8px;
+  padding: 56px 0 16px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .setup-band h1 {
   margin: 0;
-  font-size: clamp(26px, 3.4vw, 36px);
-  line-height: 1.15;
+  font-size: clamp(34px, 4.2vw, 50px);
+  font-weight: 700;
+  font-style: italic;
+  -webkit-text-stroke: 0.4px var(--ink);
+  line-height: 1.08;
   letter-spacing: -0.02em;
 }
 
 .setup-band .muted {
-  margin: 0 0 14px;
+  margin: 0 0 20px;
   max-width: 62ch;
-  font-size: 14.5px;
-  line-height: 1.6;
-  color: #59635b;
-}
-
-/* Buttons in the outcome row are <button> now, not <a>: completion reveals the
-   dashboard in place rather than navigating, so there is nowhere to link to. */
-.progress-done button,
-.progress-error button {
-  display: inline-flex;
-  align-items: center;
-  border: 0;
-  border-radius: 999px;
-  padding: 10px 18px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.progress-done button.primary,
-.progress-error button.primary {
-  background: var(--green);
-  color: white;
-}
-
-.progress-done button:focus-visible,
-.progress-error button:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
+  font-size: 18px;
+  line-height: 1.65;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line);
 }

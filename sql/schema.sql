@@ -415,9 +415,186 @@ CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.profile_gaps (
 COMMENT 'What we still need to ask. Drives the ElevenLabs question queue.';
 
 
+-- SECTION 5 — LIVE. The job discovery pipeline (scripts/scan/).
+--   Applied to workspace.vthacks_2026 on 2026-09-19. Plan:
+--   docs/JOB_PIPELINE_PLAN.md. Writer: scripts/scan/scan-us-jobs.mjs, every
+--   5 minutes, one row per posting.
+--
+--   NOTE ON APPLYING THIS FILE: do NOT write a helper that splits it on ';'.
+--   A semicolon inside a COMMENT string splits a statement in two and
+--   half-applies the schema. (No COMMENT string in this file contains one, and
+--   keeping it that way is cheaper than a correct parser.)
 -- ---------------------------------------------------------------------------
--- SECTION 5 — the match agent. APPLIED LIVE 2026-09-19.
+
+-- job_snapshots gains three columns. The scanner stores EVERY posting it
+-- fetches: US-ness and freshness are COLUMNS, not a discard. A dropped row
+-- cannot be re-examined when the filter turns out to have been wrong, and the US
+-- filter being subtly wrong is the most likely silent failure in this lane.
+-- The table already exists and other lanes read it, so this is ALTER, never a
+-- re-CREATE.
+--
+-- THE ONLY NON-IDEMPOTENT STATEMENT IN THIS FILE. `ADD COLUMNS IF NOT EXISTS`
+-- and `ADD COLUMN IF NOT EXISTS` were both tried against this warehouse on
+-- 2026-09-19 and BOTH are parse errors ([PARSE_SYNTAX_ERROR] at 'EXISTS') — the
+-- clause the Delta docs suggest is not accepted here. Re-running this statement
+-- therefore fails with FIELDS_ALREADY_EXIST. That is a loud, harmless failure;
+-- check first with DESCRIBE TABLE workspace.vthacks_2026.job_snapshots and skip
+-- it if is_us is already there.
+ALTER TABLE workspace.vthacks_2026.job_snapshots ADD COLUMNS (
+  is_us               BOOLEAN   COMMENT 'Verdict of scripts/scan/lib/location-us.mjs. Heuristic over a display string plus a Workday URL path segment, not a gazetteer.',
+  posted_at           TIMESTAMP COMMENT 'When the employer published the posting. NULL when the source exposes no date, which is why freshness is a filter and not a claim.',
+  location_confidence STRING    COMMENT 'display = the posting named a place we recognise. url_hint = the location string named none and the URL path did. unknown = no geography was read, so is_us rests on a weak signal such as a bare Remote.'
+);
+
+-- open_us_jobs — "US roles open right now" as a query rather than a discard.
+-- 3 days matches the scanner constant FRESHNESS_DAYS. Postings with no
+-- posted_at are excluded here on purpose: without a date we cannot claim a
+-- posting is open, and the row still exists in job_snapshots for anyone who
+-- wants to reason about it.
+CREATE OR REPLACE VIEW workspace.vthacks_2026.open_us_jobs AS
+SELECT * FROM workspace.vthacks_2026.job_snapshots
+WHERE is_us AND posted_at >= current_timestamp() - INTERVAL 3 DAYS;
+
+-- job_boards — the seed list AND its health. Scheduling state lives with the
+--   thing being scheduled, so a restart does not lose the rotation. Seeded from
+--   scripts/scan/boards.json via `npm run boards:seed`, which never resets the
+--   rotation or health columns of a board it already knows.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.job_boards (
+  board_id             STRING NOT NULL COMMENT 'provider:slug, e.g. greenhouse:stripe',
+  provider             STRING NOT NULL COMMENT 'greenhouse | ashby | lever | workday | icims',
+  company_name         STRING          COMMENT 'Real employer name. No placeholders.',
+  board_slug           STRING,
+  api_url              STRING          COMMENT 'Pinned public JSON endpoint. Pinned rather than detected so a marketing site redesign cannot break the scan.',
+  careers_url          STRING          COMMENT 'Human-facing board, for the UI and for debugging',
+  country_hint         STRING,
+  enabled              BOOLEAN,
+  last_scanned_at      TIMESTAMP       COMMENT 'Drives the rotating slice. NULLS FIRST, so a new board is scanned next.',
+  last_ok_at           TIMESTAMP,
+  consecutive_failures INT,
+  backoff_until        TIMESTAMP       COMMENT 'Boards break. Without a backoff we re-hit a dead board every 5 minutes forever.',
+  CONSTRAINT job_boards_pk PRIMARY KEY (board_id)
+) USING DELTA
+COMMENT 'Employer job boards to scan, with their rotation and health state.';
+
+-- scan_runs — one row per tick. The observability story, the "is the pipeline
+--   alive?" answer for the dashboard, AND the uniqueness assertion.
+--   postings_us / postings_fresh / postings_undated matter more than they look:
+--   they are how we tell "the US filter is working" from "the US filter is
+--   eating everything".
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.scan_runs (
+  run_id           STRING    NOT NULL,
+  started_at       TIMESTAMP NOT NULL,
+  finished_at      TIMESTAMP,
+  boards_attempted INT,
+  boards_ok        INT,
+  boards_failed    INT,
+  postings_seen    INT       COMMENT 'Everything the providers returned, before in-memory de-duplication',
+  postings_new     INT       COMMENT 'Rows the MERGE actually inserted',
+  postings_us      INT,
+  postings_fresh   INT,
+  postings_undated INT,
+  total_rows       BIGINT    COMMENT 'count(*) over job_snapshots at the end of the tick',
+  distinct_job_ids BIGINT    COMMENT 'count(DISTINCT job_id) over the same. MUST equal total_rows. UC PRIMARY KEY is informational and Delta enforces nothing, so uniqueness is produced by the writer and verified here, every run.',
+  error_message    STRING    COMMENT 'Board failures, and a loud message if the assertion above ever fires',
+  CONSTRAINT scan_runs_pk PRIMARY KEY (run_id)
+) USING DELTA
+COMMENT 'One row per 5-minute scan tick, including the uniqueness assertion.';
+
+-- scan_locks — the single-writer lock. NOT in the original plan document, and
+--   needed for its own section 3.1 point 3 to be true: two concurrent MERGEs
+--   against job_snapshots can both evaluate "not matched" for one job_id and
+--   both insert, because Delta's optimistic concurrency does not serialise
+--   them. A 5-minute cron with ~90s ticks overlaps as soon as one tick runs
+--   long, and a lock file on one machine cannot see a tick running on another.
+--   A tick that cannot take the lock EXITS. Locks expire so a crashed tick
+--   cannot wedge the pipeline (see scripts/scan/lib/lock.mjs).
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.scan_locks (
+  lock_name   STRING    NOT NULL COMMENT 'us-scan',
+  holder      STRING    NOT NULL COMMENT 'Per-tick UUID. Ownership is confirmed by reading this back after the acquire.',
+  acquired_at TIMESTAMP NOT NULL,
+  expires_at  TIMESTAMP NOT NULL COMMENT 'A later tick may steal an expired lock',
+  CONSTRAINT scan_locks_pk PRIMARY KEY (lock_name)
+) USING DELTA
+COMMENT 'Single-writer lock for the job scan tick. One row per lock name.';
+
+
+-- ---------------------------------------------------------------------------
+-- SECTION 6 — the voice agent. Applied 2026-09-19. See docs/VOICE_AGENT_PLAN.md §5.
+--
+-- Two problems found by reading this file rather than assuming, and what was done
+-- about each:
+--
+--   1. voice_events has no user_id and is keyed on application_id, which does not
+--      exist during onboarding — there is no application yet. So it cannot hold an
+--      onboarding transcript. Rather than bend it, the transcript gets its own
+--      table (voice_turns): turns are a different shape and a much higher volume
+--      than telemetry events. voice_events is widened only so a session can be
+--      attributed to a user at all.
+--
+--   2. goals.sponsorship_required is a BOOLEAN. "I'm on F-1 OPT and I'll need
+--      H-1B in about two years" is not a boolean, and the part an employer cares
+--      about is exactly the part a boolean throws away. The column STAYS, as a
+--      derived convenience for the match query; the user's own words are appended
+--      to profile_memory as voice.sponsorship. The memory keeps what they said,
+--      the column keeps what we can filter on.
+--
+-- NOTE FOR RE-RUNS: the two ALTERs below are the only NON-idempotent statements
+-- in this file. `ADD COLUMNS IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` are
+-- both PARSE ERRORS on this warehouse. DESCRIBE TABLE first and skip them if the
+-- columns are already there.
+-- ---------------------------------------------------------------------------
+
+-- voice_turns — the transcript, in order, including what the system DID.
+--   role='action' rows are why this is worth storing: they are the audit trail of
+--   a voice turn changing the user's data, which is the claim the product makes.
+--   turn_id is a client-minted uuid so a retry cannot double-log a turn.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.voice_turns (
+  turn_id         STRING NOT NULL,
+  user_id         STRING NOT NULL,
+  conversation_id STRING NOT NULL COMMENT 'ElevenLabs conversation id, or typed:<uuid> for the typed fallback',
+  turn_index      INT    NOT NULL COMMENT 'Order within the conversation',
+  role            STRING NOT NULL COMMENT 'user | agent | action',
+  text            STRING,
+  action_kind     STRING COMMENT 'profile_updated | job_matched | refused | interview_feedback. NULL unless role=action',
+  action_detail   STRING,
+  field_key       STRING COMMENT 'The gap this turn answered, when it answered one',
+  spoken_at       TIMESTAMP NOT NULL,
+  CONSTRAINT voice_turns_pk PRIMARY KEY (turn_id)
+) USING DELTA
+COMMENT 'One row per conversation turn. role=action rows record what the turn changed.';
+
+-- Attribution for voice telemetry. NOT the transcript — see voice_turns.
+ALTER TABLE workspace.vthacks_2026.voice_events ADD COLUMNS (
+  user_id         STRING COMMENT 'users.user_id. Onboarding has no application_id.',
+  conversation_id STRING COMMENT 'ElevenLabs conversation id'
+);
+
+-- The structured side of the P0 question set. Free text, not enums: "May 2027"
+-- and "hybrid, Blacksburg or Arlington" are real answers and normalising them
+-- here would discard the part that makes them useful.
+ALTER TABLE workspace.vthacks_2026.goals ADD COLUMNS (
+  employment_type    STRING COMMENT 'full-time | internship | co-op, in the user''s words',
+  work_location_pref STRING COMMENT 'Onsite/hybrid/remote plus cities, free text',
+  work_authorization STRING COMMENT 'Citizen | permanent resident | F-1 OPT | ... free text',
+  graduation_date    STRING COMMENT 'Free text: "May 2027" is a real answer',
+  clearance          STRING,
+  industries_avoid   ARRAY<STRING>,
+  pii_release_policy ARRAY<STRING> COMMENT 'Field names the user consents to release. NOTHING READS THIS YET.',
+  company_size       STRING
+);
+
+-- profile_gaps needs NO change: field_key is already a free-form STRING, so the
+-- four new P0 questions are rows, not columns.
+
+
+-- ---------------------------------------------------------------------------
+-- SECTION 7 — the match agent. APPLIED LIVE 2026-09-19.
 -- See docs/MATCH_AGENT_PLAN.md §5.
+--
+-- Numbered 7, not 5: the job pipeline took SECTION 5 and the voice agent took
+-- SECTION 6 while this branch was open. Renumbered on merge rather than
+-- renumbering theirs, because every other lane's notes already refer to their
+-- sections by number.
 --
 -- Read this before re-running the ALTER below:
 --   `ADD COLUMNS IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` are BOTH parse
@@ -428,13 +605,13 @@ COMMENT 'What we still need to ask. Drives the ElevenLabs question queue.';
 
 -- match_runs — one row per match run. Same role as scan_runs: observability, and
 --   the "is it working?" answer. Without it a bad run is invisible: you can see
---   that rows were written but not that 340 candidates collapsed to 3 because a
---   filter was inverted.
+--   that rows were written but not that 200 candidates collapsed to 3 because a
+--   filter was inverted, or that the eligibility gate dropped 8 roles and why.
 CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.match_runs (
   run_id             STRING    NOT NULL,
   user_id            STRING    NOT NULL,
   started_at         TIMESTAMP NOT NULL,
-  finished_at        TIMESTAMP,
+  finished_at        TIMESTAMP          COMMENT 'NULL means the run never completed. The cache reader requires NOT NULL.',
   candidates_total   INT                COMMENT 'Jobs considered before filtering',
   after_filters      INT                COMMENT 'Survived the hard filters, incl. the eligibility gate',
   after_similarity   INT                COMMENT 'Survived the cosine cut — the rerank candidate set',
@@ -456,6 +633,12 @@ COMMENT 'One row per match run. Observability for the match agent.';
 -- the DOUBLE this file's SECTION 1 records. SECTION 1 documents a table that
 -- predates this file; the live definition wins and the match writer binds a
 -- DOUBLE parameter that Delta narrows on insert.
+--
+-- match_evaluations is the CACHE, not a ledger: a re-score DELETEs the user's
+-- previous rows so there is at most one row per (user_id, job_id). The history
+-- lives in match_runs. Unity Catalog PRIMARY KEYs are informational and Delta
+-- does not enforce them (see the header of this file), so that uniqueness is
+-- arranged by the writer, not declared here.
 ALTER TABLE workspace.vthacks_2026.match_evaluations ADD COLUMNS (
   run_id             STRING,
   user_id            STRING        COMMENT 'candidate_profile_id predates users; this is users.user_id',
@@ -467,3 +650,8 @@ ALTER TABLE workspace.vthacks_2026.match_evaluations ADD COLUMNS (
   eligibility        STRING        COMMENT 'pass | fail | unknown',
   eligibility_reason STRING        COMMENT 'Why. A fail with no reason is a bug — see hard rule 4.'
 );
+
+-- job_embeddings needs NO change. It already existed in SECTION 3 with exactly
+-- the right shape; it was simply EMPTY. scripts/embed-jobs.mjs fills it:
+-- 16,206 rows, 1024-dim, from 16,207 job_snapshots (one row has an empty
+-- description_text and is skipped, not failed).

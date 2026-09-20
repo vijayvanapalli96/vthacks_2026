@@ -19,19 +19,12 @@ export default function LinkedInIntakePage() {
       </nav>
 
       <div className="intake-shell">
-        <ol className="intake-steps">
-          <li className="is-done">1. Resume</li>
-          <li aria-current="step">2. LinkedIn</li>
-          <li>3. Reading</li>
-        </ol>
 
         <p className="eyebrow">STEP TWO</p>
         <h1>Add your LinkedIn.</h1>
         <p className="muted">
-          The URL goes on your profile and travels with anything I send on your behalf. I cannot
-          read the page itself — LinkedIn has no public profile API and blocks anonymous requests —
-          so if you want your roles and skills from there, hand me the data export underneath. This
-          is the last thing I ask for; next I read everything at once.
+          Your URL goes on your profile and gets shared with applications. Last step — then I
+          read everything at once.
         </p>
 
         <LinkedInIntakeForm />

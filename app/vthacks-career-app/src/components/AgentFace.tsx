@@ -23,6 +23,14 @@ const MOUTH_X1 = 62;
 const MOUTH_X2 = 98;
 const MOUTH_Y = 98;
 
+/** Fallback presentation attributes — see the note in the markup below. */
+const OUTLINE = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+} as const;
+
 const mouthPath = (curve: number) =>
   `M ${MOUTH_X1} ${MOUTH_Y} Q 80 ${MOUTH_Y + curve} ${MOUTH_X2} ${MOUTH_Y}`;
 
@@ -44,15 +52,40 @@ export function AgentFace({ mood = 'idle', size = 190 }: { mood?: FaceMood; size
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+
+    const strokes = root.querySelectorAll<SVGGeometryElement>('.face__draw');
+
+    /** Drop the inline dash properties createDrawable writes, leaving each
+     *  stroke plainly, fully visible. The face must never be able to get
+     *  stuck part-drawn: a blank head is worse than no entrance at all. */
+    const undraw = () => {
+      strokes.forEach((el) => {
+        el.style.removeProperty('stroke-dasharray');
+        el.style.removeProperty('stroke-dashoffset');
+      });
+    };
+
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    const drawables = svg.createDrawable(root.querySelectorAll('.face__draw'));
-    animate(drawables, {
+    // createDrawable measures with getTotalLength(). If we are not laid out
+    // yet — mounted inside something still hidden, or swapped in by
+    // router.refresh() before layout — every stroke measures 0 and stays
+    // invisible for good. Skip the entrance rather than risk that.
+    if (!root.getBoundingClientRect().width) return;
+
+    const drawables = svg.createDrawable(strokes);
+    const entrance = animate(drawables, {
       draw: ['0 0', '0 1'],
       ease: 'inOutSine',
       duration: 1500,
       delay: utils.stagger(140),
+      onComplete: undraw,
     });
+
+    return () => {
+      entrance.pause();
+      undraw();
+    };
   }, []);
 
   // Blink, at irregular human intervals. Skipped entirely under reduced motion.
@@ -152,19 +185,23 @@ export function AgentFace({ mood = 'idle', size = 190 }: { mood?: FaceMood; size
       aria-hidden="true"
       focusable="false"
     >
-      <circle className="face__draw face__head" cx="80" cy="80" r="58" />
+      {/* The stroke/fill below are also set in globals.css, which wins — they are
+          repeated as presentation attributes so that in the window before that
+          stylesheet applies the face is a face, and not an SVG default: a solid
+          black disc with nothing on it. */}
+      <circle className="face__draw face__head" cx="80" cy="80" r="58" {...OUTLINE} />
 
       <g className="face__brow face__brow--l">
-        <path className="face__draw" d="M 50 58 Q 58 53 66 57" />
+        <path className="face__draw" d="M 50 58 Q 58 53 66 57" {...OUTLINE} />
       </g>
       <g className="face__brow face__brow--r">
-        <path className="face__draw" d="M 94 57 Q 102 53 110 58" />
+        <path className="face__draw" d="M 94 57 Q 102 53 110 58" {...OUTLINE} />
       </g>
 
-      <circle className="face__eye face__eye--l" cx="58" cy="76" r="5.5" />
-      <circle className="face__eye face__eye--r" cx="102" cy="76" r="5.5" />
+      <circle className="face__eye face__eye--l" cx="58" cy="76" r="5.5" fill="currentColor" />
+      <circle className="face__eye face__eye--r" cx="102" cy="76" r="5.5" fill="currentColor" />
 
-      <path className="face__draw face__mouth" data-curve="4" d={mouthPath(4)} />
+      <path className="face__draw face__mouth" data-curve="4" d={mouthPath(4)} {...OUTLINE} />
     </svg>
   );
 }

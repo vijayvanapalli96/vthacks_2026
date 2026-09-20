@@ -30,7 +30,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { sql, type SqlParam } from '@/lib/databricks';
+import { arrayLiteral, sql, type SqlParam } from '@/lib/databricks';
 import { detectGaps, emptyProfile, type ExtractedProfile } from '@/lib/extract/types';
 import {
   extractLinkedInExport,
@@ -269,7 +269,7 @@ async function knownProfile(userId: string): Promise<ExtractedProfile> {
  * the salary you would accept or whether you need visa sponsorship — so they stay
  * open until someone asks out loud. That is the handoff to the voice agent.
  */
-const GAP_FIELDS: ReadonlyArray<{
+export const GAP_FIELDS: ReadonlyArray<{
   field: string;
   priority: number;
   question: string;
@@ -287,10 +287,24 @@ const GAP_FIELDS: ReadonlyArray<{
   { field: 'projects', priority: 90, question: 'Any projects you would want an employer to see?', fromDocument: true },
   { field: 'links', priority: 100, question: 'Do you have a GitHub or portfolio link?', fromDocument: true },
 
+  // ---- P0 decisions: the first voice conversation. ~8 questions, 3-4 minutes.
+  //
+  // The four added here (employment_type, work_location_pref, work_authorization,
+  // graduation_date) are interleaved at ODD-ISH priorities rather than renumbering
+  // the five that shipped before them. recomputeGaps() only ever updates `status`,
+  // never `priority`, so renumbering would leave rows already in profile_gaps on
+  // their old numbers and the ask order would differ per user depending on when they
+  // signed up. Gaps in the number line are free; a silent per-user reordering is not.
   { field: 'target_role', priority: 200, question: 'What kind of role are you looking for?', fromDocument: false },
-  { field: 'sponsorship', priority: 210, question: 'Will you need visa sponsorship?', fromDocument: false },
+  { field: 'employment_type', priority: 202, question: 'Are you looking for full-time, an internship, or a co-op?', fromDocument: false },
+  { field: 'work_location_pref', priority: 204, question: 'Onsite, hybrid, or remote — and which cities work for you?', fromDocument: false },
+  { field: 'sponsorship', priority: 210, question: 'Will you need visa sponsorship, now or later?', fromDocument: false },
+  { field: 'work_authorization', priority: 212, question: 'How are you authorised to work in the US right now — citizen, permanent resident, F-1 or OPT, or something else?', fromDocument: false },
+  { field: 'graduation_date', priority: 214, question: 'When do you graduate?', fromDocument: false },
   { field: 'comp_floor', priority: 220, question: 'Is there a salary below which you would rather not be contacted?', fromDocument: false },
   { field: 'start_date', priority: 230, question: 'When could you start?', fromDocument: false },
+
+  // ---- P1: asked the NEXT time they talk to the agent, not in the first session.
   { field: 'accommodations', priority: 240, question: 'Any accommodations I should request on your behalf?', fromDocument: false },
 ];
 
@@ -364,13 +378,6 @@ async function recomputeGaps(userId: string, profile: ExtractedProfile): Promise
 }
 
 /* -------------------------------------------------- structured profile write */
-
-function arrayLiteral(values: string[]): string {
-  // Values are model output, so they are escaped rather than trusted. Delta has no
-  // array parameter type, so an array() literal is the only way in.
-  const escaped = values.map((value) => `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`);
-  return escaped.length ? `array(${escaped.join(', ')})` : 'array()';
-}
 
 async function writeStructuredProfile(
   userId: string,
@@ -704,17 +711,113 @@ export async function skipIntake(userId: string, kind: IntakeKind): Promise<Stag
  * downstream can reference them yet, because being referenced is what 'parsed'
  * means. A parsed document is never touched.
  */
-async function clearUnread(userId: string, kind: IntakeKind): Promise<void> {
+/**
+ * Drop any earlier unread row for this kind, so a re-upload replaces rather than
+ * stacks.
+ *
+ * `exceptDocumentId` lets this run AFTER the insert instead of before it. That
+ * matters because the dashboard gate reads these rows: the insert has to be awaited
+ * so the gate can see it, but the cleanup does not, and excluding the new row is
+ * what makes the reversed order safe.
+ */
+async function clearUnread(
+  userId: string,
+  kind: IntakeKind,
+  exceptDocumentId?: string,
+): Promise<void> {
+  const params: SqlParam[] = [
+    { name: 'user', value: userId },
+    { name: 'kind', value: kind },
+  ];
+  let clause = '';
+  if (exceptDocumentId) {
+    clause = ' AND document_id <> :except';
+    params.push({ name: 'except', value: exceptDocumentId });
+  }
   await sql(
-    `DELETE FROM ${DOCS} WHERE user_id = :user AND kind = :kind AND status IN ('received', 'skipped')`,
-    [
-      { name: 'user', value: userId },
-      { name: 'kind', value: kind },
-    ],
+    `DELETE FROM ${DOCS} WHERE user_id = :user AND kind = :kind AND status IN ('received', 'skipped')${clause}`,
+    params,
   );
 }
 
 /** Store the bytes and record the source. Does NOT read the document. */
+/**
+ * Stage a document WITHOUT waiting for the warehouse.
+ *
+ * stageDocument makes three sequential Databricks round-trips after the bytes are
+ * saved, and a cold serverless warehouse takes 20-30s to answer the first one. That
+ * left the user watching a disabled "Saving…" button for the whole of it, on the
+ * second screen of their first run.
+ *
+ * Only the durable byte write is awaited here — lose that and the file is gone. The
+ * three catalogue writes are deliberately left running after we return: on a
+ * long-lived Node server the promise keeps executing, and the user is already two
+ * screens along by the time it settles.
+ *
+ * THE TRADE: intake_documents is what the dashboard gate reads. Somebody who races
+ * through LinkedIn and reaches /applicant before the insert lands would be sent back
+ * here. That window is the length of one Databricks INSERT against an already-warm
+ * warehouse, and the LinkedIn screen sits in front of it.
+ *
+ * Nothing here throws at its caller; a failed background write is a logged warning,
+ * exactly as the awaited path treats a failed parse.
+ */
+export async function stageDocumentDeferred(args: {
+  userId: string;
+  kind: Extract<IntakeKind, 'resume_pdf' | 'linkedin_export_pdf' | 'transcript_pdf'>;
+  file: File;
+}): Promise<StageResult> {
+  const { userId, kind, file } = args;
+
+  const invalid = validateUpload(file);
+  if (invalid) return { ok: false, error: invalid };
+
+  let stored: Awaited<ReturnType<typeof putUpload>>;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    stored = await putUpload({
+      userId,
+      kind,
+      bytes,
+      fileName: file.name,
+      mimeType: file.type || 'application/pdf',
+    });
+  } catch (error) {
+    // The bytes never landed, so there is nothing to catch up on later. Report it.
+    return { ok: false, error: (error as Error).message };
+  }
+
+  const documentId = randomUUID();
+
+  void (async () => {
+    try {
+      // Same idempotency guard as the awaited path: profile_memory is append-only,
+      // so re-staging identical bytes would double every fact with no undo.
+      const existing = await findParsedByHash(userId, stored.contentHash);
+      if (existing) {
+        await clearUnread(userId, kind);
+        return;
+      }
+      await clearUnread(userId, kind);
+      await insertDocument({
+        documentId,
+        userId,
+        kind,
+        status: 'received',
+        storagePath: stored.storagePath,
+        fileName: file.name,
+        mimeType: file.type || 'application/pdf',
+        byteSize: stored.byteSize,
+        contentHash: stored.contentHash,
+      });
+    } catch (error) {
+      console.warn('[intake] deferred staging failed for %s/%s: %s', userId, kind, (error as Error).message);
+    }
+  })();
+
+  return { ok: true, documentId, reused: false };
+}
+
 export async function stageDocument(args: {
   userId: string;
   kind: Extract<IntakeKind, 'resume_pdf' | 'linkedin_export_pdf' | 'transcript_pdf'>;
@@ -790,6 +893,39 @@ function guessMimeType(fileName: string): string {
  * The reliable path is the one next to it on the same page: kind
  * 'linkedin_export_pdf', the archive the user owns.
  */
+/**
+ * Stage a LinkedIn URL with one warehouse round-trip in front of the redirect
+ * instead of two.
+ *
+ * This one CANNOT be fully deferred the way stageDocumentDeferred is. The LinkedIn
+ * step redirects to /applicant, and intakeGate reads intake_documents to decide
+ * where to send people — with no linkedin_url row it would send them straight back
+ * here, every time. So the insert stays awaited.
+ *
+ * The cleanup does not need to be. It runs afterwards, excluding the row just
+ * written, which is the whole reason clearUnread takes an exception.
+ */
+export async function stageLinkedInUrlDeferred(userId: string, url: string): Promise<StageResult> {
+  const documentId = randomUUID();
+  try {
+    await insertDocument({
+      documentId,
+      userId,
+      kind: 'linkedin_url',
+      status: 'received',
+      externalUrl: url,
+    });
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+
+  void clearUnread(userId, 'linkedin_url', documentId).catch((error: Error) => {
+    console.warn('[intake] deferred cleanup failed for %s/linkedin_url: %s', userId, error.message);
+  });
+
+  return { ok: true, documentId, reused: false };
+}
+
 export async function stageLinkedInUrl(userId: string, url: string): Promise<StageResult> {
   try {
     const documentId = randomUUID();

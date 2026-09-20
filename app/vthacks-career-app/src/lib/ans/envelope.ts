@@ -33,10 +33,12 @@ export function signEnvelope(input: {
   issuer: string;
   audience: string;
   payload: Record<string, unknown>;
+  /** Only the attack console passes this, to build a deliberately stale envelope. */
+  now?: number;
 }): string {
   const certificate = new X509Certificate(material(input.signer, 'CERT'));
   const header = { alg: 'ES256', typ: ENVELOPE_TYPE, x5c: [certificate.raw.toString('base64')] };
-  const iat = Math.floor(Date.now() / 1000);
+  const iat = Math.floor((input.now ?? Date.now()) / 1000);
   const claims = {
     ...input.payload,
     iss: input.issuer,
