@@ -149,15 +149,35 @@ const PAID_TOOLS: { id: 'cover_letter' | 'answers' | 'resume'; label: string; wh
 const PAID_COST = '1 model call · usually 20–40s';
 const FREE_COST = 'Free · instant · no model call';
 
-function timeAgo(iso: string): string {
-  const then = Date.parse(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`);
-  if (!Number.isFinite(then)) return iso;
-  const minutes = Math.round((Date.now() - then) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} d ago`;
+/**
+ * When a document was generated, as an ABSOLUTE time in UTC.
+ *
+ * Deliberately not "5 min ago". A relative time needs `Date.now()` during
+ * render, and `Date.now()` on the server and `Date.now()` in the browser are
+ * different numbers by construction — so the server sends "just now", the client
+ * hydrates "1 min ago", and React reports a hydration mismatch. The honest
+ * options are a client-only effect or an absolute timestamp, and for a list of
+ * documents you might print, the absolute timestamp is the more useful one
+ * anyway.
+ *
+ * Formatted from the ISO string by slicing, not by `toLocaleString`: the
+ * server's ICU locale and the browser's are not guaranteed to agree either, and
+ * that is the same bug wearing a different hat.
+ */
+function generatedAt(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso);
+  if (!match) return iso;
+  const [, year, month, day, hour, minute] = match;
+  return `${year}-${month}-${day} ${hour}:${minute} UTC`;
+}
+
+/**
+ * A digit-grouped integer, computed rather than localised — see `generatedAt`
+ * above for why `toLocaleString()` is not used in a component that renders on
+ * both sides.
+ */
+function grouped(value: number): string {
+  return String(Math.trunc(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 function asStringArray(value: unknown): string[] {
@@ -635,7 +655,7 @@ export function JobToolbox({
             {artifacts.map((artifact) => (
               <li key={artifact.artifact_id}>
                 <strong>{artifact.kind.replace(/_/g, ' ')}</strong>
-                <span className="jd-when">{timeAgo(artifact.created_at)}</span>
+                <span className="jd-when">{generatedAt(artifact.created_at)}</span>
                 <span
                   className={
                     artifact.verdict === 'pass'
@@ -669,7 +689,7 @@ export function JobToolbox({
           <>
             Everything above was computed for <strong>{jobTitle ?? 'this role'}</strong>
             {companyName ? <> at <strong>{companyName}</strong></> : null}, from the posting text we
-            actually stored ({descriptionChars.toLocaleString()} characters) and the{' '}
+            actually stored ({grouped(descriptionChars)} characters) and the{' '}
             {factCount} facts in your profile.
           </>
         ) : null}
