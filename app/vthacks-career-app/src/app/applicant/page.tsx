@@ -8,7 +8,6 @@ import { JobVerificationList } from '@/components/JobVerificationList';
 import { MatchList } from '@/components/MatchList';
 import { MatchRunButton } from '@/components/MatchRunButton';
 import { Reveal } from '@/components/Reveal';
-import { VoiceAgent } from '@/components/voice/VoiceAgent';
 import { applicantJobVerificationMemory } from '@/lib/audit';
 import { intakeGate } from '@/lib/intake';
 import { DEMO_JOB, listJobs } from '@/lib/jobs';
@@ -157,16 +156,20 @@ export default async function ApplicantDashboard() {
         )}
       </Reveal>
 
-      {/* Last in the DOM, so tab order reaches the page content before the floating
-          control rather than making every keyboard user pass through it first. It
-          connects nothing until asked.
+      {/* THE VOICE DOCK IS NOT MOUNTED HERE ANY MORE.
+          It moved to app/applicant/layout.tsx (voice lane, PR #29) so the
+          conversation survives navigating between /applicant and /applicant/jobs —
+          a page-level mount tears the WebSocket down on every route change, which
+          is the one thing a live conversation cannot survive.
 
-          This is the ONE voice surface on the page. <VoiceConsole /> used to render
-          here too; it called navigator.mediaDevices.getUserMedia itself and its
-          buttons were a state-picker harness that talked to no endpoint, so two
-          microphone grabs competed on one page. VoiceAgent owns the only stream now,
-          and HireWire's face rides along as the widget's visual. */}
-      <VoiceAgent />
+          Mounting it in both places is what the voice lane's
+          src/components/voice/mount-claim.ts exists to arbitrate, and two docks
+          briefly flashing on this page is the symptom it was written for. Removing
+          this render is the other half of that fix.
+
+          ORDERING, because it matters: this branch removes the mount, PR #29 adds
+          it to the layout. If this lands FIRST, /applicant has no voice dock until
+          #29 lands. Merge #29 first, or merge them together. */}
     </main>
   );
 }
