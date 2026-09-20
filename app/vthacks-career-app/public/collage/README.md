@@ -1,62 +1,45 @@
-# Stage collage images
+# Story images — the "How it works" rail
 
-**24 square .jpg files, 800×800 or larger.** Drop them in this folder using the
-exact filenames below — nothing else to wire up, the frames already point here.
+**Ten images, named `story-01.jpg` … `story-10.jpg`.** Drop them in this folder;
+nothing else to wire up. The frames already point here.
 
-Each stage has its own composition, so the counts differ. Do not add extras;
-they won't render.
+Portrait or square both work — the frame is tall and crops to fill. **1200px on
+the short edge or larger.**
 
-## Shared style — append to EVERY prompt
+## Shared style — append this to EVERY prompt
 
 > Muted desaturated palette of deep navy and warm off-white, soft directional
-> light, film grain, shallow depth of field, editorial photography, square
-> composition. No text, no logos, no watermarks, no UI screenshots.
+> light, film grain, shallow depth of field, cinematic editorial photography.
+> No text, no logos, no watermarks, no user interface screenshots.
 
-Keeping this line identical across all 24 is what makes them read as one series
-instead of 24 unrelated pictures.
+Keeping this line identical across all ten is what makes them read as one story
+rather than ten stock photos.
 
-## The files
+## The ten beats
 
-### 01 Profile agent — 3 images, large + two stepping down
-| File | Prompt |
-|---|---|
-| `01-1.jpg` | A printed CV on a wooden desk beside reading glasses, overhead |
-| `01-2.jpg` | A fountain pen underlining a line of text on paper, macro |
-| `01-3.jpg` | Index cards pinned to a corkboard, one handwritten word each |
+### Act one — the problem
 
-### 02 Voice agent — 2 images, facing pair
-| `02-1.jpg` | A studio microphone lit from one side against darkness |
-| `02-2.jpg` | Two people mid-conversation, hands gesturing, faces out of frame |
+| File | On screen | Prompt |
+|---|---|---|
+| `story-01.jpg` | *Another hundred applications.* | A person seen from behind at a desk late at night, laptop glow, many browser tabs implied by reflected light, exhausted posture |
+| `story-02.jpg` | *The same details. Every single site.* | Overhead of the same printed form filled out over and over, a stack of near-identical pages, pen resting on top |
+| `story-03.jpg` | *Hours gone. Nothing back.* | An empty inbox tray on a desk at dawn, cold light, a clock just visible out of focus |
 
-### 03 Job sourcing — 4 images, loose 2×2
-| `03-1.jpg` | Rows of job cards pinned to a noticeboard, shallow focus |
-| `03-2.jpg` | A library card catalogue drawer pulled open |
-| `03-3.jpg` | Paper slips fanned across a desk, overhead |
-| `03-4.jpg` | Many paper slips sorted into one neat stack, overhead |
+### Act two — the turn
 
-### 04 Match agent — 2 images, heavily overlapping
-| `04-1.jpg` | Two hands holding photographs side by side, comparing |
-| `04-2.jpg` | An analogue gauge needle pointing high, extreme close-up |
+| `story-04.jpg` | *So we built HireWire.* | A single desk lamp switching on in a dark room, warm pool of light, calm and deliberate |
 
-### 05 Tailor agent — 3 images, diagonal cascade
-| `05-1.jpg` | A tailor's bench with chalk, measuring tape, folded cloth |
-| `05-2.jpg` | A letter being folded into an envelope, warm side light |
-| `05-3.jpg` | A wax seal being pressed onto paper |
+### Act three — how it works
 
-### 06 Applicant agent — 2 images, hero + inset
-| `06-1.jpg` | An embossed certificate seal under raking light, macro |
-| `06-2.jpg` | A brass door chain across a barely opened door |
+| `story-05.jpg` | *Just talk to it.* | A person speaking, relaxed, hands still, no screen in front of them, warm side light |
+| `story-06.jpg` | *Your resume in, the right jobs out.* | A single sheet of paper passing into light, a few cards fanning out from it, overhead |
+| `story-07.jpg` | *Wait — is this employer real?* | A hand pausing on a half-open door, chain still attached, cool light through the gap |
+| `story-08.jpg` | *Our agent asks theirs to prove it.* | Two embossed wax seals side by side on paper, raking light, one being pressed |
+| `story-09.jpg` | *Hiring? It runs both ways.* | Two hands meeting in a handshake, lit equally from both sides, symmetrical |
+| `story-10.jpg` | *Agents talk. You decide.* | Two points of light connected by a thread across a dark field, long exposure, a person watching from a distance out of focus |
 
-### 07 Employer agent — 2 images, mirrored
-| `07-1.jpg` | Two hands meeting in a handshake, dramatic side lighting |
-| `07-2.jpg` | A single object reflected between two facing mirrors |
+## If ten is too many
 
-### 08 Audit console — 3 images, scattered
-| `08-1.jpg` | A leather ledger with handwritten rows, overhead |
-| `08-2.jpg` | A rubber stamp mid-press leaving a mark on paper |
-| `08-3.jpg` | A security chain and padlock, cold light, close-up |
-
-### 09 Analytics — 3 images, tall + two stacked
-| `09-1.jpg` | A hand-drawn line chart on graph paper, pencil resting on it |
-| `09-2.jpg` | A vintage wall calendar with days crossed off |
-| `09-3.jpg` | Long exposure of a clock face, hands blurred into an arc |
+Do act one and the two verification beats first — `01`, `03`, `07`, `08`. Those
+four carry the argument. The rest can stay as empty frames without the story
+breaking.

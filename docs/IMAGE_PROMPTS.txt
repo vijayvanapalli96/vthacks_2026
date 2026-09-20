@@ -1,0 +1,183 @@
+================================================================================
+STORY IMAGES — what to generate, and where to put them
+For the "How it works" rail on the homepage.
+================================================================================
+
+WHAT CLAUDE CAN AND CANNOT DO
+  Claude wrote these prompts but CANNOT generate images — there is no image tool
+  in the session, only text and files. Turning a prompt into a .jpg is the part
+  that needs you.
+
+
+--------------------------------------------------------------------------------
+STEPS
+--------------------------------------------------------------------------------
+
+  1. Open any image generator — ChatGPT, Gemini, Midjourney, whichever you have.
+
+  2. Paste ONE prompt below. Generate. Download the image.
+     Repeat for each. Generate all of them in the SAME tool in the SAME sitting —
+     switching tools halfway will show.
+
+  3. Save each file, with these exact names, into:
+
+        app/vthacks-career-app/public/collage/
+
+     Full path:
+        /Users/nidhi/Documents/Projects/VTHACK/vthacks_2026/
+        app/vthacks-career-app/public/collage/
+
+  4. Refresh http://localhost:3000 — they appear. No code change needed.
+
+  NAMING MATTERS. Lowercase, two digits, .jpg:
+        story-01.jpg   NOT story-1.jpg, Story-01.jpg, or story-01.png
+
+  SIZE: portrait or square, 1200px or larger on the short edge. The frame is
+  tall and crops to fill, so a portrait image wastes least.
+
+  SHORT ON TIME? Do 01, 03, 07, 08 only. Exhaustion -> silence -> the moment of
+  doubt -> verification. Those four carry the whole argument, and 07 and 08 are
+  the two the GoDaddy judges care about. The other six can stay empty frames
+  without the story breaking.
+
+
+--------------------------------------------------------------------------------
+THE PROMPTS — copy one block at a time, exactly as written
+--------------------------------------------------------------------------------
+The style sentence is already appended to every prompt. Do not edit it out — it
+is the only reason ten separately-generated images will look like one story
+instead of ten stock photos.
+
+
+### story-01.jpg  —  "Another hundred applications."
+
+A person seen from behind at a desk late at night, laptop glow lighting their
+shoulders, exhausted posture, head slightly lowered. Muted desaturated palette of
+deep navy and warm off-white, soft directional light, film grain, shallow depth of
+field, cinematic editorial photography. No text, no logos, no watermarks, no user
+interface screenshots.
+
+
+### story-02.jpg  —  "The same details. Every single site."
+
+Overhead shot of the same printed form filled out over and over, a stack of
+near-identical pages fanned across a desk, a pen resting on top. Muted desaturated
+palette of deep navy and warm off-white, soft directional light, film grain, shallow
+depth of field, cinematic editorial photography. No text, no logos, no watermarks,
+no user interface screenshots.
+
+
+### story-03.jpg  —  "Hours gone. Nothing back."
+
+An empty paper inbox tray on a desk at dawn, cold light through a window, a clock
+just visible out of focus behind it. Muted desaturated palette of deep navy and warm
+off-white, soft directional light, film grain, shallow depth of field, cinematic
+editorial photography. No text, no logos, no watermarks, no user interface
+screenshots.
+
+
+### story-04.jpg  —  "So we built HireWire."
+
+A single desk lamp switching on in a dark room, a warm pool of light spreading
+across an empty desk, calm and deliberate. Muted desaturated palette of deep navy
+and warm off-white, soft directional light, film grain, shallow depth of field,
+cinematic editorial photography. No text, no logos, no watermarks, no user interface
+screenshots.
+
+
+### story-05.jpg  —  "Just talk to it."
+
+A person mid-sentence, relaxed, hands still, no screen in front of them, warm side
+light across the face, eyes looking slightly off camera. Muted desaturated palette of
+deep navy and warm off-white, soft directional light, film grain, shallow depth of
+field, cinematic editorial photography. No text, no logos, no watermarks, no user
+interface screenshots.
+
+
+### story-06.jpg  —  "Your resume in, the right jobs out."
+
+A single sheet of paper passing into a shaft of light, several smaller cards fanning
+outward from it, overhead composition. Muted desaturated palette of deep navy and
+warm off-white, soft directional light, film grain, shallow depth of field, cinematic
+editorial photography. No text, no logos, no watermarks, no user interface
+screenshots.
+
+
+### story-07.jpg  —  "Wait — is this employer real?"
+
+A hand pausing on a half-open door with the security chain still attached, cool light
+coming through the narrow gap. Muted desaturated palette of deep navy and warm
+off-white, soft directional light, film grain, shallow depth of field, cinematic
+editorial photography. No text, no logos, no watermarks, no user interface
+screenshots.
+
+
+### story-08.jpg  —  "Our agent asks theirs to prove it."
+
+Two embossed wax seals side by side on heavy paper, raking light catching the
+texture, one of them mid-press under a brass stamp. Muted desaturated palette of deep
+navy and warm off-white, soft directional light, film grain, shallow depth of field,
+cinematic editorial photography. No text, no logos, no watermarks, no user interface
+screenshots.
+
+
+### story-09.jpg  —  "Hiring? It runs both ways."
+
+Two hands meeting in a handshake, lit equally from both sides so neither dominates,
+perfectly symmetrical composition. Muted desaturated palette of deep navy and warm
+off-white, soft directional light, film grain, shallow depth of field, cinematic
+editorial photography. No text, no logos, no watermarks, no user interface
+screenshots.
+
+
+### story-10.jpg  —  "Agents talk. You decide."
+
+Two points of light connected by a single thread of light across a dark field, long
+exposure, a person watching from a distance far out of focus. Muted desaturated
+palette of deep navy and warm off-white, soft directional light, film grain, shallow
+depth of field, cinematic editorial photography. No text, no logos, no watermarks, no
+user interface screenshots.
+
+
+--------------------------------------------------------------------------------
+WHAT EACH CARD SAYS ON SCREEN (the words are already built, images only)
+--------------------------------------------------------------------------------
+  01  THE PROBLEM    Another hundred applications.
+                     Every day. Most of them never answered.
+  02  THE PROBLEM    The same details. Every single site.
+                     Name, education, experience, upload the same PDF again.
+  03  THE PROBLEM    Hours gone. Nothing back.
+                     Repetitive work that leads nowhere, and no way to tell
+                     what worked.
+  04  THE TURN       So we built HireWire.
+                     One agent that does the applying, and refuses when
+                     something is wrong.
+  05  HOW IT WORKS   Just talk to it.
+                     Say what you are looking for. No forms, no mouse, no tabs.
+  06  HOW IT WORKS   Your resume in, the right jobs out.
+                     Add your resume and LinkedIn once. Get roles matched to
+                     you, not keywords.
+  07  HOW IT WORKS   Wait — is this employer real?
+                     Before anything is sent, it asks the question you never
+                     get to ask.
+  08  HOW IT WORKS   Our agent asks theirs to prove it.
+                     Only once the employer is verified does your resume leave
+                     your hands.
+  09  HOW IT WORKS   Hiring? It runs both ways.
+                     The employer agent verifies the applicant too. No bots at
+                     the door.
+  10  THE FUTURE     Agents talk. You decide.
+                     The repetitive part disappears. You are brought in only
+                     when it matters.
+
+
+--------------------------------------------------------------------------------
+IF SOMETHING LOOKS WRONG AFTER YOU DROP THEM IN
+--------------------------------------------------------------------------------
+  Image does not appear    Check the filename character by character. It is the
+                           cause almost every time.
+  Appears on some cards    The missing ones are named wrong, or are .png.
+  Badly cropped            The frame is tall and crops from the centre. Use a
+                           portrait or square source, not a wide landscape one.
+  Still the old page       Hard refresh: Cmd + Shift + R.
+================================================================================
