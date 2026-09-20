@@ -15,12 +15,15 @@
  * SERVER-RENDERED, and the reads are the same ones the endpoints use
  * (`loadContext`, `listArtifacts`). No duplicate query lives in this file.
  */
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { loadContext } from '@/lib/artifacts/context.mjs';
 import { listArtifacts } from '@/lib/artifacts/store.mjs';
 import { sql } from '@/lib/databricks';
+import { currentStage } from '@/lib/interview';
+import { interviewUnlocked } from '@/lib/interview-contract';
 import { requireRole } from '@/lib/session';
 
 import { JobDetail } from '@/components/JobDetail';
@@ -102,6 +105,10 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
 
   const posted = formatDate(job.posted_at);
 
+  // One cheap read of the same view the board reads. A rehearsal is only offered
+  // once the employer has actually replied, so the page has to know the stage.
+  const stage = await currentStage(user.id, job.job_id).catch(() => null);
+
   return (
     <main>
       <ApplicantNav current="jobs" />
@@ -169,6 +176,27 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
           posted_at: job.posted_at,
         }}
       />
+
+      {/* Offered above the document toolbox, not inside it: every tool in that
+          panel produces a DOCUMENT, and this produces a rehearsal. Only rendered
+          once an employer has replied, which is the whole gate. */}
+      {interviewUnlocked(stage) ? (
+        <section className="panel" aria-labelledby="jd-interview-h">
+          <header>
+            <div>
+              <small>THEY REPLIED</small>
+              <h2 id="jd-interview-h">Rehearse this interview</h2>
+            </div>
+          </header>
+          <p>
+            Questions built from this posting and your own match gaps, answered one at a time, on camera if you want
+            it. Nothing is recorded as video.
+          </p>
+          <p>
+            <Link href={`/applicant/interview/${encodeURIComponent(job.job_id)}`}>Open the mock interview room</Link>
+          </p>
+        </section>
+      ) : null}
 
       <section className="panel" aria-labelledby="jd-toolbox-h">
         <header>
