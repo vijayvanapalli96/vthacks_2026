@@ -348,3 +348,30 @@
     text-align: left;
   }
 }
+
+/* The row's two links. The title goes to the job screen; the action at the foot
+   says the destination in words rather than leaving it to a hoverable title.
+   Deliberately NOT a wrapper around the whole row — the row already contains an
+   external anchor, and an <a> inside an <a> is invalid. */
+.match-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.match-title-link:hover strong,
+.match-title-link:focus-visible strong {
+  text-decoration: underline;
+}
+
+.match-title-link:focus-visible {
+  outline: 2px solid var(--hw-ink);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.match-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 600;
+}

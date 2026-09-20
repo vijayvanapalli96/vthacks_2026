@@ -1,11 +1,11 @@
-import { BriefcaseBusiness, Target } from 'lucide-react';
+import Link from 'next/link';
+import { BadgeCheck, ChevronRight, Target } from 'lucide-react';
 
 import { ApplicantNav } from '@/components/ApplicantNav';
-import { JobVerificationList } from '@/components/JobVerificationList';
 import { MatchList } from '@/components/MatchList';
 import { MatchRunButton } from '@/components/MatchRunButton';
 import { applicantJobVerificationMemory } from '@/lib/audit';
-import { DEMO_JOB, listJobs } from '@/lib/jobs';
+import { DEMO_JOB } from '@/lib/jobs';
 import { readMatches } from '@/lib/match-read';
 import { requireRole } from '@/lib/session';
 
@@ -15,24 +15,26 @@ export const metadata = { title: 'Jobs · HireWire' };
 export const dynamic = 'force-dynamic';
 
 /**
- * Two panels, and the order is the argument.
+ * ONE RANKED LIST. Every row the match agent scored, each with its percentage,
+ * the sentence that explains it, the verification memory for that employer, and
+ * a link into that job's own screen where the check runs and apply is offered.
  *
- * RANKED FIRST. These are the roles the match agent scored against this student's
- * skills and coursework, each with its percentage and the sentence that explains
- * it. It reads the CACHED run — zero model calls — so this page is fast and does
- * not re-run the agent just because somebody navigated to it.
+ * The raw unscored feed used to sit underneath this. It was removed: it repeated
+ * most of the same postings without a score or a reason, and the ranked rows are
+ * now the thing you act on, so the second list was a second route to the same
+ * screen with less information attached.
  *
- * OPENINGS SECOND, and deliberately not merged into the first. It is the raw
- * discovery feed in posted order: no score, no ranking, no claim about fit. Mixing
- * scored and unscored rows into one list would make the unscored ones look like
- * 0% matches, which is a statement about the jobs rather than about what we have
- * read. It also carries the labelled ANS demo employer, which is the verified-apply
- * path and has to stay reachable whatever the match agent says.
+ * THE DEMO EMPLOYER STAYS, separately and unscored. It is the ANS-registered
+ * verified-apply path, it is not a real posting, and the match agent does not
+ * rank it — so if it were folded into the list above it would either vanish or
+ * have to be given a fabricated score. It is labelled as a demo on screen.
+ *
+ * Reads the CACHED run — zero model calls — so navigating here does not re-run
+ * the agent.
  */
 export default async function JobsPage() {
   const user = await requireRole('applicant');
-  const [{ jobs, source }, memory, matches] = await Promise.all([
-    listJobs(40),
+  const [memory, matches] = await Promise.all([
     applicantJobVerificationMemory(user.id),
     readMatches(user.id),
   ]);
@@ -64,6 +66,7 @@ export default async function JobsPage() {
             read failed — it never presents a failure as an empty list. */}
         <MatchList
           result={matches}
+          verificationMemory={memory}
           emptyNote="The last run finished and nothing cleared the bar. That is a real answer, not a failure — the numbers below say what was scanned and what the eligibility gate removed."
         />
 
@@ -78,22 +81,39 @@ export default async function JobsPage() {
         {hasRankedMatches ? null : <MatchRunButton />}
       </section>
 
-      <section className="panel" aria-labelledby="jobs-h">
+      {/* Not a list of openings any more — one labelled row, kept because the
+          verified-apply path has to stay reachable whatever the match agent
+          says, and the agent never ranks a demo posting. */}
+      <section className="panel" aria-labelledby="demo-h">
         <header>
           <div>
-            <small>{source === 'open_us_jobs' ? 'US · POSTED IN THE LAST 3 DAYS' : 'LATEST POSTINGS'}</small>
-            <h2 id="jobs-h">Openings, unscored and in posted order</h2>
+            <small>VERIFIED APPLY</small>
+            <h2 id="demo-h">The ANS-registered demo employer</h2>
           </div>
-          <BriefcaseBusiness aria-hidden="true" />
+          <BadgeCheck aria-hidden="true" />
         </header>
-        <JobVerificationList jobs={[DEMO_JOB, ...jobs]} initialMemory={memory} />
-        {jobs.length === 0 ? (
-          <p className="job-empty">
-            {source === 'unavailable'
-              ? 'The job feed could not be reached just now. The demo posting still works.'
-              : 'No real postings yet. The discovery pipeline fills this list every five minutes once it is running.'}
-          </p>
-        ) : null}
+        <p>
+          Not a real opening and not scored against your profile. It is our own registered employer agent,
+          kept here so the end-to-end verified handshake is always reachable.
+        </p>
+        <ul className="job-list">
+          <li>
+            <Link
+              className="job-row job-row-link"
+              href={`/applicant/jobs/${encodeURIComponent(DEMO_JOB.job_id)}`}
+            >
+              <span>
+                <strong>{DEMO_JOB.job_title}</strong>
+                <small>
+                  {DEMO_JOB.company_name}
+                  {DEMO_JOB.location_text ? ` · ${DEMO_JOB.location_text}` : ''}
+                </small>
+              </span>
+              <span className="job-tag">ANS demo employer</span>
+              <ChevronRight size={17} aria-hidden="true" />
+            </Link>
+          </li>
+        </ul>
       </section>
     </main>
   );
