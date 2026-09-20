@@ -32,13 +32,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
-import { interviewUnlocked } from '@/lib/interview-contract';
 import {
-  FUNNEL_STAGES,
+  interviewUnlocked,
+  putPreparedSession,
+  type InterviewSessionPayload,
+} from '@/lib/interview-contract';
+import {
   PIPELINE_STATUSES,
-  STATUS_HINT,
   STATUS_LABEL,
-  STATUS_MARK,
   daysPhrase,
   stalledSentence,
   type PipelineCard,
@@ -80,11 +81,6 @@ export function PipelineBoard({ cards: initial, loadError = null }: Props) {
     return byStage;
   }, [cards]);
 
-  const counts = useMemo(() => {
-    const out = {} as Record<PipelineStatus, number>;
-    for (const stage of PIPELINE_STATUSES) out[stage] = grouped.get(stage)?.length ?? 0;
-    return out;
-  }, [grouped]);
 
   const change = useCallback(
     async (card: PipelineCard, next: PipelineStatus, note?: string) => {
@@ -174,89 +170,30 @@ export function PipelineBoard({ cards: initial, loadError = null }: Props) {
         </section>
       ) : (
         <>
-          <section className="pipe-funnel" aria-labelledby="pipe-funnel-h">
-            <h2 id="pipe-funnel-h">Where {tracked} tracked {tracked === 1 ? 'role' : 'roles'} stand</h2>
-            {/* A definition list, not a chart: the numbers ARE the content, and
-                the bar is decoration on top of text that already reads correctly. */}
-            <dl className="pipe-funnel-list">
-              {FUNNEL_STAGES.map((stage) => (
-                <div key={stage} className="pipe-funnel-row">
-                  <dt>
-                    <span className="pipe-mark" aria-hidden="true">
-                      {STATUS_MARK[stage]}
-                    </span>
-                    {STATUS_LABEL[stage]}
-                  </dt>
-                  <dd>
-                    <span
-                      className="pipe-bar"
-                      aria-hidden="true"
-                      style={{ inlineSize: `${tracked ? (counts[stage] / tracked) * 100 : 0}%` }}
-                    />
-                    <strong>{counts[stage]}</strong>
-                  </dd>
-                </div>
-              ))}
-              <div className="pipe-funnel-row is-exit">
-                <dt>Closed out</dt>
-                <dd>
-                  <strong>{counts.rejected + counts.withdrawn}</strong>{' '}
-                  <span className="pipe-muted">
-                    ({counts.rejected} rejected, {counts.withdrawn} withdrawn)
-                  </span>
-                </dd>
-              </div>
-            </dl>
-          </section>
+          {/* ONE LIST, NOT SEVEN COLUMNS. The per-stage columns were mostly empty
+              headings: with a handful of tracked roles, six of the seven said
+              "nothing here yet", which is a lot of furniture to say very little.
+              The stage a role is in is already on its own card, and changing it
+              is still the <select> on that card, so nothing was lost but the
+              scaffolding. The summary funnel went for the same reason: counting
+              to two is not worth a chart.
 
-          <div className="pipe-board">
-            {PIPELINE_STATUSES.map((stage) => {
-              const stageCards = grouped.get(stage) ?? [];
-              const headingId = `pipe-col-${stage}`;
-              return (
-                <section key={stage} className="pipe-col" aria-labelledby={headingId}>
-                  <header className="pipe-col-head">
-                    <h2 id={headingId}>
-                      <span className="pipe-mark" aria-hidden="true">
-                        {STATUS_MARK[stage]}
-                      </span>
-                      {STATUS_LABEL[stage]}
-                      {/* The count is inside the heading so a screen-reader user
-                          hears "Applied, 3 roles" when they land on the column,
-                          instead of having to explore it to find out. */}
-                      <span className="pipe-count">
-                        {stageCards.length} {stageCards.length === 1 ? 'role' : 'roles'}
-                      </span>
-                    </h2>
-                    <p className="pipe-muted pipe-col-hint">{STATUS_HINT[stage]}</p>
-                  </header>
-
-                  {stageCards.length === 0 ? (
-                    <p className="pipe-muted pipe-col-empty">
-                      {stage === 'saved'
-                        ? 'Save a role from Jobs and it starts here.'
-                        : `Nothing at ${STATUS_LABEL[stage].toLowerCase()} yet.`}
-                    </p>
-                  ) : (
-                    <ul className="pipe-cards">
-                      {stageCards.map((card) => (
-                        <Card
-                          key={card.job_id}
-                          card={card}
-                          saving={savingJobId === card.job_id}
-                          onChange={change}
-                          registerRef={(element) => {
-                            if (element) selectRefs.current.set(card.job_id, element);
-                            else selectRefs.current.delete(card.job_id);
-                          }}
-                        />
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              );
-            })}
-          </div>
+              Ordered by stage (PIPELINE_STATUSES order), so the funnel reading
+              survives as sequence rather than as headings. */}
+          <ul className="pipe-cards pipe-cards-flat">
+            {PIPELINE_STATUSES.flatMap((stage) => grouped.get(stage) ?? []).map((card) => (
+              <Card
+                key={card.job_id}
+                card={card}
+                saving={savingJobId === card.job_id}
+                onChange={change}
+                registerRef={(element) => {
+                  if (element) selectRefs.current.set(card.job_id, element);
+                  else selectRefs.current.delete(card.job_id);
+                }}
+              />
+            ))}
+          </ul>
         </>
       )}
     </>
@@ -279,95 +216,82 @@ function Card({
   const [note, setNote] = useState('');
   const stalled = stalledSentence(card);
   const router = useRouter();
+
+  const [preparing, setPreparing] = useState(false);
   const [navigating, startNavigation] = useTransition();
+  /** Saving a stage, preparing the room and loading the page are one wait to the person clicking. */
+  const busy = saving || preparing || navigating;
 
   /**
-   * Open the room, recording the employer's reply first when there is one to
-   * record.
+   * PREPARE THE ROOM, THEN SWITCH TO IT.
    *
-   * The write goes through `onChange`, the board's single path to
-   * POST /api/pipeline/status — hard rule 5, no private implementation — and the
-   * navigation waits for it, because the room re-checks the stage server-side and
-   * would otherwise greet the student with "not yet" in a race they cannot see.
-   * A failed write leaves the reason in the board's alert region and stays put,
-   * rather than walking them into a locked door.
+   * The room used to be opened cold: navigate, and only once the page had mounted
+   * did it ask for a session — a cold warehouse read plus a model call, spent
+   * looking at an empty room. The wait now happens here, on a button that says it
+   * is working, and the room opens with its questions already in hand.
+   *
+   * The payload is handed over in sessionStorage rather than a query parameter,
+   * because it carries a signed conversation credential and a URL gets logged,
+   * copied and shared. The room CONSUMES it, so a session is never minted twice:
+   * each mint writes a telemetry row and spends a Gemini call.
+   *
+   * A FAILED PREFETCH STILL NAVIGATES — the room asks for its own session when
+   * there is no handoff, so the worst case is the behaviour we had before rather
+   * than a dead button. Only a failed STAGE write stops it, because the room's
+   * server-side gate would then turn the student away at the door.
    */
-  const openRoom = useCallback(async () => {
-    if (card.status === 'applied') await onChange(card, 'interviewing');
-    startNavigation(() => {
-      router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`);
-    });
+  const startInterview = useCallback(async () => {
+    setPreparing(true);
+    try {
+      if (card.status === 'applied') await onChange(card, 'interviewing');
+      try {
+        const response = await fetch(`/api/interview/${encodeURIComponent(card.job_id)}/session`, {
+          cache: 'no-store',
+        });
+        if (response.ok) putPreparedSession(card.job_id, (await response.json()) as InterviewSessionPayload);
+      } catch {
+        // Offline, or the warehouse said no. The room will ask for itself.
+      }
+      startNavigation(() => router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`));
+    } finally {
+      setPreparing(false);
+    }
   }, [card, onChange, router]);
-
-  /** Saving the stage and loading the page are one wait to the person clicking. */
-  const busy = saving || navigating;
 
   return (
     <li className="pipe-card">
-      {/* The role opens its own page. It used to be an outbound link to the
-          original posting, so the one obvious click left the product; and for a
-          while it changed destination with the stage, which meant the same
-          gesture did two different things on two cards in the same column. One
-          destination, always. The interview has its own button below. */}
+      {/* THE CARD IS THE ROLE AND THE ACTION. Everything else folds away.
+
+          It had grown to nine things competing for one glance: title, company,
+          an outbound posting link, a match score, a reason paragraph, an age, an
+          event count, a stage select with its own explanatory line, and a note
+          box. Every one of them earns its place SOMEWHERE — none of them earns
+          being the first thing you read on a board you are scanning.
+
+          So: the role, and one button. The rest lives in a disclosure, which
+          keeps it a single keystroke away, keyboard reachable and announced, and
+          costs nothing to ignore. Nothing was deleted.
+
+          The title opens the role's own page, always. It previously changed
+          destination with the stage, which meant the same gesture did two
+          different things on two cards in the same column. */}
       <p className="pipe-card-title">
         <Link href={`/applicant/jobs/${encodeURIComponent(card.job_id)}`}>
           {card.title ?? 'Untitled role'}
-          <span className="sr-only"> at {card.company ?? 'this company'} &mdash; open this role and its tools</span>
+          <span className="sr-only"> at {card.company ?? 'this company'} — open this role and its tools</span>
         </Link>
       </p>
       <p className="pipe-card-company">
         {card.company ?? 'Company not recorded'}
         {card.location ? <span className="pipe-muted"> · {card.location}</span> : null}
       </p>
-      {card.source_url ? (
-        <p className="pipe-muted pipe-card-source">
-          <a href={card.source_url} target="_blank" rel="noreferrer">
-            Original posting
-            <span className="sr-only"> for {card.title ?? 'this role'}, opens in a new tab</span>
-          </a>
-        </p>
-      ) : null}
 
-      {/* Score and reason only when the match cache has them. A pipeline card is
-          useful without a score, so there is no "—" placeholder to read past. */}
-      {card.match_score !== null ? (
-        <p className="pipe-card-score">
-          Match {Math.round(card.match_score)} out of 100
-          {card.match_reason ? <span className="pipe-card-reason">{card.match_reason}</span> : null}
-        </p>
-      ) : null}
-
-      <p className="pipe-muted pipe-card-age">
-        In {STATUS_LABEL[card.status]} {daysPhrase(card.days_in_stage)}
-        {card.days_tracked !== null && card.days_tracked !== card.days_in_stage
-          ? `, tracked ${daysPhrase(card.days_tracked)}`
-          : ''}
-        {/* events_total on screen is the append-only proof made legible: the row
-            count grows, the card does not fork. */}
-        {card.events_total > 1 ? ` · ${card.events_total} events logged` : ''}
-      </p>
-
+      {/* The one sentence worth interrupting for: this has been sitting. */}
       {stalled ? <p className="pipe-card-stalled">{stalled}</p> : null}
-      {card.note ? <p className="pipe-card-note">“{card.note}”</p> : null}
 
-      {/* ONE BUTTON FOR THE INTERVIEW, and it tells you it is working.
-
-          There were three ways in before this — the title, a link, and a second
-          link with different wording on Applied cards — which is three things to
-          read on a card that already carries a stage, a score, a reason, an age
-          and a note box. Now there is one control and one label.
-
-          IT SHOWS A PENDING STATE BECAUSE THE WAIT IS REAL. Opening the room
-          reads the posting and the match row off a warehouse that cold-starts in
-          20-30 seconds and then asks a model for the questions. A button that
-          looks inert for that long reads as broken, and the student clicks it
-          again. useTransition keeps the pending state tied to the actual
-          navigation rather than to a timer we invented.
-
-          An Applied card records the reply first, through the same
-          POST /api/pipeline/status the <select> uses, so the label says so.
-          Saved and below get nothing: rehearsing for an interview nobody offered
-          is anxiety with a button on it. */}
+      {/* THE ACTION. Applied records the reply first, through the board's single
+          write path, and says so. Saved and below get nothing — rehearsing for an
+          interview nobody offered is anxiety with a button on it. */}
       {interviewUnlocked(card.status) || card.status === 'applied' ? (
         <p className="pipe-card-rehearse">
           <button
@@ -375,9 +299,9 @@ function Card({
             className="pipe-rehearse-button"
             disabled={busy}
             aria-busy={busy}
-            onClick={() => void openRoom()}
+            onClick={() => void startInterview()}
           >
-            {busy ? 'Preparing the room…' : 'Prepare for interview'}
+            {busy ? 'Preparing the room…' : 'Start mock interview'}
             <span className="sr-only">
               {' '}
               for {card.title ?? 'this role'} at {card.company ?? 'this company'}
@@ -386,46 +310,78 @@ function Card({
                 : '. Opens the mock interview room.'}
             </span>
           </button>
-          {card.status === 'applied' ? (
+          {card.status === 'applied' && !busy ? (
             <span className="pipe-muted pipe-rehearse-hint">Marks this Interviewing first.</span>
           ) : null}
         </p>
       ) : null}
 
-      <div className="pipe-field">
-        {/* A real label, visible, associated by htmlFor. It names the JOB as well
-            as the control, because "Stage" repeated down a column tells a
-            screen-reader user nothing about which job they are changing. */}
-        <label htmlFor={selectId}>
-          Stage<span className="sr-only"> for {card.title ?? 'this role'} at {card.company ?? 'this company'}</span>
-        </label>
-        <select
-          id={selectId}
-          ref={registerRef}
-          className="pipe-select"
-          value={card.status}
-          aria-busy={saving}
-          aria-describedby={noteId}
-          onChange={(event) => {
-            void onChange(card, event.target.value as PipelineStatus, note || undefined);
-          }}
-        >
-          {PIPELINE_STATUSES.map((stage) => (
-            <option key={stage} value={stage}>
-              {STATUS_LABEL[stage]}
-            </option>
-          ))}
-        </select>
-        <p id={noteId} className="pipe-muted pipe-field-hint">
-          {saving ? 'Saving…' : 'Changing this appends an event. Nothing is overwritten.'}
-        </p>
-      </div>
+      <details className="pipe-card-more">
+        <summary>
+          Details and stage
+          <span className="sr-only"> for {card.title ?? 'this role'} at {card.company ?? 'this company'}</span>
+        </summary>
 
-      {/* Notes are optional and folded away, so the primary keyboard path is
-          exactly two stops per card: the title link, then the stage select. */}
-      <details className="pipe-note-box">
-        <summary>Add a note</summary>
-        <label htmlFor={`${noteId}-input`}>Note for {card.title ?? 'this role'}</label>
+        {card.match_score !== null ? (
+          <p className="pipe-card-score">
+            Match {Math.round(card.match_score)} out of 100
+            {card.match_reason ? <span className="pipe-card-reason">{card.match_reason}</span> : null}
+          </p>
+        ) : null}
+
+        <p className="pipe-muted pipe-card-age">
+          In {STATUS_LABEL[card.status]} {daysPhrase(card.days_in_stage)}
+          {card.days_tracked !== null && card.days_tracked !== card.days_in_stage
+            ? `, tracked ${daysPhrase(card.days_tracked)}`
+            : ''}
+          {/* events_total on screen is the append-only proof made legible: the
+              row count grows, the card does not fork. */}
+          {card.events_total > 1 ? ` · ${card.events_total} events logged` : ''}
+        </p>
+
+        {card.note ? <p className="pipe-card-note">“{card.note}”</p> : null}
+
+        {card.source_url ? (
+          <p className="pipe-muted pipe-card-source">
+            <a href={card.source_url} target="_blank" rel="noreferrer">
+              Original posting
+              <span className="sr-only"> for {card.title ?? 'this role'}, opens in a new tab</span>
+            </a>
+          </p>
+        ) : null}
+
+        <div className="pipe-field">
+          {/* A real label, visible, associated by htmlFor. It names the JOB as
+              well as the control, because "Stage" repeated down a list tells a
+              screen-reader user nothing about which job they are changing. */}
+          <label htmlFor={selectId}>
+            Stage<span className="sr-only"> for {card.title ?? 'this role'} at {card.company ?? 'this company'}</span>
+          </label>
+          <select
+            id={selectId}
+            ref={registerRef}
+            className="pipe-select"
+            value={card.status}
+            aria-busy={saving}
+            aria-describedby={noteId}
+            onChange={(event) => {
+              void onChange(card, event.target.value as PipelineStatus, note || undefined);
+            }}
+          >
+            {PIPELINE_STATUSES.map((stage) => (
+              <option key={stage} value={stage}>
+                {STATUS_LABEL[stage]}
+              </option>
+            ))}
+          </select>
+          <p id={noteId} className="pipe-muted pipe-field-hint">
+            {saving ? 'Saving…' : 'Changing this appends an event. Nothing is overwritten.'}
+          </p>
+        </div>
+
+        <label className="pipe-note-label" htmlFor={`${noteId}-input`}>
+          Note for {card.title ?? 'this role'}
+        </label>
         <textarea
           id={`${noteId}-input`}
           value={note}

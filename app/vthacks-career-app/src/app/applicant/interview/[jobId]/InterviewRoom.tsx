@@ -43,6 +43,7 @@ import {
   QUESTION_KIND_LABEL,
   QUESTION_SOURCE_LABEL,
   emptyVitals,
+  takePreparedSession,
   type AnswerCritique,
   type InterviewAnswer,
   type InterviewFeedback,
@@ -125,6 +126,21 @@ export function InterviewRoom({ jobId, jobTitle, company }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+
+    // THE BOARD MAY HAVE ALREADY DONE THIS. "Start mock interview" fetches the
+    // session before it navigates and parks it in sessionStorage, so the room
+    // opens with its questions in hand instead of showing an empty page while a
+    // cold warehouse and a model call finish. Reading it CONSUMES it: every mint
+    // writes a telemetry row and spends a Gemini call, so a second fetch here
+    // would quietly double both.
+    const prepared = takePreparedSession(jobId);
+    if (prepared) {
+      setSession(prepared);
+      live.current.sessionId = prepared.sessionId;
+      live.current.vitalsReady = prepared.vitalsReady;
+      return;
+    }
+
     (async () => {
       try {
         const response = await fetch(`/api/interview/${encodeURIComponent(jobId)}/session`, { cache: 'no-store' });
@@ -516,15 +532,20 @@ export function InterviewRoom({ jobId, jobTitle, company }: Props) {
           )}
           {cameraError ? <p className="iv-warn">{cameraError}</p> : null}
 
-          {/* Persona 2, mounted only while the interview is actually running and
-              only when the server minted a signed URL. Mounting it earlier would
-              put a "connect" button on the briefing screen, and a conversation
-              costs money per minute. */}
+          {/* Persona 2, mounted only while the interview is running and only when
+              the server minted a signed URL. Earlier would put a connect button on
+              the briefing screen, and a conversation costs money per minute. */}
           {phase === 'live' && session.signedUrl ? (
             <InterviewVoice
               signedUrl={session.signedUrl}
               dynamicVariables={session.dynamicVariables}
               onAgentLine={(line) => setNotice(line)}
+              // The room owns the question order; the agent is told where it has
+              // got to every time this changes. Without it the voice keeps asking
+              // its own next question while the screen has already moved on.
+              currentQuestion={question ? { id: question.id, text: question.text } : null}
+              questionNumber={index + 1}
+              questionCount={session.questions.length}
             />
           ) : null}
 
@@ -744,21 +765,7 @@ function VitalsPanel({
       {off ? (
         <p className="iv-warn">{off}</p>
       ) : !cameraOn ? (
-        <>
-          {/* SAY WHAT IT READS, not that it "reads signals". The first version of
-              this line was abstract enough that someone looking at it could not
-              tell what the feature did, which for a camera pointed at your face
-              is the wrong thing to be vague about. */}
-          <p className="iv-muted">
-            With the camera on, this reads three things from the video itself, with no wearable: your{' '}
-            <strong>pulse</strong>, your <strong>breathing rate</strong>, and the <strong>expression</strong> on your
-            face.
-          </p>
-          <p className="iv-muted">
-            You get one sentence at the end — whether your pulse held steady across the call or climbed, and roughly
-            where. Nerves you cannot feel while they are happening.
-          </p>
-        </>
+        <p className="iv-muted">Turn the camera on and this reads your pulse and breathing from the video.</p>
       ) : (
         <>
           {/* aria-live off: a number that changes every second is unusable read aloud. */}

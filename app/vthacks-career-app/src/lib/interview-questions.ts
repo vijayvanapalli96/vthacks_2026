@@ -277,16 +277,15 @@ function validate(parsed: unknown, raw: string): InterviewQuestion[] {
   // A BARE ARRAY IS ACCEPTED. The prompt asks for {"questions": [...]} and the
   // model usually obliges, but "return JSON" and "return JSON in this exact
   // wrapper" are different instruction-following problems and the cheap tier is
-  // likelier to drop the wrapper. Rejecting a perfectly good list over its
-  // envelope would send a student to the deterministic questions for nothing.
+  // likelier to drop the wrapper. Rejecting a good list over its envelope sends a
+  // student to the deterministic questions for nothing.
   const list = Array.isArray(parsed) ? parsed : (parsed as { questions?: unknown })?.questions;
 
   if (!Array.isArray(list) || list.length < 3) {
-    // The raw head, in the server log only. Production hit this once with "0
-    // questions" and left nothing to diagnose from: an empty array, a different
-    // wrapper key and a refusal all produce the same count. 400 characters is
-    // enough to tell those apart and short enough not to dump a posting into the
-    // logs. Never returned to the browser — the student sees the deterministic
+    // The raw head, server log only. Production has been hitting this on every
+    // single room open ("0 questions") with nothing to diagnose from: an empty
+    // array, a different wrapper key and a refusal all produce the same count.
+    // Never returned to the browser — the student gets the deterministic
     // questions and a sentence saying Gemini did not write them.
     console.warn('[interview] unusable question set from Gemini. First 400 chars:', raw.slice(0, 400));
     throw new GeminiError(`Gemini returned ${Array.isArray(list) ? list.length : 0} questions; needed at least 3.`);

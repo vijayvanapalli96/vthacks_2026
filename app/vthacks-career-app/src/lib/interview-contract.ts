@@ -87,7 +87,11 @@ export const QUESTION_SOURCES = ['gemini', 'jd-deterministic'] as const;
 export type QuestionSource = (typeof QUESTION_SOURCES)[number];
 
 export const QUESTION_SOURCE_LABEL: Record<QuestionSource, string> = {
-  gemini: 'Written by Gemini from this job description and your profile',
+  // The vendor name is deliberately absent, but the PROVENANCE is not: this
+  // still says the questions were written for this posting, which is what
+  // separates it from the deterministic path below. Dropping the distinction
+  // entirely would be the rule 8 problem this label exists to avoid.
+  gemini: 'Written for this posting from the job description and your profile',
   'jd-deterministic': 'Built from this job description and your match gaps, no model call',
 };
 
@@ -285,4 +289,71 @@ export function pacingNote(words: number, spokenSeconds: number | null): string 
   if (wpm > 200) return `You spoke at about ${wpm} words a minute, which is fast enough to be hard to follow.`;
   if (wpm < 100) return `You spoke at about ${wpm} words a minute, with enough pause that an interviewer may cut in.`;
   return `You spoke at about ${wpm} words a minute, which is an easy pace to listen to.`;
+}
+
+/* ==========================================================================
+ * HANDING A PREPARED SESSION FROM THE BOARD TO THE ROOM.
+ *
+ * The board fetches the session BEFORE it navigates, so the student waits on a
+ * button that says it is working rather than on a blank room. The payload is
+ * parked in sessionStorage and the room picks it up on mount instead of asking
+ * for a second one.
+ *
+ * WHY NOT JUST LET THE ROOM FETCH. It already does, and that is still the
+ * fallback. But that fetch starts only after the page has loaded, so the student
+ * sees an empty room first and the wait — a cold warehouse plus a model call —
+ * happens where nothing explains it.
+ *
+ * WHY sessionStorage AND NOT A QUERY PARAMETER. The payload contains a signed
+ * conversation credential. A URL gets logged, copied and shared; sessionStorage
+ * is per tab, dies with it, and never leaves the browser.
+ *
+ * FETCHING TWICE WOULD NOT BE HARMLESS: every session mint writes a telemetry
+ * row and spends a Gemini call, so the handoff is deleted as soon as it is read.
+ * ========================================================================== */
+
+export function preparedSessionKey(jobId: string): string {
+  return `hirewire:interview:prepared:${jobId}`;
+}
+
+/**
+ * How long a prepared session stays usable.
+ *
+ * The signed ElevenLabs URL expires in minutes, so a handoff older than this is
+ * likely to hand the room a dead credential. Two minutes covers navigation and a
+ * slow page load; anything slower should pay for a fresh session rather than
+ * silently open a room whose microphone cannot connect.
+ */
+export const PREPARED_SESSION_TTL_MS = 2 * 60 * 1000;
+
+export type PreparedSession = { at: number; payload: InterviewSessionPayload };
+
+/** Read and CONSUME a prepared session. Returns null when absent, stale or unreadable. */
+export function takePreparedSession(jobId: string): InterviewSessionPayload | null {
+  if (typeof window === 'undefined') return null;
+  const key = preparedSessionKey(jobId);
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    // Removed before it is trusted: a payload that fails to parse must not sit
+    // there failing on every subsequent open.
+    window.sessionStorage.removeItem(key);
+    const parsed = JSON.parse(raw) as PreparedSession;
+    if (!parsed?.payload || Date.now() - parsed.at > PREPARED_SESSION_TTL_MS) return null;
+    return parsed.payload;
+  } catch {
+    // Private mode, blocked storage, or a quota error. The room fetches instead.
+    return null;
+  }
+}
+
+/** Park a prepared session for the room. Failure is not an error — the room refetches. */
+export function putPreparedSession(jobId: string, payload: InterviewSessionPayload): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const entry: PreparedSession = { at: Date.now(), payload };
+    window.sessionStorage.setItem(preparedSessionKey(jobId), JSON.stringify(entry));
+  } catch {
+    /* no storage, no handoff, no problem */
+  }
 }

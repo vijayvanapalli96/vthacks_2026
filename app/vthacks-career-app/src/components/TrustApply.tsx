@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight, Loader2, ShieldAlert, ShieldCheck, Volume2 } from 'lucide-react';
 
+import { A2ATranscript } from '@/components/A2ATranscript';
 import { AgentBadge } from '@/components/AgentBadge';
 import { emitAgentState } from '@/lib/agent-state';
+import type { Turn } from '@/lib/a2a/transcript';
 
 // Mirrors the /api/verify and /api/apply contracts (TASK_DIVISION.md §4).
 type Dimension = { name: string; score: number; reason: string };
@@ -21,6 +23,10 @@ type ApplyResult = {
   audit_id: string | null;
   spoken_reason: string;
   match_explanation?: { score: number; verdict: string; reasons: string[] };
+  /** The exchange as recorded, saved to `hirewire.a2a_transcripts`. */
+  transcript?: Turn[];
+  transcript_id?: string | null;
+  narrator?: 'gemini' | 'none';
 };
 
 type Phase =
@@ -76,7 +82,14 @@ export function TrustApply({
   const [skills, setSkills] = useState('Python, SQL, TypeScript');
   const [resumeUrl, setResumeUrl] = useState('');
   const [approved, setApproved] = useState<Record<string, boolean>>({});
+  // The chain, appended to as each turn arrives from the stream. Kept next to
+  // the phase rather than inside it because it outlives the send: after the
+  // result lands, the student is still reading it.
+  const [turns, setTurns] = useState<Turn[]>([]);
   const resultHeading = useRef<HTMLHeadingElement>(null);
+  // Once per visit. "Check again" re-runs the verification but must not fire a
+  // second application at the same employer.
+  const autoSent = useRef(false);
 
   const target = host;
   const verification = 'verification' in phase ? phase.verification : null;
@@ -135,17 +148,21 @@ export function TrustApply({
     ? new Date(job.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : null;
 
-  async function apply(humanApproved: boolean, fields: string[]) {
+  async function apply(humanApproved: boolean, fields: string[], mode: 'confirmed' | 'auto' = 'confirmed') {
     if (!verification) return;
     setPhase({ kind: 'sending', verification });
+    setTurns([]);
     emitAgentState({ state: 'thinking' });
     try {
-      const response = await fetch('/api/apply', {
+      // The STREAMING route, so the chain fills in while the handshake runs.
+      // Same body, same server-side gate as /api/apply — see the route header.
+      const response = await fetch('/api/apply/stream', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           employer_host: target,
           human_approved: humanApproved,
+          approval_mode: mode,
           requested_fields: fields,
           candidate: {
             full_name: name,
@@ -156,16 +173,92 @@ export function TrustApply({
           job,
         }),
       });
-      const result = (await response.json()) as ApplyResult;
-      setPhase({ kind: 'done', verification, result });
-      announce(result.status === 'submitted' ? 'pass' : 'refuse', result.spoken_reason);
+
+      // A 401/403 or any other refusal to open the stream answers with plain
+      // JSON, so it is read as JSON rather than parsed as an empty chain.
+      if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+        const result = (await response.json()) as ApplyResult & { error?: string };
+        if (result.error) throw new Error(result.error);
+        setPhase({ kind: 'done', verification, result });
+        announce(result.status === 'submitted' ? 'pass' : 'refuse', result.spoken_reason);
+        return;
+      }
+
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = '';
+      let settled = false;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        // SSE frames are separated by a blank line; a partial frame stays in
+        // the buffer until the rest of it arrives.
+        const frames = buffer.split('\n\n');
+        buffer = frames.pop() ?? '';
+        for (const frame of frames) {
+          const event = /^event: (.+)$/m.exec(frame)?.[1];
+          const data = frame
+            .split('\n')
+            .filter((line) => line.startsWith('data: '))
+            .map((line) => line.slice(6))
+            .join('\n');
+          if (!event || !data) continue;
+          if (event === 'turn') {
+            const turn = JSON.parse(data) as Turn;
+            setTurns((current) => [...current, turn]);
+          } else if (event === 'result') {
+            const result = JSON.parse(data) as ApplyResult;
+            settled = true;
+            // The saved transcript, with Gemini's lines attached, replaces the
+            // turns streamed live — same turns, now narrated.
+            if (result.transcript?.length) setTurns(result.transcript);
+            setPhase({ kind: 'done', verification, result });
+            announce(result.status === 'submitted' ? 'pass' : 'refuse', result.spoken_reason);
+          } else if (event === 'error') {
+            settled = true;
+            throw new Error((JSON.parse(data) as { error?: string }).error ?? 'The application could not be completed.');
+          }
+        }
+      }
+      // The connection ended without a result: the exchange may well have
+      // happened, so this does not claim it did not.
+      if (!settled) {
+        setPhase({
+          kind: 'error',
+          message: 'The connection closed before the result arrived. Check your activity log before sending again.',
+        });
+      }
     } catch {
       setPhase({ kind: 'error', message: 'Could not reach the apply service. Nothing was confirmed as sent.' });
     }
   }
 
-  const approvedFields = Object.keys(fieldLabels).filter((field) => approved[field] && values[field]);
+  // Ticked by default now: these are the fields that WENT, and unticking one is
+  // how you take it out of a deliberate re-send.
+  const approvedFields = Object.keys(fieldLabels).filter((field) => values[field] && (approved[field] ?? true));
   const busy = phase.kind === 'verifying' || phase.kind === 'sending';
+  /** Every field that actually has a value. Empty ones are not sent as blanks. */
+  const releasable = Object.keys(fieldLabels).filter((field) => values[field]);
+
+  /**
+   * THE SEND, WITH NO CONFIRMATION STEP. Owner decision, 2026-09-20: once the
+   * employer's agent has cleared the Trust Index in front of the student, asking
+   * them to tick the same fields again was asking them to re-approve a check
+   * they had just watched run. A refusal still sends nothing — this changes who
+   * presses send, not whether the gate has to pass — and the audit log and the
+   * transcript both record that it went automatically rather than by hand.
+   *
+   * The fields below the result stay editable, and a changed set can be sent
+   * again deliberately.
+   */
+  useEffect(() => {
+    if (phase.kind !== 'verified' || autoSent.current || releasable.length === 0) return;
+    autoSent.current = true;
+    void apply(false, releasable, 'auto');
+    // `apply` and the field values are read at call time; adding them here would
+    // re-fire this on every keystroke in the skills box.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase.kind]);
 
   return (
     <div className="trust-flow">
@@ -317,15 +410,55 @@ export function TrustApply({
         </section>
       ) : null}
 
-      {phase.kind === 'verified' || (phase.kind === 'sending' && verification?.verdict === 'pass') ? (
+      {/* Between the trust card and the result, because that is where it
+          happens. Live while sending, then the saved, narrated version. */}
+      {phase.kind === 'sending' || (phase.kind === 'done' && turns.length > 0) ? (
+        <A2ATranscript
+          turns={turns}
+          live={phase.kind === 'sending'}
+          narrator={phase.kind === 'done' ? (phase.result.narrator ?? 'none') : 'none'}
+          transcriptId={phase.kind === 'done' ? (phase.result.transcript_id ?? null) : null}
+        />
+      ) : null}
+
+      {/* STEP 2 IS NO LONGER A GATE. Nothing is held here waiting to be ticked:
+          the fields go the moment the check passes, and this panel says which
+          ones went and offers a deliberate re-send after an edit. The list is
+          still shown field by field, because "we sent your name, email and
+          skills" has to be readable without opening the transcript. */}
+      {phase.kind === 'verified' || phase.kind === 'sending' || phase.kind === 'done' ? (
         <section className="panel trust-step" aria-labelledby="step-approve">
           <header>
             <div>
-              <small>STEP 2 · YOUR APPROVAL</small>
-              <h2 id="step-approve">Choose exactly what to send</h2>
+              <small>STEP 2 · RELEASED AUTOMATICALLY</small>
+              <h2 id="step-approve">
+                {phase.kind === 'sending' ? 'Sending these fields now' : 'These fields were sent'}
+              </h2>
             </div>
           </header>
           <div className="trust-body">
+            <p className="muted">
+              A verified employer agent is a proven recipient, so your agent released these the moment the
+              Trust Index passed, with no second confirmation. A refusal still sends nothing, and the audit
+              log records that this went automatically rather than by hand.
+            </p>
+            <fieldset className="trust-fields" disabled={busy}>
+              <legend>Released to {verification?.registry?.ans_name ?? target}</legend>
+              {Object.entries(fieldLabels).map(([field, label]) => (
+                <label key={field} className={values[field] ? '' : 'is-empty'}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(values[field]) && (approved[field] ?? true)}
+                    disabled={!values[field] || busy}
+                    onChange={(event) => setApproved({ ...approved, [field]: event.target.checked })}
+                  />
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{values[field] || 'Not provided'}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
             <div className="field">
               <label htmlFor="trust-skills">Skills to share</label>
               <input id="trust-skills" value={skills} onChange={(event) => setSkills(event.target.value)} />
@@ -340,26 +473,12 @@ export function TrustApply({
                 placeholder="https://"
               />
             </div>
-            <fieldset className="trust-fields">
-              <legend>Release to {verification?.registry?.ans_name ?? target}</legend>
-              {Object.entries(fieldLabels).map(([field, label]) => (
-                <label key={field} className={values[field] ? '' : 'is-empty'}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(approved[field])}
-                    disabled={!values[field] || busy}
-                    onChange={(event) => setApproved({ ...approved, [field]: event.target.checked })}
-                  />
-                  <span>
-                    <strong>{label}</strong>
-                    <small>{values[field] || 'Not provided'}</small>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+            {/* The one remaining button, and it is a re-send rather than the
+                approval: changing the skills line or adding a resume link after
+                the fact is the reason it exists. */}
             <button
               type="button"
-              className="primary"
+              className="secondary"
               disabled={busy || approvedFields.length === 0}
               onClick={() => apply(true, approvedFields)}
             >
@@ -369,7 +488,7 @@ export function TrustApply({
                 </>
               ) : (
                 <>
-                  Send {approvedFields.length} approved {approvedFields.length === 1 ? 'field' : 'fields'}{' '}
+                  Send again with {approvedFields.length} {approvedFields.length === 1 ? 'field' : 'fields'}{' '}
                   <ArrowRight size={18} aria-hidden="true" />
                 </>
               )}

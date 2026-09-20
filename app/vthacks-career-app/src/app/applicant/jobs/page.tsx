@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { BadgeCheck, ChevronRight, Target } from 'lucide-react';
+import { BadgeCheck, ChevronRight, Radio, Target } from 'lucide-react';
 
+import { A2ALaneCard } from '@/components/A2ALaneCard';
 import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { MatchList } from '@/components/MatchList';
@@ -30,6 +31,12 @@ export const dynamic = 'force-dynamic';
  * rank it — so if it were folded into the list above it would either vanish or
  * have to be given a fabricated score. It is labelled as a demo on screen.
  *
+ * FIRST ON THE PAGE is a placeholder internship at HireWire whose card does not
+ * open a job at all: it links into /applicant/apply, the agent-to-agent screen.
+ * It is there so the A2A lane can be reached in one click without first passing
+ * the employer check on a detail page, and it is labelled a placeholder — it
+ * wears the ranked cards' skin but carries no score, because nothing scored it.
+ *
  * Reads the CACHED run — zero model calls — so navigating here does not re-run
  * the agent.
  */
@@ -52,6 +59,22 @@ export default async function JobsPage() {
           Select a posting and your agent checks the employer in the background. The result stays attached to
           that job in your workspace. No verified agent, no data sent.
         </p>
+      </section>
+
+      {/* FIRST ON THE PAGE, and in the same card skin as the ranked roles below.
+          It is a placeholder, not a posting and not scored — see A2ALaneCard for
+          what it borrows from a match card and what it refuses to borrow. It is
+          first because the agent-to-agent handshake is the thing this product is
+          for, and at the bottom of the page it read as a footnote to it. */}
+      <section className="panel" aria-labelledby="a2a-h">
+        <header>
+          <div>
+            <small>AGENT TO AGENT</small>
+            <h2 id="a2a-h">Open the A2A lane directly</h2>
+          </div>
+          <Radio aria-hidden="true" />
+        </header>
+        <A2ALaneCard />
       </section>
 
       <section className="panel" aria-labelledby="match-h">
@@ -116,6 +139,7 @@ export default async function JobsPage() {
           </li>
         </ul>
       </section>
+
     </main>
   );
 }

@@ -241,8 +241,8 @@
   padding-top: 20px;
 }
 
-/* The canvas inherits `color` so the wave can read --ink out of the cascade and
-   follow the theme instead of hard-coding a colour. */
+/* The canvas inherits `color` so the wave reads --ink out of the cascade and
+   follows the theme instead of hard-coding a colour. */
 .iv-wave {
   color: var(--ink);
   display: block;
