@@ -290,6 +290,11 @@ function Card({
    * If the write fails, `onChange` puts the reason in the board's alert region and
    * this stays put rather than walking them into a locked door.
    */
+  /** See the comment on the title below: one honest destination per stage. */
+  const roleHref = interviewUnlocked(card.status)
+    ? `/applicant/interview/${encodeURIComponent(card.job_id)}`
+    : `/applicant/jobs/${encodeURIComponent(card.job_id)}`;
+
   const replyAndRehearse = useCallback(async () => {
     await onChange(card, 'interviewing');
     router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`);
@@ -297,19 +302,45 @@ function Card({
 
   return (
     <li className="pipe-card">
+      {/* CLICKING THE ROLE OPENS ITS MENU, which is the thing a card on a board is
+          expected to do and previously did not: the title used to be an outbound
+          link to the original posting, so the one obvious click left the product.
+
+          WHERE IT GOES DEPENDS ON THE STAGE, because there is only one honest
+          destination per stage. At Interviewing or Offer the rehearsal exists, so
+          it goes straight to the interview room. Everywhere else it goes to the
+          job page, which carries the document toolbox and the interview panel —
+          sending an Applied card into the room would land on "not yet", and a
+          click that reaches a locked door is worse than one that never offered.
+
+          NOT A WHOLE-CARD CLICK TARGET. The card holds a <select>, a <textarea>
+          and a button; wrapping all of that in a link nests interactive elements,
+          which breaks keyboard navigation and makes a screen reader announce the
+          lot as one control. Hard rule 6. The title is the target, the posting
+          keeps its own link below, and both are reachable by Tab in reading
+          order. */}
       <p className="pipe-card-title">
-        {card.source_url ? (
-          <a href={card.source_url} target="_blank" rel="noreferrer">
-            {card.title ?? 'Untitled role'}
-          </a>
-        ) : (
-          (card.title ?? 'Untitled role')
-        )}
+        <Link href={roleHref}>
+          {card.title ?? 'Untitled role'}
+          <span className="sr-only">
+            {' '}
+            at {card.company ?? 'this company'} &mdash;{' '}
+            {interviewUnlocked(card.status) ? 'open the mock interview room' : 'open this role and its tools'}
+          </span>
+        </Link>
       </p>
       <p className="pipe-card-company">
         {card.company ?? 'Company not recorded'}
         {card.location ? <span className="pipe-muted"> · {card.location}</span> : null}
       </p>
+      {card.source_url ? (
+        <p className="pipe-muted pipe-card-source">
+          <a href={card.source_url} target="_blank" rel="noreferrer">
+            Original posting
+            <span className="sr-only"> for {card.title ?? 'this role'}, opens in a new tab</span>
+          </a>
+        </p>
+      ) : null}
 
       {/* Score and reason only when the match cache has them. A pipeline card is
           useful without a score, so there is no "—" placeholder to read past. */}

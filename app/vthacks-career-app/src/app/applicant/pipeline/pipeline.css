@@ -338,3 +338,10 @@
   font-size: 0.85rem;
   margin-top: 2px;
 }
+
+/* The original posting moved out of the title, which now opens the role inside
+   the product. Small and quiet: it is the escape hatch, not the main action. */
+.pipe-card-source {
+  font-size: 0.85rem;
+  margin: 4px 0 0;
+}
