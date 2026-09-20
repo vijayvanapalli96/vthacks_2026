@@ -112,6 +112,16 @@ function MatchRowView({
 
   return (
     <li className="match-row">
+      {/* Makes the whole card a mouse target. Hidden from assistive tech and
+          skipped by the keyboard on purpose: the title link and the "open" link
+          below already reach this job, and a third route to the same place
+          would just be announced twice more. */}
+      <Link
+        className="match-row-open"
+        href={`/applicant/jobs/${encodeURIComponent(row.job_id)}`}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
       <div className="match-head">
         <span className="match-rank" aria-hidden="true">
           {rank}

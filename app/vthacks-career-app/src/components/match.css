@@ -45,10 +45,39 @@
 }
 
 .match-row {
+  position: relative;
   display: grid;
   gap: 10px;
   padding: 20px 22px;
   border-bottom: 1px solid var(--match-line);
+}
+
+/* Covers the card, sits under everything else in it. */
+.match-row-open {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.match-row:hover {
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+/* The card's content sits above the overlay so it stays readable, but does not
+   take the pointer - a click on the score or the reason has to reach the
+   overlay behind it. The trade-off is that card text is no longer selectable by
+   dragging; the whole card being a target is worth more here.
+   Real controls inside take the pointer back, so "Original posting" still opens
+   the posting rather than the job screen. */
+.match-row > *:not(.match-row-open) {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.match-row a:not(.match-row-open),
+.match-row button {
+  pointer-events: auto;
 }
 
 .match-list li:last-child {
