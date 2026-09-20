@@ -15,7 +15,7 @@ type Check =
 type Prepared =
   | { state: 'idle' }
   | { state: 'working' }
-  | { state: 'done'; fields: string[]; reason: string }
+  | { state: 'done'; fields: string[]; reason: string; screenshot: string | null }
   | { state: 'error'; message: string };
 
 export type DetailJob = {
@@ -106,13 +106,15 @@ export function JobDetail({
       });
       const payload = (await response.json()) as {
         error?: string;
-        prepared?: { fields_filled?: string[]; spoken_reason?: string };
+        prepared?: { fields_filled?: string[]; spoken_reason?: string; screenshot_path?: string };
       };
       if (!response.ok) throw new Error(payload.error ?? 'Nothing was prepared.');
+      const shot = payload.prepared?.screenshot_path?.split('/').pop() ?? null;
       setPrepared({
         state: 'done',
         fields: payload.prepared?.fields_filled ?? [],
         reason: payload.prepared?.spoken_reason ?? 'The application was prepared for your review.',
+        screenshot: shot,
       });
     } catch (error) {
       setPrepared({
@@ -292,6 +294,27 @@ export function JobDetail({
                   <p>{prepared.reason}</p>
                   {prepared.fields.length ? (
                     <p className="muted">Filled: {prepared.fields.join(', ')}</p>
+                  ) : null}
+                  {/* The form as the agent left it. Saying "prepared" without
+                      showing it asks for trust we have not earned. */}
+                  {prepared.screenshot ? (
+                    // next/image is the wrong tool here: a private, one-off
+                    // artifact behind an authenticated route, served once and
+                    // never cached at the edge.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      className="job-prepared-shot"
+                      src={`/api/jobs/autofill/screenshot?name=${encodeURIComponent(prepared.screenshot)}`}
+                      alt={`The ${job.company} application form with your name and email filled in, not submitted.`}
+                    />
+                  ) : null}
+                  {job.source_url ? (
+                    <p className="job-source-link">
+                      <a href={job.source_url} target="_blank" rel="noopener noreferrer">
+                        Open the application to finish and submit it yourself
+                        <ArrowUpRight size={13} aria-hidden="true" />
+                      </a>
+                    </p>
                   ) : null}
                 </div>
               ) : prepared.state === 'error' ? (

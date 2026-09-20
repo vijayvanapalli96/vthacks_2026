@@ -5,6 +5,12 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./app.env
+    # Read-only view of what the ATS worker prepared, so the app can show the
+    # filled form back to the person who asked for it. Without this the
+    # screenshot is a file inside a container nobody can reach, and "prepared"
+    # is a claim the user cannot check.
+    volumes:
+      - ats_work:/app/ats-artifacts:ro
     restart: unless-stopped
 
   employer:
