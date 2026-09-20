@@ -1,11 +1,13 @@
 'use server';
 
 import { AuthError } from 'next-auth';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { auth, signIn, signOut } from '@/auth';
 import { isGoogleConfigured } from '@/lib/providers';
+import { SIGNUP_ROLE_COOKIE } from '@/lib/signup-role';
 import { createUser, EMAIL_TAKEN, findUserByEmail, setUserRole } from '@/lib/users';
 
 export type AuthFormState = {
@@ -134,9 +136,22 @@ export async function googleSignInAction(formData: FormData): Promise<void> {
   if (!isGoogleConfigured()) redirect('/signin?error=google-unavailable');
 
   // Carry the pathway the landing page already collected through the OAuth round
-  // trip, so we don't ask a second time on the way back.
+  // trip, so we don't ask a second time on the way back. Twice: in the callback
+  // url, and in a ten-minute cookie that survives it losing the query string —
+  // the request leaves our origin entirely, and whether `?role=` comes back is
+  // up to the provider and the callback-url handling rather than to us. It is
+  // read at /continue ONLY when the account has no role yet.
   const role = roleSchema.safeParse(text(formData, 'role'));
   const redirectTo = role.success ? `/continue?role=${role.data}` : '/continue';
+  if (role.success) {
+    (await cookies()).set(SIGNUP_ROLE_COOKIE, role.data, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 600,
+    });
+  }
 
   await signIn('google', { redirectTo });
 }
@@ -149,6 +164,8 @@ export async function setRoleAction(formData: FormData): Promise<void> {
   if (!parsed.success) redirect('/continue');
 
   await setUserRole(session.user.email, parsed.data);
+  // The question it answered has been answered.
+  (await cookies()).delete(SIGNUP_ROLE_COOKIE);
   redirect(parsed.data === 'applicant' ? '/applicant' : '/employer');
 }
 
