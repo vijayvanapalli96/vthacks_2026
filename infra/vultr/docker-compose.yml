@@ -36,7 +36,7 @@ services:
       ATS_ARTIFACT_DIR: /app/work/ats
       AUDIT_LOG_PATH: /app/audit/events.jsonl
       # Required. Unset, the worker rejects every request.
-      ATS_WORKER_TOKEN: ${ATS_WORKER_TOKEN:?set ATS_WORKER_TOKEN in infra/vultr/.env}
+      ATS_WORKER_TOKEN: ${ATS_WORKER_TOKEN:-}
       # The kill switch. Leave this false to deploy a box that physically cannot
       # send an application, only prepare one for review.
       ATS_ALLOW_SUBMIT: ${ATS_ALLOW_SUBMIT:-false}
