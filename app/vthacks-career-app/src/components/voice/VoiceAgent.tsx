@@ -397,15 +397,22 @@ function VoiceAgentShell() {
     conversation.endSession();
   }, [conversation]);
 
+  /**
+   * Flips a flag and nothing else, deliberately.
+   *
+   * Calling conversation.setVolume() here threw "No active conversation. Call
+   * startSession() first." on every click, because the react wrapper's
+   * getConversation() throws rather than no-oping when there is no session —
+   * and with voice unconfigured there never is one. It was also a side effect
+   * inside a setState updater, which StrictMode double-invokes.
+   *
+   * None of it was needed: useConversation already watches the `volume` option
+   * above in an effect guarded on the conversation existing, so the value is
+   * applied when it changes AND when a session later starts.
+   */
   const toggleSpeaker = useCallback(() => {
-    setSpeakerMuted((wasMuted) => {
-      const next = !wasMuted;
-      // Applied live if there is a session; the `volume` option above covers the
-      // case where there is not one yet.
-      conversation.setVolume({ volume: next ? 0 : 1 });
-      return next;
-    });
-  }, [conversation]);
+    setSpeakerMuted((wasMuted) => !wasMuted);
+  }, []);
 
   const toggleMute = useCallback(() => {
     conversation.setMuted(!conversation.isMuted);

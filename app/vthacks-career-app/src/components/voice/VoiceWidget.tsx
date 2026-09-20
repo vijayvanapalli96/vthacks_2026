@@ -165,12 +165,6 @@ export function VoiceWidget({
           </span>
         </button>
 
-        {speakerMuted ? (
-          <p className="vw-caption" role="status">
-            Speaker muted — click the nose
-          </p>
-        ) : null}
-
         {/* The nose is a mesh inside a canvas: a pointer can hit it, a keyboard and
             a screen reader cannot. This is the same action as a real control, in
             the tab order, so the mute is not mouse-only — hard rule 6. It is
@@ -185,6 +179,7 @@ export function VoiceWidget({
         {/* Never only a colour or an animation. */}
         <p className={`vw-caption${blocked || status === 'error' ? ' is-failure' : ''}`} role="status">
           {caption}
+          {speakerMuted ? ' · speaker muted' : ''}
         </p>
       </div>
     </>
