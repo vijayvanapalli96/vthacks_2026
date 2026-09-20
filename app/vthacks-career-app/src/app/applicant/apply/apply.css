@@ -560,6 +560,33 @@ nav a[aria-current='page'] {
   font-weight: 800;
 }
 
+/* Rows are links now, not buttons. */
+.job-row-link {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.job-row-link:hover {
+  background: var(--hw-wash);
+}
+
+.job-prepared {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--hw-line);
+  border-radius: var(--hw-radius);
+  background: var(--hw-wash);
+  font-size: 13px;
+}
+
+.job-prepared p {
+  margin: 0 0 4px;
+}
+
 .job-empty {
   margin: 0;
   padding: 18px 22px;

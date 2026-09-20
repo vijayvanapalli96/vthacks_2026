@@ -23,6 +23,8 @@ import { listArtifacts } from '@/lib/artifacts/store.mjs';
 import { sql } from '@/lib/databricks';
 import { requireRole } from '@/lib/session';
 
+import { JobDetail } from '@/components/JobDetail';
+
 import { JobToolbox, type Artifact } from './JobToolbox';
 
 import '../../apply/apply.css';
@@ -150,6 +152,23 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
           </div>
         )}
       </section>
+
+      {/* The employer check, between the posting and the tools. What it finds
+          decides which route is offered: agent-to-agent apply for a verified
+          agent, autofill for a real company with no agent, nothing for neither.
+          renderRole is false because the hero above already carries the role. */}
+      <JobDetail
+        renderRole={false}
+        job={{
+          job_id: job.job_id,
+          title: job.job_title ?? '',
+          company: job.company_name ?? '',
+          location: job.location_text,
+          source: job.source,
+          source_url: job.source_url,
+          posted_at: job.posted_at,
+        }}
+      />
 
       <section className="panel" aria-labelledby="jd-toolbox-h">
         <header>

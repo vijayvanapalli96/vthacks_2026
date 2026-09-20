@@ -47,6 +47,7 @@ export async function POST(request: Request) {
         spoken_reason: result.spoken_reason,
         dimensions: result.dimensions,
         fields_released: [],
+        company_tier: 'agent_verified',
         user_id: session.user.id,
         job_id: job.job_id,
       }),
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
       spoken_reason: spokenReason,
       dimensions,
       fields_released: [],
+      company_tier: company.tier,
       user_id: session.user.id,
       job_id: job.job_id,
     });
