@@ -27,10 +27,10 @@
   --vt-fail: #9b1c1c;
 
   position: fixed;
-  /* Inset from the window edge rather than welded to it: the card reads as a
-     floating panel over the page, not as a browser chrome element that got cut
-     off by the viewport. */
-  left: clamp(12px, 2vw, 24px);
+  /* Right edge, inset from the window rather than welded to it: the card reads
+     as a floating panel over the page, not as browser chrome cut off by the
+     viewport. Fixed, so it never displaces the page content behind it. */
+  right: clamp(12px, 2vw, 24px);
   top: 96px;
   bottom: 24px;
   z-index: 60;
@@ -51,15 +51,16 @@
   gap: 6px;
   padding: 14px 10px;
   border: 1px solid var(--line);
-  border-left: 0;
-  border-radius: 0 12px 12px 0;
-  background: white;
-  color: var(--green);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  box-shadow: 0 6px 20px rgb(20 33 27 / 10%);
-  order: 2;
+  border-right: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: none;
+  /* order 1 puts the tab to the LEFT of the panel, so it hangs inward off the
+     right edge of the window. */
+  order: 1;
   margin-top: 10px;
 }
 
@@ -68,24 +69,22 @@
 }
 
 /* Closed, the tab is the whole control, so it needs the edge the panel would
-   otherwise have given it — a flat, borderless left side only makes sense when
+   otherwise have given it — a flat, borderless right side only makes sense when
    something is butted up against it. */
 .vt-dock.is-closed .vt-tab {
-  border-left: 1px solid var(--line);
-  border-radius: 12px;
+  border-right: 1px solid var(--line);
 }
 
 .vt-panel {
-  order: 1;
+  order: 2;
   /* The dock inset and the tab both eat into the room available. */
   width: min(420px, calc(100vw - 96px));
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  background: white;
+  background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgb(20 33 27 / 14%);
+  box-shadow: 0 10px 40px color-mix(in srgb, var(--ink) 16%, transparent);
   overflow: hidden;
 }
 
@@ -279,183 +278,57 @@
 
 /* --------------------------------------------------- the floating control --- */
 
+/* ===========================================================================
+   THE FLOATING VOICE CONTROL — the face, and a line of text. No panel.
+   =========================================================================== */
+
 .vw {
   position: fixed;
   /* The default corner, for the single commit before useDraggable has measured the
-     element and set left/top inline. With a fixed width and both left and right set
-     the inline `left` wins in LTR, so these are only ever the fallback. Without them
-     the widget would render once in static-flow position and visibly jump. */
+     element and set left/top inline. With both left and right set the inline `left`
+     wins in LTR, so these are only ever the fallback. Without them the control would
+     render once in static-flow position and visibly jump. */
   right: 28px;
   bottom: 28px;
   z-index: 90; /* Above the transcript dock on purpose: it overlaps other widgets. */
-  width: 268px;
-  padding: 12px;
-  border-radius: 16px;
-  background: #0b2c1f;
-  color: #f2f7f3;
-  box-shadow: 0 14px 44px rgb(11 44 31 / 38%);
   display: grid;
-  gap: 10px;
-  font-size: 13px;
+  justify-items: center;
+  gap: 6px;
+  width: 168px;
+  touch-action: none; /* Or a touch drag scrolls the page instead of moving this. */
 }
 
-.vw.is-dragging {
-  box-shadow: 0 20px 60px rgb(11 44 31 / 52%);
-}
-
-.vw-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* A real <button>, so it is in the tab order and the arrow keys reach it. */
-.vw-grip,
-.vw-reset {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 auto;
-  border: 1px solid rgb(242 247 243 / 26%);
-  border-radius: 8px;
-  background: transparent;
-  color: #f2f7f3;
-}
-
-.vw-grip {
-  cursor: grab;
-}
-
-.vw.is-dragging .vw-grip {
-  cursor: grabbing;
-}
-
-/* The green ring from globals.css is invisible on this panel. */
-.vw button:focus-visible {
-  outline: 3px solid #dcef86;
-  outline-offset: 2px;
-}
-
-.vw-status {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.05em;
-  /* 11.9:1 on #0b2c1f. */
-  color: #dbe8df;
-}
-
-.vw-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #7f9689;
-  flex: 0 0 auto;
-}
-
-.vw-dot.is-live {
-  background: #dcef86;
-}
-
-/* Holds whatever is passed as the `visual` prop — HireWire's face. */
-.vw-visual {
-  display: flex;
-  justify-content: center;
-}
-/* The face is drawn in currentColor, which is --ink for the paper background it
-   was designed against and invisible on this panel. One override, not one per
-   stroke; the mood colours (speaking green, refusing red) still set stroke and
-   fill explicitly and are unaffected. */
-.vw-visual .face {
-  color: #f2f7f3;
-}
-/* Same reason for the two signal states: --success and --failure are chosen for
-   the paper background and both go muddy on this one. These are the panel's own
-   live green and a red that clears it. */
-.vw-visual .face--speaking .face__head,
-.vw-visual .face--speaking .face__brow path,
-.vw-visual .face--speaking .face__mouth,
-.vw-visual .face--happy .face__head,
-.vw-visual .face--happy .face__brow path,
-.vw-visual .face--happy .face__mouth {
-  stroke: #dcef86;
-}
-.vw-visual .face--speaking .face__eye,
-.vw-visual .face--happy .face__eye {
-  fill: #dcef86;
-}
-.vw-visual .face--refusing .face__head,
-.vw-visual .face--refusing .face__brow path,
-.vw-visual .face--refusing .face__mouth {
-  stroke: #ff9d9d;
-}
-.vw-visual .face--refusing .face__eye {
-  fill: #ff9d9d;
-}
-
-.vw-blurb {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #dbe8df;
-}
-
-.vw-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.vw-btn {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 10px 12px;
+.vw-face {
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
-  border-radius: 10px;
-  font-weight: 750;
-  font-size: 13px;
+  background: transparent;
+  cursor: grab;
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
-.vw-start {
-  background: #dcef86;
-  color: #14211b;
-}
+.vw-face:hover { transform: translateY(-2px) scale(1.04); }
+.vw-face:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+.vw-face:disabled { cursor: not-allowed; opacity: 0.55; }
+.vw.is-dragging .vw-face { cursor: grabbing; transform: scale(1.06); }
 
-.vw-start:disabled {
-  background: #4a5d51;
-  color: #e4ece6;
-  cursor: not-allowed;
-}
-
-.vw-mute {
-  background: rgb(242 247 243 / 16%);
-  color: #f2f7f3;
-}
-
-.vw-stop {
-  background: #f7dcdc;
-  color: #7a1414;
-}
-
-.vw-reason {
+.vw-caption {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: #e9f2ec;
-  background: rgb(242 247 243 / 12%);
-  padding: 8px 10px;
-  border-radius: 9px;
+  max-width: 168px;
+  text-align: center;
+  text-wrap: balance;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  /* The control floats over whatever page is behind it, so the caption needs to
+     hold its own without a panel to sit on. */
+  text-shadow: 0 1px 0 var(--paper), 0 -1px 0 var(--paper), 1px 0 0 var(--paper), -1px 0 0 var(--paper);
 }
 
-/* Visible to assistive tech, invisible on screen. Not display:none, which would
-   remove it from the accessibility tree and take the announcements with it. */
+.vw.is-live .vw-caption { color: var(--ink); }
+.vw-caption.is-failure { color: var(--failure); }
+
 .vt-sr-only {
   position: absolute;
   width: 1px;
@@ -471,16 +344,12 @@
 /* --------------------------------------------------------------- motion --- */
 /* Opt-in, not opt-out. Default is still. */
 @media (prefers-reduced-motion: no-preference) {
-  .vw-dot.is-live {
-    animation: vw-pulse 1.8s ease-in-out infinite;
+  .vw.is-live .vw-face {
+    animation: vw-pulse 2.4s ease-in-out infinite;
   }
 
-  .vw-dot.is-speaking {
-    animation-duration: 0.7s;
-  }
-
-  .vw-spin {
-    animation: vw-spin 1s linear infinite;
+  .vw[data-voice-state='speaking'] .vw-face {
+    animation-duration: 1s;
   }
 
   .vt-action.is-pending {
@@ -490,19 +359,11 @@
   @keyframes vw-pulse {
     0%,
     100% {
-      opacity: 1;
       transform: scale(1);
     }
 
     50% {
-      opacity: 0.45;
-      transform: scale(0.75);
-    }
-  }
-
-  @keyframes vw-spin {
-    to {
-      transform: rotate(360deg);
+      transform: scale(1.04);
     }
   }
 }
@@ -518,6 +379,6 @@
   }
 
   .vw {
-    width: 232px;
+    width: 150px;
   }
 }
