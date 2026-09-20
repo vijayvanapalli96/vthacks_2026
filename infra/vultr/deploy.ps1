@@ -2,7 +2,11 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$HostIp,
   [string]$SshUser = "root",
-  [string]$IdentityFile
+  [string]$IdentityFile,
+  # The ATS worker is opt-in. Without this the deployed stack is exactly what it
+  # was before that service existed, so a broken Chromium build cannot take the
+  # employer and applicant agents down with it.
+  [switch]$IncludeAts
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +37,9 @@ New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/employer") -F
 New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/applicant") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/shared") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stagingRoot "certs") -Force | Out-Null
+if ($IncludeAts) {
+  New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/ats") -Force | Out-Null
+}
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "docker-compose.yml") -Destination $stagingRoot
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Caddyfile") -Destination $stagingRoot
@@ -46,6 +53,20 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/remote-agent.mjs") -D
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/trust-policy.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/mutual-match.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
 Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/signed-envelope.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
+if ($IncludeAts) {
+  foreach ($atsFile in "Dockerfile", "server.mjs", "providers.mjs", "form-filler.mjs") {
+    Copy-Item -LiteralPath (Join-Path $repoRoot "agents/ats/$atsFile") -Destination (Join-Path $stagingRoot "agents/ats")
+  }
+  # docker compose reads ATS_WORKER_TOKEN from a .env beside the compose file and
+  # refuses to start the service without it. Fail here, with a useful message,
+  # rather than half-deploying and leaving the stack down.
+  $atsEnv = Join-Path $PSScriptRoot ".env"
+  if (-not (Test-Path -LiteralPath $atsEnv)) {
+    throw "Missing $atsEnv. Copy infra/vultr/.env.example to .env and set ATS_WORKER_TOKEN before deploying with -IncludeAts."
+  }
+  Copy-Item -LiteralPath $atsEnv -Destination (Join-Path $stagingRoot ".env")
+}
+
 Copy-Item -LiteralPath $requiredFiles[0] -Destination (Join-Path $stagingRoot "certs/employer.leaf.pem")
 Copy-Item -LiteralPath $requiredFiles[1] -Destination (Join-Path $stagingRoot "certs/employer.key")
 Copy-Item -LiteralPath $requiredFiles[2] -Destination (Join-Path $stagingRoot "certs/applicant.leaf.pem")
@@ -97,7 +118,8 @@ scp @identityArgs $archive "${destination}:/tmp/hirewire-vultr.tgz"
 if ($LASTEXITCODE -ne 0) { throw "Could not upload the deployment archive." }
 # Docker writes progress to stderr; fold it into stdout so Windows PowerShell 5.1
 # does not treat build progress as a failure. The exit code still decides success.
-ssh @identityArgs $destination "tar -xzf /tmp/hirewire-vultr.tgz -C /opt/hirewire && chmod 600 /opt/hirewire/certs/employer.key /opt/hirewire/certs/applicant.key && cd /opt/hirewire && docker compose up -d --build --quiet-pull 2>&1"
+$composeProfile = if ($IncludeAts) { "--profile ats " } else { "" }
+ssh @identityArgs $destination "tar -xzf /tmp/hirewire-vultr.tgz -C /opt/hirewire && chmod 600 /opt/hirewire/certs/employer.key /opt/hirewire/certs/applicant.key && cd /opt/hirewire && docker compose ${composeProfile}up -d --build --quiet-pull 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "Remote Docker deployment failed." }
 
 Write-Host "Both agents deployed. Point employer.hirewire.biz and applicant.hirewire.biz A records to $HostIp, then run verify-public.ps1."

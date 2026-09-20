@@ -65,6 +65,32 @@ Application orchestration returns:
 
 A refusal always returns `fields_released: []` and does not call the employer.
 
+## Applying at volume
+
+Two lanes sit on top of the single-job path above. Both default to sending
+nothing.
+
+`applicant/auto-apply.mjs` fans out over `applyToEmployer`:
+
+- `plan({ jobs })` verifies every employer and releases nothing. It does not POST
+  an application and does not read candidate PII, so a plan file is safe to write
+  to disk and safe to run unattended.
+- `submit({ plan, approvedJobIds, candidate })` applies to the approved subset.
+  `approvedJobIds` is required — there is no approve-all default — and an
+  approval cannot upgrade a refusal.
+
+`ats/` drives Greenhouse, Lever and Ashby application forms in Playwright.
+`CLAUDE.md` lists ATS form automation as out of scope; that was revisited and
+reversed, on the basis that an ANS-registered agent filling a form is a different
+claim from an anonymous headless browser. The ANS name rides in the user agent
+and is what carries that claim.
+
+- `fill()` prepares the form, screenshots it, records which fields were filled
+  and which were skipped, and stops. `submit: true` is what clicks.
+- An unrecognised ATS is never typed into and no browser is launched.
+- `ats/server.mjs` is the deployed worker. It is not published — see
+  `../infra/vultr/README.md` for why, and for the two default-safe switches.
+
 ## Real infrastructure handoff
 
 1. Applicant and employer identities are ACTIVE in ANS; certificates are stored
