@@ -81,7 +81,10 @@ export function VoiceWidget({
   const blocked = Boolean(unavailableReason);
 
   const caption = unavailableReason
-    ? unavailableReason
+    ? // Short, and never the server's own words. The full reason goes to the
+      // transcript panel, which is where the typed fallback actually is — a
+      // paragraph of configuration detail under a face is not a caption.
+      'Voice is off — type in the transcript'
     : connecting
       ? 'Connecting…'
       : status === 'error'

@@ -156,6 +156,9 @@ function VoiceAgentShell() {
       setOptions(payload.gaps.map((gap) => ({ fieldKey: gap.fieldKey, question: gap.question })));
       setGapsRemaining(payload.gaps.length);
       setUnavailable(payload.unavailableReason);
+      // The face only says "voice is off"; the why belongs next to the typed
+      // input that replaces it.
+      if (payload.unavailableReason) setNote(payload.unavailableReason);
       return payload;
     } catch (error) {
       setUnavailable(`The voice session could not be prepared — ${(error as Error).message}. You can still type your answers.`);
