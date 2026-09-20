@@ -187,6 +187,27 @@ $appEnv = @(
   (ConvertTo-EnvLine "MONGODB_URI" (Get-HirewireSecret "mongodb-uri"))
 )
 
+# The interview room and the voice agent. ALL OPTIONAL, each independently: a
+# missing one degrades to a stated reason on screen rather than a crash, which is
+# the whole contract those features are built to. elevenlabs-api-key serves BOTH
+# personas and Scribe speech-to-text; the two agent ids are separate agents on
+# purpose (see interviewerConfig() in src/lib/elevenlabs.ts).
+foreach ($pair in @(
+    @{ Secret = "elevenlabs-api-key"; Env = "ELEVENLABS_API_KEY" },
+    @{ Secret = "elevenlabs-agent-id"; Env = "ELEVENLABS_AGENT_ID" },
+    @{ Secret = "elevenlabs-interviewer-agent-id"; Env = "ELEVENLABS_INTERVIEWER_AGENT_ID" },
+    @{ Secret = "presage-api-key"; Env = "PRESAGE_API_KEY" },
+    @{ Secret = "google-generative-ai-api-key"; Env = "GOOGLE_GENERATIVE_AI_API_KEY" }
+  )) {
+  $value = Get-OptionalHirewireSecret $pair.Secret
+  if ($value) {
+    $appEnv += (ConvertTo-EnvLine $pair.Env $value)
+    Write-Host "$($pair.Env): configured."
+  } else {
+    Write-Host "$($pair.Env): not set in the hirewire scope; the feature behind it will say so on screen."
+  }
+}
+
 $googleId = Get-OptionalHirewireSecret "google-client-id"
 $googleSecret = Get-OptionalHirewireSecret "google-client-secret"
 if ($googleId -and $googleSecret) {

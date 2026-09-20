@@ -23,9 +23,9 @@ import type { MatchBrief, PageBrief } from '@/lib/voice-brief';
  * not resolve, or being asked to apply) and `navigated` / `job_status_set` for the
  * two things it now does on the user's behalf.
  *
- * `interview_feedback` is still unreached and is left in deliberately: the interviewer
- * persona is a separate feature and the honest state of this list is that it has a
- * case nothing produces yet.
+ * `interview_feedback` is produced by the mock interview room (src/lib/interview.ts,
+ * F4.7), which appends the closing readout as a role='action' turn. It was reserved
+ * here and unreached until then.
  *
  * The union is the mechanism, not decoration — adding a kind is a compile error in
  * TranscriptAction's exhaustive switch until it is handled, rather than a silent

@@ -9,14 +9,17 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "voice:agent": "node scripts/provision-voice-agent.mjs",
-    "voice:smoke": "node scripts/voice-actions-smoke.mjs"
+    "voice:smoke": "node scripts/voice-actions-smoke.mjs",
+    "voice:interviewer": "node scripts/provision-interviewer-agent.mjs"
   },
   "dependencies": {
     "@elevenlabs/react": "^1.15.2",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
+    "@smartspectra/node-sdk": "^3.3.0",
     "animejs": "^4.5.0",
     "bcryptjs": "^3.0.3",
+    "jpeg-js": "^0.4.4",
     "lenis": "^1.3.26",
     "lucide-react": "0.546.0",
     "mongodb": "^6.21.0",

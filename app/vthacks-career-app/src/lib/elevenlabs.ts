@@ -47,6 +47,35 @@ export function elevenLabsConfig(): { config: ElevenLabsConfig } | { reason: str
 }
 
 /**
+ * PERSONA 2 — the interviewer, for the mock interview room (F4.7).
+ *
+ * A SECOND AGENT ID, NOT A SECOND PROMPT ON THE FIRST. The calm assistant's prompt
+ * is built around a question QUEUE it must not deviate from and a `record_answer`
+ * tool it must call after every answer. An interviewer has to follow up on what it
+ * just heard and must write nothing to the profile. Pushing both behaviours into one
+ * prompt makes each worse, and the agent that ends up half-interviewer is also the
+ * one that logs a rehearsed answer as a profile fact.
+ *
+ * Unset is a normal deployment state, exactly as with the assistant: the interview
+ * room then shows the questions on screen and takes typed or recorded answers. The
+ * reason is deliberately vague to the visitor and specific in the server log.
+ */
+export function interviewerConfig(): { config: ElevenLabsConfig } | { reason: string } {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  const agentId = process.env.ELEVENLABS_INTERVIEWER_AGENT_ID;
+
+  if (!apiKey) {
+    console.warn('[interview] ELEVENLABS_API_KEY is not set; the interviewer will not speak.');
+    return { reason: 'The interviewer voice is not switched on here, so the questions are on screen instead.' };
+  }
+  if (!agentId) {
+    console.warn('[interview] ELEVENLABS_INTERVIEWER_AGENT_ID is not set; run `npm run voice:interviewer`.');
+    return { reason: 'The interviewer voice is not switched on here, so the questions are on screen instead.' };
+  }
+  return { config: { agentId, apiKey } };
+}
+
+/**
  * Mint a signed conversation URL for the configured agent.
  *
  * Throws on anything other than a 200 with a signed_url. The caller turns that into

@@ -31,6 +31,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { interviewUnlocked } from '@/lib/interview-contract';
 import {
   FUNNEL_STAGES,
   PIPELINE_STATUSES,
@@ -314,6 +315,23 @@ function Card({
 
       {stalled ? <p className="pipe-card-stalled">{stalled}</p> : null}
       {card.note ? <p className="pipe-card-note">“{card.note}”</p> : null}
+
+      {/* The one thing this board could never offer: something to DO the moment an
+          employer replies. Rendered only for the stages where a rehearsal is real
+          (interviewing, offer) so it is not an eighth identical link on every card,
+          and it names the role in its accessible name because "Rehearse" repeated
+          down a column tells a screen-reader user nothing. */}
+      {interviewUnlocked(card.status) ? (
+        <p className="pipe-card-rehearse">
+          <Link href={`/applicant/interview/${encodeURIComponent(card.job_id)}`}>
+            Rehearse this interview
+            <span className="sr-only">
+              {' '}
+              for {card.title ?? 'this role'} at {card.company ?? 'this company'}
+            </span>
+          </Link>
+        </p>
+      ) : null}
 
       <div className="pipe-field">
         {/* A real label, visible, associated by htmlFor. It names the JOB as well

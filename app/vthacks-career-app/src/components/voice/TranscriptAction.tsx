@@ -14,8 +14,9 @@
  * That paid off: making the agent an ACTOR reached four of them —`job_matched` when it
  * reloads or explains, `refused` when it will not open a job it cannot resolve,
  * `navigated` when it walks you somewhere, `job_status_set` when it moves a role's
- * stage. `interview_feedback` is still unreached, and saying so is more useful than
- * quietly deleting it.
+ * stage. The mock interview room (F4.7) reached the last one, `interview_feedback`,
+ * by appending its closing readout as an action turn — so every kind in the union now
+ * has something that produces it.
  *
  * The `never` assignment at the bottom is what makes that true: adding a kind without
  * a case here fails the build. The kinds are data; the styling is a lookup.

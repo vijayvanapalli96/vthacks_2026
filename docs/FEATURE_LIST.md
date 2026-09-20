@@ -156,7 +156,7 @@ Voice is the **interface**, not narration. The whole app is operable eyes-free.
 | F4.4 | Goals capture → `goals` table, echoed back for confirmation | **P0** | Nidhi | 30 m |
 | F4.5 | **Tool router** (Gemini function-calling): `search_jobs`, `match`, `explain_match`, `tailor`, `verify_employer`, `apply`, `status`, `open_dashboard`. Every voice utterance becomes an action, never a canned reply. | **P0** | Nidhi | 1.5 h |
 | F4.6 | **The spoken refusal** — "I stopped. That employer could not prove who it is; its identity certificate doesn't match its domain. I have not sent anything." Wins the ElevenLabs *and* ANS tracks. | **P0** | Nidhi + Vijay | 30 m |
-| F4.7 | Persona 2 — interviewer, voice mock interview | P2 | Nidhi | 2 h |
+| F4.7 | Persona 2 — interviewer, **video** mock interview, gated on the pipeline reaching `interviewing`. Questions from Gemini (deterministic JD/gap fallback), answers transcribed by ElevenLabs Scribe, steadiness via Presage, readout appended as the `interview_feedback` action. All four integrations degrade independently. **DONE — `/applicant/interview/[jobId]`** | P2 ✅ | Nidhi | 2 h |
 | F4.8 | 30-second overnight audio briefing artifact | P2 | Nidhi | 45 m |
 
 ---

@@ -306,3 +306,10 @@
     grid-template-columns: 12ch 1fr;
   }
 }
+
+/* The rehearse link, on cards where an employer has replied. Block rather than
+   inline so it is a full-width tap target on a phone, and separated by space
+   rather than by a rule: the card already has enough hairlines. */
+.pipe-card-rehearse {
+  margin: 12px 0 0;
+}

@@ -189,8 +189,16 @@ These are correctness, not style. Breaking one breaks the pitch.
 ## Out of scope — decided, not up for rediscussion at 4 AM
 
 Playwright / ATS form automation (replaced by A2A) · Solana (no honest fit) ·
-payments · mobile · resume WYSIWYG · Presage · Gmail ingestion (the
+payments · mobile · resume WYSIWYG · Gmail ingestion (the
 `email_classifications` table exists; we are not filling it in 15 hours).
+
+**Presage came back, for one feature only.** It was on this list as "no honest
+fit"; the owner reversed that on 2026-09-20 for the mock interview room, where a
+steadiness read off the rehearsal webcam is about the candidate's own nerves in
+their own practice session. It is gated on `PRESAGE_API_KEY`, the SDK is a manual
+install and not a dependency, no frame is ever stored, and the reading never
+reaches an employer. It stays out of scope everywhere else — see the header of
+`src/lib/presage.ts` before extending it.
 
 ## Working agreements
 
