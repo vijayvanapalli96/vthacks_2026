@@ -23,6 +23,24 @@
 import { sql } from './lib/dbsql.mjs';
 import { runMatch } from '../app/vthacks-career-app/src/lib/match/run.mjs';
 
+/**
+ * Accounts this OPERATOR SCRIPT will never write to without an explicit override.
+ *
+ * `runMatch()` itself has no such list, deliberately: in production the product
+ * must be able to re-score any account, including this one, and a hardcoded
+ * exception inside the pipeline would be a permanent bug wearing a safety vest.
+ * The guard belongs here, on the path a human types by hand at 3am, because that
+ * is where the accident happens.
+ *
+ * A re-score DELETEs the target user's previous match_evaluations rows (see
+ * run.mjs). That is correct for a cache and catastrophic if the target is the
+ * wrong account.
+ */
+const PROTECTED_USER_IDS = new Set([
+  // tarangnair98@gmail.com — the human's live account.
+  '3027b072-2f8c-4960-b3c3-33f63569b50a',
+]);
+
 function flag(args, name) {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : undefined;
@@ -54,12 +72,22 @@ async function main(args) {
   const goalsRaw = flag(args, 'goals');
   const goalsOverride = goalsRaw ? JSON.parse(goalsRaw) : null;
 
+  let persist = !args.includes('--no-persist');
+  if (persist && PROTECTED_USER_IDS.has(userId) && !args.includes('--i-mean-it')) {
+    persist = false;
+    console.log(
+      `  ! ${userId} is a PROTECTED account — forcing --no-persist.\n` +
+        `    A re-score would DELETE its existing match_evaluations rows.\n` +
+        `    Pass --i-mean-it to override.`,
+    );
+  }
+
   const t0 = Date.now();
   const out = await runMatch({
     sql,
     userId,
     refresh: args.includes('--refresh'),
-    persist: !args.includes('--no-persist'),
+    persist,
     freshnessDays: flag(args, 'freshness') ? Number(flag(args, 'freshness')) : undefined,
     pool: flag(args, 'pool') ? Number(flag(args, 'pool')) : undefined,
     limit: flag(args, 'limit') ? Number(flag(args, 'limit')) : undefined,

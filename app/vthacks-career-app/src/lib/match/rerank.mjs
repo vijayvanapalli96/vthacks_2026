@@ -284,5 +284,14 @@ export async function rerank(sql, profile, candidates) {
     scored.push({ ...candidate, ...validated.value });
   }
 
+  // SORTED BY THE MODEL'S SCORE, descending. This is not cosmetic and it was a
+  // real bug in the first live run: `result.rows` comes back in whatever order the
+  // warehouse produced the ai_query results, so the "top 3" printed were
+  // retrieval ranks 7, 3 and 12 with scores 70, 60, 60. Reranking the top 20 and
+  // then showing them in arbitrary order throws away the entire point of stage 2.
+  // Ties break on retrieval_rank, so the zero-token stage decides between two
+  // jobs the model scored the same — it is the signal with a reason attached.
+  scored.sort((a, b) => b.overall_score - a.overall_score || a.retrieval_rank - b.retrieval_rank);
+
   return { scored, modelCalls: result.rows.length, droppedNoReason };
 }

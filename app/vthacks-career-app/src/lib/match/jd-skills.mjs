@@ -231,6 +231,16 @@ const STOPWORDS = new Set([
 export function scanJd(jdText) {
   const lines = String(jdText ?? '').split('\n');
   const skills = new Set();
+  // Every line inside a requirements block, bullet or not. The donor only ever
+  // harvested BULLETS, via SKILL_TOKEN_RE, which has two consequences on this
+  // corpus: a non-bullet requirement line ("3+ years with Python and Kubernetes")
+  // contributes nothing, and a lowercase skill name ('dbt', 'k8s',
+  // 'scikit-learn') can never match because SKILL_TOKEN_RE is anchored on [A-Z].
+  // The donor's own diagnoseExtraction() comment says so outright. Collecting the
+  // section TEXT lets requirementsFor() run the canonical vocabulary over it,
+  // which has neither limitation — while this stays ONE state machine, which is
+  // the thing the donor is emphatic about not duplicating.
+  const requirementLines = [];
   let inRequirementsBlock = false;
   let sawRequirementSection = false;
 
@@ -256,6 +266,8 @@ export function scanJd(jdText) {
       inRequirementsBlock = false;
     }
 
+    if (inRequirementsBlock) requirementLines.push(line);
+
     const bulletMatch = BULLET_LINE_RE.exec(line);
     if (inRequirementsBlock && bulletMatch) {
       const bulletText = bulletMatch[1];
@@ -269,7 +281,11 @@ export function scanJd(jdText) {
       }
     }
   }
-  return { skills: [...skills], sawRequirementSection };
+  return {
+    skills: [...skills],
+    sawRequirementSection,
+    requirementText: requirementLines.join('\n'),
+  };
 }
 
 /**
@@ -279,6 +295,143 @@ export function scanJd(jdText) {
  */
 export function extractJdSkills(jdText) {
   return scanJd(jdText).skills;
+}
+
+// ── Making the above actually work on THIS corpus ────────────────────────────
+//
+// MEASURED, on 60 engineering postings drawn from the live `open_us_jobs` view:
+//
+//   scanJd() on the raw text            ->  2 / 60 found a requirements section
+//   scanJd() on normalised text         -> 41 / 60
+//   canonical vocabulary, whole text    -> 2.9 recognised skills per posting
+//
+// 2 out of 60 is the whole story. `job_snapshots.description_text` is HTML that
+// has been flattened to plain text by the ingest path: most rows are ONE running
+// paragraph with no newlines and no bullet characters at all. The donor's state
+// machine needs lines to classify and bullets to harvest, so on this corpus it
+// silently returned nothing — which shipped as empty `skills_matched` and empty
+// `skills_missing` on every single match in the first live run. Nothing threw.
+// That is the failure mode plan §7.1 predicted ("description_text quality varies
+// by ATS"), arriving structurally rather than occasionally.
+//
+// Two fixes, layered, precision first.
+
+const HEADING_PHRASES = [
+  // Longest first within a family so "Basic Qualifications" wins over
+  // "Qualifications" and the shorter one does not split the longer one's text.
+  'Basic Qualifications', 'Minimum Qualifications', 'Preferred Qualifications',
+  'Qualifications', 'Requirements', 'Required Skills', 'Skills and Experience',
+  "What You'll Bring", 'What You Will Bring', "What You'll Need",
+  'Who You Are', 'About You', 'You Have', 'You Will Have',
+  'Nice to have', 'Nice-to-have', 'Must have', 'Must-have',
+  // Closers matter as much as openers: without them the block runs to
+  // end-of-file and the benefits list becomes required skills.
+  'Responsibilities', "What You'll Do", 'What You Will Do',
+  'Benefits', 'Perks', 'Compensation', 'Salary Range', 'Pay Range',
+  'About Us', 'About the Role', 'About the Team', 'Equal Opportunity',
+  'How to Apply', 'What we offer', 'Why Join',
+];
+
+const HEADING_SPLIT_RE = new RegExp(
+  `\\b(${HEADING_PHRASES.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b\\s*:?`,
+  'gi',
+);
+
+/**
+ * Re-introduce enough structure into a flattened description for scanJd() to work.
+ *
+ * Three passes, and each one is doing the minimum that lets the existing state
+ * machine see what it needs:
+ *   1. every recognised heading PHRASE becomes a markdown heading on its own line;
+ *   2. every sentence boundary becomes a bullet, because a flattened bullet list
+ *      IS a run of sentences once the <li> tags are gone;
+ *   3. any remaining line that starts with a capital becomes a bullet too.
+ *
+ * Only ever called when the RAW text yielded nothing, so it cannot damage a
+ * posting that already had real structure. That guard is load-bearing: run on
+ * Replit's already-structured posting, this normaliser produces ZERO tokens where
+ * the raw text produced fourteen, because pass 2 shatters its lines.
+ *
+ * The lookbehind in pass 2 requires a lowercase letter, digit or closing bracket
+ * before the period, which keeps "Ph.D.", "U.S." and "Node.js" from splitting.
+ *
+ * @param {string} jdText
+ * @returns {string}
+ */
+export function normalizeFlattenedJd(jdText) {
+  //   is everywhere in scraped ATS text and is NOT matched by \s in some
+  // older engines; normalising it first makes every pattern below simpler.
+  let s = String(jdText ?? '').replace(/ /g, ' ');
+  s = s.replace(HEADING_SPLIT_RE, (m) => `\n## ${m.replace(/:\s*$/, '').trim()}\n`);
+  s = s.replace(/(?<=[a-z0-9)\]”"'])\.\s+(?=[A-Z])/g, '.\n- ');
+  s = s.replace(/\n(?!##|- )([A-Z][^\n]{3,})/g, '\n- $1');
+  return s;
+}
+
+/**
+ * The requirements of a posting, and WHERE they were read from.
+ *
+ * The requirements SECTION is located with the donor's state machine; the skills
+ * inside it are then read with the CANONICAL VOCABULARY rather than with
+ * `SKILL_TOKEN_RE`. That swap is the precision half of the fix, and it buys two
+ * things at once:
+ *
+ *   * No garbage. `SKILL_TOKEN_RE` harvests any capitalised token, so on real
+ *     postings "Palo", "Alto", "Site", "Reliability" and "Systems" land in
+ *     `skills_missing` next to Terraform. `skills_missing` is the column the
+ *     coursework lever will aggregate into "take CS 3214 and +40% of postings open
+ *     up", so a garbage token there becomes a wrong course recommendation later. A
+ *     closed vocabulary cannot produce one.
+ *   * Lowercase and non-bullet requirements. `SKILL_TOKEN_RE` is anchored on
+ *     `[A-Z]` and only ever ran on bullets, so 'dbt' and 'k8s' were invisible and
+ *     so was "3+ years with Python and Kubernetes" if it was not a bullet.
+ *
+ * THE COST, stated rather than hidden: a genuinely required skill the vocabulary
+ * does not know — RocksDB, Spanner, AlloyDB — is dropped from `skills_missing`.
+ * That is plan §7.2's trade ("skill extraction is a vocabulary, not
+ * understanding") and it is exactly what stage 2 covers; the reranker reads the
+ * full posting and names those requirements in its explanation. It is a
+ * zero-token stage being honest about its ceiling, not a bug.
+ *
+ * `source` is returned, not inferred, so an empty result can always be told apart
+ * from an unchecked one.
+ *
+ * @param {string} jdText
+ * @returns {{skills: string[], source: string, sawRequirementSection: boolean}}
+ */
+export function requirementsFor(jdText) {
+  const raw = scanJd(jdText);
+  if (raw.sawRequirementSection) {
+    const skills = [...extractSkills(raw.requirementText)];
+    if (skills.length > 0) {
+      return { skills, source: 'requirements-section', sawRequirementSection: true };
+    }
+  }
+
+  // Only now. The normaliser SHATTERS an already-structured posting — its
+  // sentence-to-bullet pass breaks real lines — so running it first would destroy
+  // the postings that need no help.
+  const normalized = scanJd(normalizeFlattenedJd(jdText));
+  if (normalized.sawRequirementSection) {
+    const skills = [...extractSkills(normalized.requirementText)];
+    if (skills.length > 0) {
+      return {
+        skills,
+        source: 'normalized-requirements-section',
+        sawRequirementSection: true,
+      };
+    }
+  }
+
+  // No requirements section anywhere. Fall back to the vocabulary over the whole
+  // description. Less precise about what is REQUIRED versus merely mentioned, and
+  // labelled as such — but it is the difference between this feature working on
+  // this corpus and returning empty arrays on every row.
+  return {
+    skills: [...extractSkills(jdText)],
+    source: 'whole-description-vocabulary',
+    sawRequirementSection: false,
+  };
 }
 
 /**

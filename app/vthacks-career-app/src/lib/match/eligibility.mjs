@@ -178,6 +178,48 @@ export function classifyWorkAuthorization(value) {
 }
 
 /**
+ * Does this student need visa sponsorship? Read from BOTH columns that answer it.
+ *
+ * FOUND FROM LIVE DATA, not from the schema. `goals` has two overlapping
+ * sponsorship signals — `work_authorization STRING` and
+ * `sponsorship_required BOOLEAN` — and the voice lane populates the BOOLEAN. The
+ * first version of this module read only the string, so the one real `goals` row
+ * in the workspace (sponsorship_required = true, work_authorization = NULL) came
+ * back `needsSponsorship: null` and the sponsorship gate never fired for the one
+ * account that had actually answered the question.
+ *
+ * The free text WINS when it is definitive, because it is more specific: "US
+ * citizen" and "green card holder" are facts, whereas the boolean is a single
+ * yes/no that a voice transcript can easily get backwards. When the text says
+ * nothing, the boolean is the answer.
+ *
+ * Databricks renders a BOOLEAN column as the STRING "true"/"false" through the
+ * JSON_ARRAY result format, so both are accepted. Treating the string "false" as
+ * truthy — which a bare `if (value)` does — would invert the gate.
+ *
+ * @param {{work_authorization?: string|null, sponsorship_required?: boolean|string|null}} goals
+ * @returns {{needsSponsorship: boolean|null, isCitizen: boolean|null, raw: string|null}}
+ */
+export function resolveSponsorshipNeed(goals) {
+  const fromText = classifyWorkAuthorization(goals?.work_authorization);
+  if (fromText.needsSponsorship !== null) return fromText;
+
+  const flag = goals?.sponsorship_required;
+  const asBool =
+    flag === true || flag === 'true'
+      ? true
+      : flag === false || flag === 'false'
+        ? false
+        : null;
+  if (asBool === null) return fromText;
+  return {
+    needsSponsorship: asBool,
+    isCitizen: asBool ? false : fromText.isCitizen,
+    raw: fromText.raw ?? `goals.sponsorship_required = ${asBool}`,
+  };
+}
+
+/**
  * Normalise `goals.clearance`.
  * @param {string|null|undefined} value
  * @returns {{hasClearance: boolean|null, level: string|null, raw: string|null}}
@@ -213,7 +255,10 @@ export function classifyClearance(value) {
  */
 export function evaluateEligibility(job, goals) {
   const jd = String(job?.jdText ?? '');
-  const auth = classifyWorkAuthorization(goals?.work_authorization);
+  // resolveSponsorshipNeed, not classifyWorkAuthorization: it folds in
+  // goals.sponsorship_required, which is the column the voice lane actually
+  // writes. See that function's header.
+  const auth = resolveSponsorshipNeed(goals ?? {});
   const clr = classifyClearance(goals?.clearance);
 
   const demandsClearance =

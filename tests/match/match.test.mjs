@@ -32,13 +32,19 @@ import test from 'node:test';
 const BASE = '../../app/vthacks-career-app/src/lib/match/';
 const { canonicalizeSkill, extractSkillsExtended } = await import(`${BASE}skill-aliases.mjs`);
 const { canonicalize: donorCanonicalize } = await import(`${BASE}skill-extract.mjs`);
-const { classifySkillGaps, extractJdSkills, matchCourses, scanJd } = await import(
-  `${BASE}jd-skills.mjs`
-);
+const {
+  classifySkillGaps,
+  extractJdSkills,
+  matchCourses,
+  normalizeFlattenedJd,
+  requirementsFor,
+  scanJd,
+} = await import(`${BASE}jd-skills.mjs`);
 const {
   classifyClearance,
   classifyWorkAuthorization,
   evaluateEligibility,
+  resolveSponsorshipNeed,
 } = await import(`${BASE}eligibility.mjs`);
 const { cosine, cosineSql } = await import(`${BASE}cosine.mjs`);
 const { seniorityTokens, titleHits } = await import(`${BASE}title-match.mjs`);
@@ -144,6 +150,81 @@ test('extraction: sawRequirementSection separates "nothing found" from "nothing 
   const bare = scanJd('We are hiring an engineer. Apply on our site.');
   assert.equal(bare.sawRequirementSection, false);
   assert.equal(bare.skills.length, 0);
+});
+
+// A real posting shape from this corpus: HTML flattened to ONE paragraph, no
+// newlines, no bullet characters. This is what 58 of 60 sampled engineering
+// postings look like, and the donor extractor returns nothing for it.
+const FLATTENED_JD =
+  'About Us Acme is a company that does things at scale. We have raised money and ' +
+  'we care about our users. The Role You will build and operate our data platform. ' +
+  'Requirements 3+ years of professional experience with Python and Kubernetes. ' +
+  'Experience running Terraform in production. Familiarity with Snowflake and dbt. ' +
+  'Strong JS skills are a plus. Benefits Competitive salary and equity. ' +
+  'Unlimited PTO and a wellness stipend. Equal Opportunity Acme is an equal ' +
+  'opportunity employer.';
+
+test('flattened postings: the raw donor scanner finds nothing, and that is the bug', () => {
+  // Pinned deliberately. If a future ingest change starts preserving newlines and
+  // this assertion flips, the fallback machinery below can be reconsidered — but
+  // nobody should have to rediscover why it exists.
+  const raw = scanJd(FLATTENED_JD);
+  assert.equal(raw.sawRequirementSection, false);
+  assert.deepEqual(raw.skills, []);
+});
+
+test('flattened postings: normalisation recovers the requirements section', () => {
+  const normalized = normalizeFlattenedJd(FLATTENED_JD);
+  assert.match(normalized, /\n## Requirements\n/);
+  assert.match(normalized, /\n## Benefits\n/);
+  assert.equal(scanJd(normalized).sawRequirementSection, true);
+});
+
+test('requirementsFor: reads the requirements section, not the benefits list', () => {
+  const { skills, source, sawRequirementSection } = requirementsFor(FLATTENED_JD);
+  assert.equal(sawRequirementSection, true);
+  assert.equal(source, 'normalized-requirements-section');
+  // Real requirements, canonicalised.
+  for (const expected of ['Python', 'Kubernetes', 'Terraform', 'Snowflake', 'dbt', 'JavaScript']) {
+    assert.ok(skills.includes(expected), `missing ${expected} from ${skills.join(',')}`);
+  }
+  // NOT the benefits block, and not the company blurb.
+  for (const noise of ['PTO', 'Competitive', 'Acme', 'Unlimited', 'Equity']) {
+    assert.ok(!skills.includes(noise), `leaked ${noise}`);
+  }
+});
+
+test('requirementsFor: every token is a vocabulary skill, never a capitalised noun', () => {
+  // The precision half of the fix. SKILL_TOKEN_RE harvests "Palo", "Alto", "Site"
+  // and "Reliability" from real postings; skills_missing is what the coursework
+  // lever aggregates, so a garbage token there becomes a wrong course
+  // recommendation later.
+  const jd =
+    'Requirements Experience with Palo Alto firewalls, Juniper switches and ' +
+    'Terraform. Strong Python skills. Responsibilities Keep the network up.';
+  const { skills } = requirementsFor(jd);
+  assert.ok(skills.includes('Terraform'), skills.join(','));
+  assert.ok(skills.includes('Python'), skills.join(','));
+  assert.ok(!skills.includes('Palo'), skills.join(','));
+  assert.ok(!skills.includes('Alto'), skills.join(','));
+  assert.ok(!skills.includes('Juniper'), skills.join(','));
+});
+
+test('requirementsFor: an already-structured posting keeps the raw path', () => {
+  // The normaliser SHATTERS a structured posting (its sentence-to-bullet pass
+  // breaks real lines), so it must only run when the raw path found nothing.
+  const { source, skills } = requirementsFor(JD);
+  assert.equal(source, 'requirements-section');
+  assert.ok(skills.includes('Python'), skills.join(','));
+});
+
+test('requirementsFor: no requirements section falls back, and SAYS it fell back', () => {
+  const jd = 'We are hiring a Python engineer to work on Kubernetes. Apply on our site.';
+  const { skills, source, sawRequirementSection } = requirementsFor(jd);
+  assert.equal(source, 'whole-description-vocabulary');
+  assert.equal(sawRequirementSection, false);
+  assert.ok(skills.includes('Python'));
+  assert.ok(skills.includes('Kubernetes'));
 });
 
 test('classification: three buckets, and the middle one is not a gap', () => {
@@ -282,6 +363,41 @@ test('GATE: work authorization free text classifies without an agreed enum', () 
   function pick(v) {
     return { needsSponsorship: v.needsSponsorship, isCitizen: v.isCitizen };
   }
+});
+
+test('GATE: goals.sponsorship_required is read, including as the STRING "true"', () => {
+  // Regression, found from the one real goals row in the workspace: the voice lane
+  // writes the BOOLEAN sponsorship_required and leaves work_authorization NULL.
+  // Reading only the string made the gate silently inert for that account.
+  assert.equal(resolveSponsorshipNeed({ sponsorship_required: true }).needsSponsorship, true);
+  // Databricks renders BOOLEAN as a string through JSON_ARRAY.
+  assert.equal(resolveSponsorshipNeed({ sponsorship_required: 'true' }).needsSponsorship, true);
+  // And "false" must not be read as truthy, which would INVERT the gate.
+  assert.equal(resolveSponsorshipNeed({ sponsorship_required: 'false' }).needsSponsorship, false);
+  assert.equal(resolveSponsorshipNeed({ sponsorship_required: false }).needsSponsorship, false);
+  assert.equal(resolveSponsorshipNeed({}).needsSponsorship, null);
+  // Definitive free text wins over the boolean: a citizen needs no sponsorship
+  // however the yes/no question was transcribed.
+  assert.equal(
+    resolveSponsorshipNeed({ work_authorization: 'US Citizen', sponsorship_required: true })
+      .needsSponsorship,
+    false,
+  );
+});
+
+test('GATE: the real shape of the live goals row fires the sponsorship gate', () => {
+  // Exactly the columns the voice lane populated, values and NULLs included.
+  const liveGoals = {
+    target_roles: ['software development roles'],
+    sponsorship_required: 'true',
+    comp_floor: 150000,
+    work_authorization: null,
+    clearance: null,
+  };
+  const jd = 'We are not able to offer visa sponsorship for this position.';
+  const v = evaluateEligibility({ jdText: jd }, liveGoals);
+  assert.equal(v.eligibility, 'fail');
+  assert.match(v.reason, /sponsor/i);
 });
 
 test('GATE: clearance free text classifies, and "none" is a real answer', () => {

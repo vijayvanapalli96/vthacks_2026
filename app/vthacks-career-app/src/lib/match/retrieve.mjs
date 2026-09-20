@@ -30,10 +30,16 @@
  * generated in a loop, so the STRUCTURE of the WHERE clause varies, but not one
  * character of untrusted VALUE ever enters the statement text.
  */
-import { classifySkillGaps, extractJdSkills, matchCourses, scanJd } from './jd-skills.mjs';
+import { classifySkillGaps, extractJdSkills, matchCourses, requirementsFor } from './jd-skills.mjs';
 import { evaluateEligibility, FAIL } from './eligibility.mjs';
 import { cosineSql } from './cosine.mjs';
-import { seniorityTokens, SUB_BASELINE_SENIORITY, titleHits } from './title-match.mjs';
+// SUB_BASELINE_SENIORITY is deliberately NOT imported. It exists in
+// title-match.mjs because career-ops' role-matcher needs it to tell two
+// requisitions apart, and because a later pass may want to boost intern/new-grad
+// roles for a student. Importing it here to "use it" would mean scoring seniority,
+// and seniority is reported for the UI rather than scored — see the blend note
+// below for why.
+import { seniorityTokens, titleHits } from './title-match.mjs';
 
 const FQ = 'workspace.vthacks_2026';
 const EMBEDDING_MODEL = 'databricks-gte-large-en';
@@ -228,7 +234,10 @@ export function rankCandidates(rows, profile, options = {}) {
 
   for (const row of rows) {
     const jd = String(row.description_text ?? '');
-    const scan = scanJd(jd);
+    // requirementsFor, NOT scanJd: on this corpus scanJd alone finds a
+    // requirements section in 2 postings out of 60, because the descriptions are
+    // flattened HTML with no lines and no bullets. See jd-skills.mjs.
+    const scan = requirementsFor(jd);
     const jdSkills = scan.skills;
     const { existing, supportedByResume, gap } = classifySkillGaps(
       jdSkills,
@@ -249,6 +258,9 @@ export function rankCandidates(rows, profile, options = {}) {
       similarity: row.similarity,
       requirements_found: jdSkills.length,
       saw_requirement_section: scan.sawRequirementSection,
+      // Which extraction path produced the requirements. Carried so an empty
+      // skills_missing can always be told apart from an unchecked one.
+      requirements_source: scan.source,
       skills_matched: [...new Set([...existing, ...supportedByResume])],
       skills_missing: gap,
       skills_claimed: existing,
