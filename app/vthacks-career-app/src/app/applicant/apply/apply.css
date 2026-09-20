@@ -1061,3 +1061,16 @@ nav a[aria-current='page'] {
   font-size: 0.8rem;
   line-height: 1.45;
 }
+
+/* The released-fields list. Was a checkbox per field; now a statement of what
+   went, since the send already happened when the Trust Index passed. */
+.trust-field-row {
+  display: grid;
+  gap: 2px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hw-line);
+}
+.trust-field-row:last-child { border-bottom: 0; }
+.trust-field-row small { color: var(--muted); }
+.trust-field-row.is-empty strong,
+.trust-field-row.is-empty small { opacity: 0.55; }
