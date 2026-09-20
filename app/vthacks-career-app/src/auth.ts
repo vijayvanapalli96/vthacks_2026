@@ -69,8 +69,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async jwt({ token }) {
       // Re-read the store on every call so a role written at /continue takes
-      // effect on the very next request, with no session-refresh dance. This is
-      // one cheap lookup; revisit if the store ever becomes a remote call.
+      // effect on the very next request, with no session-refresh dance.
+      //
+      // It was NOT a cheap lookup — it is a Databricks statement, 0.6-1.1s on a
+      // warm warehouse, and it runs on every auth() call, of which a single
+      // navigation makes at least two (route-group layout, then the page).
+      // findUserByEmail now holds the row for a few seconds and drops it the
+      // moment a write touches that user, so this callback keeps its guarantee
+      // and stops being the slowest thing on the page. See lib/users.ts.
       if (token.email) {
         const user = await findUserByEmail(token.email);
         token.uid = user?.id;

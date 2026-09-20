@@ -1429,3 +1429,49 @@ html, body, * { scrollbar-width: none; -ms-overflow-style: none; }
     text-align: left;
   }
 }
+
+/* Route-transition skeleton (app/applicant/loading.tsx, app/employer/loading.tsx).
+
+   Every workspace page is force-dynamic and reads Databricks, so a navigation
+   takes as long as the warehouse does — measured at 0.6-1.1s for a single
+   statement on a WARM warehouse, more on the first one after it idles. Without
+   a loading file the browser sat on the previous screen for all of it with no
+   sign that anything had happened, which is what "slow between menus" was. This
+   paints immediately while the server streams the real page in behind it. */
+.route-skeleton {
+  padding: clamp(24px, 6vw, 64px) clamp(16px, 5vw, 56px);
+  display: grid;
+  gap: 18px;
+  max-width: 900px;
+}
+
+.route-skeleton span {
+  display: block;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--wash), var(--line), var(--wash));
+  background-size: 200% 100%;
+  animation: route-skeleton-sweep 1.4s linear infinite;
+}
+
+.route-skeleton span:first-child {
+  height: 34px;
+  width: min(70%, 420px);
+}
+
+.route-skeleton span:nth-child(2) { width: 88%; }
+.route-skeleton span:nth-child(3) { width: 74%; }
+.route-skeleton span:nth-child(4) { width: 46%; }
+
+@keyframes route-skeleton-sweep {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* The sweep is decoration; the text in the loading file is the message. */
+@media (prefers-reduced-motion: reduce) {
+  .route-skeleton span {
+    animation: none;
+  }
+}
