@@ -25,6 +25,18 @@ const AgentFace3D = dynamic(() => import('./AgentFace3D'), {
   loading: () => <AgentFace mood="idle" size={160} />,
 });
 
-export function AgentFaceLive({ mood = 'idle', size = 260 }: { mood?: FaceMood; size?: number }) {
-  return <AgentFace3D mood={mood} size={size} />;
+export function AgentFaceLive({
+  mood = 'idle',
+  size = 260,
+  muted = false,
+  onNose,
+}: {
+  mood?: FaceMood;
+  size?: number;
+  muted?: boolean;
+  /** Passing this gives the face a nose that mutes the speaker when clicked.
+   *  Only the voice widget does; the greeter and the rail stay noseless. */
+  onNose?: () => void;
+}) {
+  return <AgentFace3D mood={mood} size={size} muted={muted} onNose={onNose} />;
 }

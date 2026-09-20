@@ -86,7 +86,17 @@ function moodColor(mood: FaceMood): string {
   return INK;
 }
 
-function Head({ mood, reduced }: { mood: FaceMood; reduced: boolean }) {
+function Head({
+  mood,
+  reduced,
+  muted,
+  onNose,
+}: {
+  mood: FaceMood;
+  reduced: boolean;
+  muted: boolean;
+  onNose?: () => void;
+}) {
   const root = useRef<THREE.Group>(null);
   const browL = useRef<THREE.Mesh>(null);
   const browR = useRef<THREE.Mesh>(null);
@@ -94,6 +104,7 @@ function Head({ mood, reduced }: { mood: FaceMood; reduced: boolean }) {
   const eyePivot = useRef<THREE.Group>(null);
   const eyeL = useRef<THREE.Mesh>(null);
   const eyeR = useRef<THREE.Mesh>(null);
+  const nose = useRef<THREE.Group>(null);
   const blink = useRef(1);
   const nextBlink = useRef(2.4);
 
@@ -116,6 +127,21 @@ function Head({ mood, reduced }: { mood: FaceMood; reduced: boolean }) {
   );
 
   const eyeGeometry = useMemo(() => new THREE.SphereGeometry(5.5 / SVG_R, 24, 24), []);
+
+  /** The nose is a speaker cone, pointing out of the face. It only exists where a
+   *  handler is passed, so the greeter and the rail keep the flat drawing's
+   *  noseless character; the voice widget is the one place it does something. */
+  const noseGeometry = useMemo(() => new THREE.ConeGeometry(0.135, 0.16, 28), []);
+  const noseRingGeometry = useMemo(() => new THREE.TorusGeometry(0.14, 0.02, 10, 28), []);
+  const slashGeometry = useMemo(() => new THREE.CapsuleGeometry(0.021, 0.24, 4, 10), []);
+  const noseAt = useMemo(() => onSphere(80, 86, 0.99), []);
+  /** The visible cone is ~13px across in the 120px voice widget, under the 24px
+   *  minimum target size. The hit area is a separate invisible sphere, so the
+   *  affordance can stay in proportion to the face while the thing you actually
+   *  have to hit is twice its size. Invisible, not `visible={false}` — three
+   *  skips the latter when raycasting. */
+  const noseHitGeometry = useMemo(() => new THREE.SphereGeometry(0.3, 12, 12), []);
+  const hovered = useRef(0);
   const eyeAt = useMemo(() => ({ left: onSphere(58, 76, 1.0), right: onSphere(102, 76, 1.0) }), []);
 
   const inkMaterial = useMemo(
@@ -132,7 +158,18 @@ function Head({ mood, reduced }: { mood: FaceMood; reduced: boolean }) {
     [],
   );
 
+  const noseMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: new THREE.Color(INK), roughness: 0.4, metalness: 0 }),
+    [],
+  );
+
+  const slashMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: new THREE.Color(PAPER), roughness: 0.5, metalness: 0 }),
+    [],
+  );
+
   const target = useMemo(() => new THREE.Color(INK), []);
+  const noseTarget = useMemo(() => new THREE.Color(INK), []);
 
   useFrame((state, delta) => {
     const p = POSE[mood];
@@ -164,6 +201,15 @@ function Head({ mood, reduced }: { mood: FaceMood; reduced: boolean }) {
       eye.scale.x = THREE.MathUtils.lerp(eye.scale.x, p.eyeScale, k);
       eye.scale.z = eye.scale.x;
       eye.scale.y = eye.scale.x * lid;
+    }
+
+    // Muted is said in colour AND by the bar across the cone, because colour
+    // alone is not a state anyone can rely on.
+    noseTarget.set(muted ? FAILURE : moodColor(mood));
+    noseMaterial.color.lerp(noseTarget, k);
+    if (nose.current) {
+      const swell = 1 + hovered.current * 0.18;
+      nose.current.scale.setScalar(THREE.MathUtils.lerp(nose.current.scale.x, swell, k));
     }
 
     const g = root.current;
@@ -204,11 +250,60 @@ function Head({ mood, reduced }: { mood: FaceMood; reduced: boolean }) {
       </group>
 
       <mesh geometry={mouths[mood]} material={inkMaterial} />
+
+      {onNose ? (
+        <group
+          ref={nose}
+          position={noseAt}
+          // The nose is its own control. Both handlers stop the NATIVE event so it
+          // never reaches the root container, which is where React 17+ listens —
+          // otherwise a press here would also start a drag and a click here would
+          // also hang up the call.
+          onPointerDown={(event) => {
+            event.nativeEvent.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            event.nativeEvent.stopPropagation();
+            onNose();
+          }}
+          onPointerOver={(event) => {
+            event.stopPropagation();
+            hovered.current = 1;
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={() => {
+            hovered.current = 0;
+            document.body.style.cursor = '';
+          }}
+        >
+          <mesh geometry={noseHitGeometry} position={[0, 0, 0.06]}>
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+          <mesh geometry={noseGeometry} material={noseMaterial} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0.07]} />
+          <mesh geometry={noseRingGeometry} material={noseMaterial} position={[0, 0, 0.01]} />
+          {muted ? (
+            <mesh geometry={slashGeometry} material={slashMaterial} rotation={[0, 0, Math.PI / 4]} position={[0, 0, 0.19]} />
+          ) : null}
+        </group>
+      ) : null}
     </group>
   );
 }
 
-export default function AgentFace3D({ mood = 'idle', size = 260 }: { mood?: FaceMood; size?: number }) {
+export default function AgentFace3D({
+  mood = 'idle',
+  size = 260,
+  muted = false,
+  onNose,
+}: {
+  mood?: FaceMood;
+  size?: number;
+  /** Draws the bar across the speaker cone. */
+  muted?: boolean;
+  /** Passing this is what gives the face a nose at all. */
+  onNose?: () => void;
+}) {
   const reduced =
     typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -230,7 +325,7 @@ export default function AgentFace3D({ mood = 'idle', size = 260 }: { mood?: Face
         <ambientLight intensity={2.4} />
         <directionalLight position={[2.5, 3.5, 4]} intensity={1.2} />
         <directionalLight position={[-3, -1, 2]} intensity={0.45} />
-        <Head mood={mood} reduced={reduced} />
+        <Head mood={mood} reduced={reduced} muted={muted} onNose={onNose} />
       </Canvas>
     </div>
   );

@@ -413,7 +413,14 @@ function VoiceAgentShell() {
            AgentFace — the same five states, so visualState still hands straight
            over with no translation layer. <VoiceConsole /> is out of
            applicant/page.tsx, so the SDK owns the only microphone on the page. */
-        visual={<AgentFaceLive mood={visualState} size={120} />}
+        visual={
+          <AgentFaceLive
+            mood={visualState}
+            size={120}
+            muted={conversation.isMuted}
+            onNose={status === 'connected' ? toggleMute : undefined}
+          />
+        }
       />
     </>
   );

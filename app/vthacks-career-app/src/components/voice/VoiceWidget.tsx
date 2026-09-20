@@ -88,10 +88,10 @@ export function VoiceWidget({
         ? 'Connection problem — tap to try again'
         : connected
           ? isMuted
-            ? 'Muted — press M to unmute, tap to stop'
+            ? 'Muted — click the nose to unmute'
             : isSpeaking
               ? 'Speaking… tap to stop'
-              : 'Listening… tap to stop'
+              : 'Listening… tap to stop, nose to mute'
           : gapsRemaining
             ? `Start talking · ${gapsRemaining} question${gapsRemaining === 1 ? '' : 's'} left`
             : 'Start talking';
@@ -157,6 +157,17 @@ export function VoiceWidget({
             corner{connected ? ', M to mute' : ''}. Or drag it with the mouse.
           </span>
         </button>
+
+        {/* The nose is a mesh inside a canvas: a pointer can hit it, a keyboard and
+            a screen reader cannot. This is the same action as a real control, in
+            the tab order, so the mute is not mouse-only — hard rule 6. It is
+            visually hidden rather than absent because the nose is already the
+            visible affordance. */}
+        {connected ? (
+          <button type="button" className="vt-sr-only vw-mute-a11y" onClick={onToggleMute} aria-pressed={isMuted}>
+            {isMuted ? 'Unmute the speaker' : 'Mute the speaker'}
+          </button>
+        ) : null}
 
         {/* Never only a colour or an animation. */}
         <p className={`vw-caption${blocked || status === 'error' ? ' is-failure' : ''}`} role="status">

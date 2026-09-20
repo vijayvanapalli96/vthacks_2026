@@ -27,15 +27,15 @@
   --vt-fail: #9b1c1c;
 
   position: fixed;
-  /* Right edge, inset from the window rather than welded to it: the card reads
-     as a floating panel over the page, not as browser chrome cut off by the
-     viewport. Fixed, so it never displaces the page content behind it. */
-  right: clamp(12px, 2vw, 24px);
-  top: 96px;
-  bottom: 24px;
+  /* A drawer flush to the right edge, running the full height beneath the nav —
+     the pattern a code host uses for its file sidebar. Fixed, so opening it
+     never reflows the page behind it. */
+  right: 0;
+  top: var(--nav-h, 84px);
+  bottom: 0;
   z-index: 60;
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   pointer-events: none;
 }
 
@@ -45,46 +45,55 @@
 
 /* The tab itself: always visible, always the same control, so the collapsed and
    expanded states are one button rather than two that can disagree. */
+/* A square icon button, always the same control in the same place, so the open
+   and closed states cannot disagree. */
 .vt-tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 10px;
-  border: 1px solid var(--line);
-  border-right: 0;
+  order: 1;
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin: 14px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
   background: var(--paper);
   color: var(--ink);
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  box-shadow: none;
-  /* order 1 puts the tab to the LEFT of the panel, so it hangs inward off the
-     right edge of the window. */
-  order: 1;
-  margin-top: 10px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.vt-tab:hover { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 4%, var(--paper)); }
+
+/* Unread count while the drawer is shut, so closing it does not hide that the
+   conversation moved on. */
+.vt-tab-count {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  line-height: 1;
 }
 
-.vt-tab-label {
-  writing-mode: vertical-rl;
-}
 
-/* Closed, the tab is the whole control, so it needs the edge the panel would
-   otherwise have given it — a flat, borderless right side only makes sense when
-   something is butted up against it. */
-.vt-dock.is-closed .vt-tab {
-  border-right: 1px solid var(--line);
-}
 
 .vt-panel {
   order: 2;
-  /* The dock inset and the tab both eat into the room available. */
-  width: min(420px, calc(100vw - 96px));
-  max-height: 100%;
+  width: min(420px, calc(100vw - 72px));
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--paper);
-  border: 1px solid var(--line);
-  box-shadow: 0 10px 40px color-mix(in srgb, var(--ink) 16%, transparent);
+  /* One divider against the page, the way a sidebar reads. No floating card. */
+  border: 0;
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 40px color-mix(in srgb, var(--ink) 8%, transparent);
   overflow: hidden;
 }
 
@@ -329,6 +338,24 @@
 .vw.is-live .vw-caption { color: var(--ink); }
 .vw-caption.is-failure { color: var(--failure); }
 
+/* Hidden until focused. A control that a keyboard user can reach but never see
+   is worse than no control: they cannot tell where they are. */
+.vw-mute-a11y:focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  clip: auto;
+  clip-path: none;
+  overflow: visible;
+  white-space: normal;
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+}
+
 .vt-sr-only {
   position: absolute;
   width: 1px;
@@ -370,12 +397,16 @@
 
 @media (max-width: 760px) {
   .vt-dock {
-    top: 72px;
+    top: var(--nav-h, 72px);
     bottom: 0;
   }
 
   .vt-panel {
-    width: calc(100vw - 42px);
+    width: calc(100vw - 72px);
+  }
+
+  .vt-tab {
+    margin: 10px;
   }
 
   .vw {
