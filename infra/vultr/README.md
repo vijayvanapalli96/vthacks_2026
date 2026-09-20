@@ -62,11 +62,26 @@ Two switches, both default-safe:
 | `ATS_WORKER_TOKEN` | Required. Unset, every request is rejected. |
 | `ATS_ALLOW_SUBMIT` | `false` deploys a box that can only *prepare* a form, never send it. A caller asking to submit gets the form prepared and told why. |
 
-Before deploying, on the server:
+The worker is **opt-in at deploy time**. A plain `deploy.ps1` run ships and
+starts exactly what it did before this service existed — `employer`, `applicant`,
+`caddy` — because `ats` sits behind a compose profile and `deploy.ps1` does not
+copy its sources unless asked. That is deliberate: a Chromium image that fails to
+build must not be able to take the two agents ANS depends on down with it.
 
-```bash
+To include it:
+
+```powershell
 cp infra/vultr/.env.example infra/vultr/.env   # then fill ATS_WORKER_TOKEN
+.\infraultr\deploy.ps1 -HostIp 45.77.96.207 -IdentityFile <SSH_KEY> -IncludeAts
 ```
+
+Without `-IncludeAts` the compose file on the server still *contains* the `ats`
+service, but it is never started and its sources are absent. `deploy.ps1` throws
+early if `-IncludeAts` is passed without `infra/vultr/.env`, rather than
+half-deploying and leaving the stack down.
+
+Deploy from a checkout that has `certs/` — worktrees do not share it, because it
+is gitignored.
 
 `POST /ats/prepare` with `{ job_url, candidate, submit }` returns a record naming
 the fields filled, the fields skipped, and the screenshot path for review.
