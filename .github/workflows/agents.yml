@@ -1,0 +1,39 @@
+name: Agents
+
+# The Databricks workflow is path-filtered to app/vthacks-career-app/**, so
+# nothing under agents/ has ever run in CI. That directory holds the PII gate —
+# hard rule 3, "a refusal must return fields_released: []" — and its tests are
+# the only thing standing between a bad refactor and the bug that turns the
+# pitch into a lie. They should not depend on someone remembering.
+
+on:
+  pull_request:
+    paths:
+      - 'agents/**'
+      - '.github/workflows/agents.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'agents/**'
+      - '.github/workflows/agents.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agents
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No install step on purpose: the agents lane has no dependencies, and
+      # `npm ci` would fail on a directory with no lockfile. The ATS tests use a
+      # hand-written Playwright stand-in rather than the real browser, so they
+      # run here in seconds without downloading Chromium.
+      - run: node --test
