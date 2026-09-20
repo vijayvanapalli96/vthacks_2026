@@ -60,6 +60,20 @@ COPY --from=deps /app/node_modules/koffi ./node_modules/koffi
 COPY --from=deps /app/node_modules/protobufjs ./node_modules/protobufjs
 COPY --from=deps /app/node_modules/@protobufjs ./node_modules/@protobufjs
 COPY --from=deps /app/node_modules/long ./node_modules/long
+# SmartSpectra needs a MACHINE ID, and a slim container has none.
+#
+# The SDK provisions its device key through D-Bus, which refuses to start without
+# /etc/machine-id or /var/lib/dbus/machine-id. Without it the container logs
+# "Cannot spawn a message bus without a machine-id" and then
+# "SmartSpectra::Initialize failed", every frame batch fails, and the room shows
+# "the steadiness read dropped out" — which is exactly what production did on the
+# first real run. dbus itself is installed because libdbus wants the daemon's
+# files present, not because we run a bus.
+#
+# Baked at BUILD time, so the id is stable across container restarts. Generating
+# it per container would re-pair the device on every deploy.
+RUN apt-get update  && apt-get install -y --no-install-recommends dbus  && rm -rf /var/lib/apt/lists/*  && dbus-uuidgen > /etc/machine-id  && mkdir -p /var/lib/dbus  && cp /etc/machine-id /var/lib/dbus/machine-id
+
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]

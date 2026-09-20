@@ -131,14 +131,23 @@ if (-not $AppOnly) {
   }
 }
 
+# PROFILE ON A LAPTOP, ENVIRONMENT IN CI.
+#
+# `-p DEFAULT` names a profile in ~/.databrickscfg, which does not exist on a
+# GitHub runner — the CLI there authenticates from DATABRICKS_HOST and
+# DATABRICKS_TOKEN in the environment, and passing a profile that is not in the
+# config file is a hard error rather than a fallback. So the flag is added only
+# when there is no token in the environment.
+$script:ProfileArgs = if ($env:DATABRICKS_TOKEN) { @() } else { @('-p', $DatabricksProfile) }
+
 function Get-OptionalHirewireSecret([string]$key) {
-  $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile 2>$null | ConvertFrom-Json
+  $json = databricks secrets get-secret hirewire $key @script:ProfileArgs 2>$null | ConvertFrom-Json
   if ($LASTEXITCODE -ne 0 -or -not $json) { $global:LASTEXITCODE = 0; return $null }
   [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($json.value))
 }
 
 function Get-HirewireSecret([string]$key) {
-  $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile | ConvertFrom-Json
+  $json = databricks secrets get-secret hirewire $key @script:ProfileArgs | ConvertFrom-Json
   if ($LASTEXITCODE -ne 0) { throw "Could not read secret '$key' from scope 'hirewire'." }
   [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($json.value))
 }
@@ -162,12 +171,48 @@ if (-not $DatabricksClientId -or -not $DatabricksClientSecret) {
 }
 
 $appSource = Join-Path $repoRoot "app/vthacks-career-app"
-# robocopy returns 0-7 for success; 8+ is a real failure.
-robocopy $appSource (Join-Path $stagingRoot "app") /MIR /NFL /NDL /NJH /NJS /NP `
-  /XD node_modules .next .git .databricks `
-  /XF ".env" ".env.local" "*.tsbuildinfo" | Out-Null
-if ($LASTEXITCODE -ge 8) { throw "Could not stage the app source (robocopy exit $LASTEXITCODE)." }
-$global:LASTEXITCODE = 0
+
+# STAGE THE APP SOURCE. Cross-platform, because this script now also runs on the
+# ubuntu runner in .github/workflows/deploy-vultr.yml and robocopy is Windows-only.
+#
+# PRUNED, NOT FILTERED. The obvious version — Get-ChildItem -Recurse then discard
+# unwanted paths — still ENUMERATES node_modules first, which is a couple of
+# hundred megabytes here since the Presage native payloads landed, and it turned a
+# two minute deploy into something that had not finished in ten. This walks a queue
+# and never descends into an excluded directory at all.
+#
+# The exclusions are not an optimisation. node_modules and .next are rebuilt inside
+# the image anyway, and .env / .env.local hold real secrets that must never ship:
+# the container's environment is app.env below, built from the Databricks scope.
+$excludedDirs = @('node_modules', '.next', '.git', '.databricks')
+$excludedFiles = @('.env', '.env.local')
+$appStage = Join-Path $stagingRoot "app"
+$sourceRoot = (Resolve-Path $appSource).Path
+
+$queue = [System.Collections.Generic.Queue[string]]::new()
+$queue.Enqueue($sourceRoot)
+while ($queue.Count -gt 0) {
+  $dir = $queue.Dequeue()
+  $relativeDir = $dir.Substring($sourceRoot.Length).TrimStart([char]92, [char]47)
+  $targetDir = if ($relativeDir) { Join-Path $appStage $relativeDir } else { $appStage }
+  if (-not (Test-Path -LiteralPath $targetDir)) {
+    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+  }
+
+  foreach ($entry in Get-ChildItem -LiteralPath $dir -Force) {
+    if ($entry.PSIsContainer) {
+      if ($excludedDirs -notcontains $entry.Name) { $queue.Enqueue($entry.FullName) }
+      continue
+    }
+    if ($excludedFiles -contains $entry.Name) { continue }
+    if ($entry.Name -like '*.tsbuildinfo') { continue }
+    Copy-Item -LiteralPath $entry.FullName -Destination (Join-Path $targetDir $entry.Name) -Force
+  }
+}
+
+if (-not (Test-Path -LiteralPath (Join-Path $appStage "package.json"))) {
+  throw "Staging the app source produced no package.json. Nothing was uploaded."
+}
 
 # One source of truth for the runtime secrets: the `hirewire` Databricks secret
 # scope, the same one the Databricks App reads. Written to a gitignored staging

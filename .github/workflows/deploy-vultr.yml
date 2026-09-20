@@ -1,0 +1,102 @@
+# Deploy the PUBLIC SITE. This is the one that puts code in front of visitors.
+#
+# WHY THIS EXISTS. databricks-app.yml deploys the Databricks App, which is not the
+# public entrance: its edge answers an anonymous request with a 302 to the
+# workspace OAuth login, so a visitor without a Databricks account never reaches
+# our own sign-in page (CLAUDE.md, Stack). hirewire.biz is the Vultr box behind
+# Caddy, and until now nothing deployed it except someone remembering to run
+# infra/vultr/deploy.ps1 by hand. That is how a merged PR can sit un-shipped, and
+# how a deploy from a stale branch can quietly revert other people's merged work.
+#
+# -AppOnly. The web app, the Caddyfile and the compose file, and nothing else.
+# The agents and their ANS key material stay exactly as they are on the server, so
+# this workflow never handles a certificate and a bad run cannot take the employer
+# or applicant agent down. Deploying those stays a deliberate local act.
+#
+# SAFE TO FAIL. `docker compose up -d --build` builds before it swaps, so a broken
+# build leaves the running site serving the previous image.
+name: Deploy the public site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/vthacks-career-app/**'
+      - 'infra/vultr/**'
+      - '.github/workflows/deploy-vultr.yml'
+  workflow_dispatch:
+
+# One deploy at a time, and never cancel one in flight: an interrupted run can
+# leave the box half-extracted. A queued run simply deploys the newer commit.
+concurrency:
+  group: vultr-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail with a sentence rather than an ssh error twenty lines later. These
+      # are repository secrets and have to be added by hand:
+      #   VULTR_SSH_KEY  private key with root access to the box
+      #   VULTR_HOST     the host, e.g. 45.77.96.207
+      # DATABRICKS_HOST and DATABRICKS_TOKEN already exist for databricks-app.yml
+      # and are what lets the script read the `hirewire` secret scope.
+      - name: Check the secrets are present
+        env:
+          SSH_KEY: ${{ secrets.VULTR_SSH_KEY }}
+          HOST: ${{ secrets.VULTR_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          missing=""
+          [ -z "$SSH_KEY" ] && missing="$missing VULTR_SSH_KEY"
+          [ -z "$HOST" ] && missing="$missing VULTR_HOST"
+          [ -z "$DATABRICKS_TOKEN" ] && missing="$missing DATABRICKS_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing. Add them in Settings > Secrets and variables > Actions. Nothing was deployed."
+            exit 1
+          fi
+
+      - uses: databricks/setup-cli@main
+
+      - name: Install the SSH key
+        env:
+          SSH_KEY: ${{ secrets.VULTR_SSH_KEY }}
+          HOST: ${{ secrets.VULTR_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/vultr
+          chmod 600 ~/.ssh/vultr
+          # Pinned rather than StrictHostKeyChecking=no: accepting whatever key
+          # answers is accepting a man in the middle on a deploy that carries
+          # every runtime secret the app has.
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy
+        shell: pwsh
+        env:
+          # The script reads the hirewire scope for every runtime secret. On a
+          # runner there is no ~/.databrickscfg, so the CLI authenticates from
+          # these and deploy.ps1 skips its -p profile flag when a token is set.
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          ./infra/vultr/deploy.ps1 `
+            -HostIp '${{ secrets.VULTR_HOST }}' `
+            -IdentityFile "$HOME/.ssh/vultr" `
+            -AppOnly
+
+      # Prove it, rather than trusting that a green build means a served page.
+      - name: Verify the site is answering
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://hirewire.biz/ || echo 000)
+            echo "attempt $attempt: $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::hirewire.biz did not return 200 after the deploy."
+          exit 1

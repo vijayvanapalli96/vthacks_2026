@@ -30,12 +30,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { interviewUnlocked } from '@/lib/interview-contract';
 import {
+  FUNNEL_STAGES,
   PIPELINE_STATUSES,
+  STATUS_HINT,
   STATUS_LABEL,
+  STATUS_MARK,
   daysPhrase,
   stalledSentence,
   type PipelineCard,
@@ -77,6 +80,11 @@ export function PipelineBoard({ cards: initial, loadError = null }: Props) {
     return byStage;
   }, [cards]);
 
+  const counts = useMemo(() => {
+    const out = {} as Record<PipelineStatus, number>;
+    for (const stage of PIPELINE_STATUSES) out[stage] = grouped.get(stage)?.length ?? 0;
+    return out;
+  }, [grouped]);
 
   const change = useCallback(
     async (card: PipelineCard, next: PipelineStatus, note?: string) => {
@@ -166,30 +174,89 @@ export function PipelineBoard({ cards: initial, loadError = null }: Props) {
         </section>
       ) : (
         <>
-          {/* ONE LIST, NOT SEVEN COLUMNS. The per-stage columns were mostly empty
-              headings: with a handful of tracked roles, six of the seven said
-              "nothing here yet", which is a lot of furniture to say very little.
-              The stage a role is in is already on its own card, and changing it
-              is still the <select> on that card, so nothing was lost but the
-              scaffolding. The summary funnel went for the same reason: counting
-              to two is not worth a chart.
+          <section className="pipe-funnel" aria-labelledby="pipe-funnel-h">
+            <h2 id="pipe-funnel-h">Where {tracked} tracked {tracked === 1 ? 'role' : 'roles'} stand</h2>
+            {/* A definition list, not a chart: the numbers ARE the content, and
+                the bar is decoration on top of text that already reads correctly. */}
+            <dl className="pipe-funnel-list">
+              {FUNNEL_STAGES.map((stage) => (
+                <div key={stage} className="pipe-funnel-row">
+                  <dt>
+                    <span className="pipe-mark" aria-hidden="true">
+                      {STATUS_MARK[stage]}
+                    </span>
+                    {STATUS_LABEL[stage]}
+                  </dt>
+                  <dd>
+                    <span
+                      className="pipe-bar"
+                      aria-hidden="true"
+                      style={{ inlineSize: `${tracked ? (counts[stage] / tracked) * 100 : 0}%` }}
+                    />
+                    <strong>{counts[stage]}</strong>
+                  </dd>
+                </div>
+              ))}
+              <div className="pipe-funnel-row is-exit">
+                <dt>Closed out</dt>
+                <dd>
+                  <strong>{counts.rejected + counts.withdrawn}</strong>{' '}
+                  <span className="pipe-muted">
+                    ({counts.rejected} rejected, {counts.withdrawn} withdrawn)
+                  </span>
+                </dd>
+              </div>
+            </dl>
+          </section>
 
-              Ordered by stage (PIPELINE_STATUSES order), so the funnel reading
-              survives as sequence rather than as headings. */}
-          <ul className="pipe-cards pipe-cards-flat">
-            {PIPELINE_STATUSES.flatMap((stage) => grouped.get(stage) ?? []).map((card) => (
-              <Card
-                key={card.job_id}
-                card={card}
-                saving={savingJobId === card.job_id}
-                onChange={change}
-                registerRef={(element) => {
-                  if (element) selectRefs.current.set(card.job_id, element);
-                  else selectRefs.current.delete(card.job_id);
-                }}
-              />
-            ))}
-          </ul>
+          <div className="pipe-board">
+            {PIPELINE_STATUSES.map((stage) => {
+              const stageCards = grouped.get(stage) ?? [];
+              const headingId = `pipe-col-${stage}`;
+              return (
+                <section key={stage} className="pipe-col" aria-labelledby={headingId}>
+                  <header className="pipe-col-head">
+                    <h2 id={headingId}>
+                      <span className="pipe-mark" aria-hidden="true">
+                        {STATUS_MARK[stage]}
+                      </span>
+                      {STATUS_LABEL[stage]}
+                      {/* The count is inside the heading so a screen-reader user
+                          hears "Applied, 3 roles" when they land on the column,
+                          instead of having to explore it to find out. */}
+                      <span className="pipe-count">
+                        {stageCards.length} {stageCards.length === 1 ? 'role' : 'roles'}
+                      </span>
+                    </h2>
+                    <p className="pipe-muted pipe-col-hint">{STATUS_HINT[stage]}</p>
+                  </header>
+
+                  {stageCards.length === 0 ? (
+                    <p className="pipe-muted pipe-col-empty">
+                      {stage === 'saved'
+                        ? 'Save a role from Jobs and it starts here.'
+                        : `Nothing at ${STATUS_LABEL[stage].toLowerCase()} yet.`}
+                    </p>
+                  ) : (
+                    <ul className="pipe-cards">
+                      {stageCards.map((card) => (
+                        <Card
+                          key={card.job_id}
+                          card={card}
+                          saving={savingJobId === card.job_id}
+                          onChange={change}
+                          registerRef={(element) => {
+                            if (element) selectRefs.current.set(card.job_id, element);
+                            else selectRefs.current.delete(card.job_id);
+                          }}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
+          </div>
         </>
       )}
     </>
@@ -212,54 +279,40 @@ function Card({
   const [note, setNote] = useState('');
   const stalled = stalledSentence(card);
   const router = useRouter();
+  const [navigating, startNavigation] = useTransition();
 
   /**
-   * Record the employer's reply, then open the room.
+   * Open the room, recording the employer's reply first when there is one to
+   * record.
    *
-   * Reuses `onChange`, which is the board's single write path to
-   * POST /api/pipeline/status — hard rule 5 again, no private implementation. The
-   * navigation waits for the write because the room re-checks the stage server-side
-   * and would otherwise greet a student with "not yet" in a race they cannot see.
-   * If the write fails, `onChange` puts the reason in the board's alert region and
-   * this stays put rather than walking them into a locked door.
+   * The write goes through `onChange`, the board's single path to
+   * POST /api/pipeline/status — hard rule 5, no private implementation — and the
+   * navigation waits for it, because the room re-checks the stage server-side and
+   * would otherwise greet the student with "not yet" in a race they cannot see.
+   * A failed write leaves the reason in the board's alert region and stays put,
+   * rather than walking them into a locked door.
    */
-  /** See the comment on the title below: one honest destination per stage. */
-  const roleHref = interviewUnlocked(card.status)
-    ? `/applicant/interview/${encodeURIComponent(card.job_id)}`
-    : `/applicant/jobs/${encodeURIComponent(card.job_id)}`;
-
-  const replyAndRehearse = useCallback(async () => {
-    await onChange(card, 'interviewing');
-    router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`);
+  const openRoom = useCallback(async () => {
+    if (card.status === 'applied') await onChange(card, 'interviewing');
+    startNavigation(() => {
+      router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`);
+    });
   }, [card, onChange, router]);
+
+  /** Saving the stage and loading the page are one wait to the person clicking. */
+  const busy = saving || navigating;
 
   return (
     <li className="pipe-card">
-      {/* CLICKING THE ROLE OPENS ITS MENU, which is the thing a card on a board is
-          expected to do and previously did not: the title used to be an outbound
-          link to the original posting, so the one obvious click left the product.
-
-          WHERE IT GOES DEPENDS ON THE STAGE, because there is only one honest
-          destination per stage. At Interviewing or Offer the rehearsal exists, so
-          it goes straight to the interview room. Everywhere else it goes to the
-          job page, which carries the document toolbox and the interview panel —
-          sending an Applied card into the room would land on "not yet", and a
-          click that reaches a locked door is worse than one that never offered.
-
-          NOT A WHOLE-CARD CLICK TARGET. The card holds a <select>, a <textarea>
-          and a button; wrapping all of that in a link nests interactive elements,
-          which breaks keyboard navigation and makes a screen reader announce the
-          lot as one control. Hard rule 6. The title is the target, the posting
-          keeps its own link below, and both are reachable by Tab in reading
-          order. */}
+      {/* The role opens its own page. It used to be an outbound link to the
+          original posting, so the one obvious click left the product; and for a
+          while it changed destination with the stage, which meant the same
+          gesture did two different things on two cards in the same column. One
+          destination, always. The interview has its own button below. */}
       <p className="pipe-card-title">
-        <Link href={roleHref}>
+        <Link href={`/applicant/jobs/${encodeURIComponent(card.job_id)}`}>
           {card.title ?? 'Untitled role'}
-          <span className="sr-only">
-            {' '}
-            at {card.company ?? 'this company'} &mdash;{' '}
-            {interviewUnlocked(card.status) ? 'open the mock interview room' : 'open this role and its tools'}
-          </span>
+          <span className="sr-only"> at {card.company ?? 'this company'} &mdash; open this role and its tools</span>
         </Link>
       </p>
       <p className="pipe-card-company">
@@ -297,47 +350,45 @@ function Card({
       {stalled ? <p className="pipe-card-stalled">{stalled}</p> : null}
       {card.note ? <p className="pipe-card-note">“{card.note}”</p> : null}
 
-      {/* The one thing this board could never offer: something to DO the moment an
-          employer replies.
-          
-          TWO SHAPES, ONE DESTINATION. On a card that is already Interviewing or
-          Offer it is a plain link. On an APPLIED card it is a button that records
-          the reply first and then opens the room, because the interview room is
-          gated on the stage and a link that lands on "not yet" is a dead end.
-          
-          The button says what it writes. It is the same append-only event the
-          <select> above produces — one more row in the log, not a silent edit —
-          and the label has to make that obvious, because a student who has not
-          actually heard back must not click it by accident. Nothing below Applied
-          gets it: rehearsing for an interview nobody offered is anxiety with a
-          button on it. */}
-      {interviewUnlocked(card.status) ? (
-        <p className="pipe-card-rehearse">
-          <Link href={`/applicant/interview/${encodeURIComponent(card.job_id)}`}>
-            Begin interview
-            <span className="sr-only">
-              {' '}
-              for {card.title ?? 'this role'} at {card.company ?? 'this company'}
-            </span>
-          </Link>
-        </p>
-      ) : card.status === 'applied' ? (
+      {/* ONE BUTTON FOR THE INTERVIEW, and it tells you it is working.
+
+          There were three ways in before this — the title, a link, and a second
+          link with different wording on Applied cards — which is three things to
+          read on a card that already carries a stage, a score, a reason, an age
+          and a note box. Now there is one control and one label.
+
+          IT SHOWS A PENDING STATE BECAUSE THE WAIT IS REAL. Opening the room
+          reads the posting and the match row off a warehouse that cold-starts in
+          20-30 seconds and then asks a model for the questions. A button that
+          looks inert for that long reads as broken, and the student clicks it
+          again. useTransition keeps the pending state tied to the actual
+          navigation rather than to a timer we invented.
+
+          An Applied card records the reply first, through the same
+          POST /api/pipeline/status the <select> uses, so the label says so.
+          Saved and below get nothing: rehearsing for an interview nobody offered
+          is anxiety with a button on it. */}
+      {interviewUnlocked(card.status) || card.status === 'applied' ? (
         <p className="pipe-card-rehearse">
           <button
             type="button"
             className="pipe-rehearse-button"
-            disabled={saving}
-            aria-busy={saving}
-            onClick={() => void replyAndRehearse()}
+            disabled={busy}
+            aria-busy={busy}
+            onClick={() => void openRoom()}
           >
-            They replied &mdash; begin interview
+            {busy ? 'Preparing the room…' : 'Prepare for interview'}
             <span className="sr-only">
               {' '}
-              for {card.title ?? 'this role'} at {card.company ?? 'this company'}. This marks the role as
-              Interviewing on your board and opens the mock interview room.
+              for {card.title ?? 'this role'} at {card.company ?? 'this company'}
+              {card.status === 'applied'
+                ? '. This marks the role as Interviewing on your board and opens the mock interview room.'
+                : '. Opens the mock interview room.'}
             </span>
           </button>
-          <span className="pipe-muted pipe-rehearse-hint">Marks this Interviewing, then opens the room.</span>
+          {card.status === 'applied' ? (
+            <span className="pipe-muted pipe-rehearse-hint">Marks this Interviewing first.</span>
+          ) : null}
         </p>
       ) : null}
 

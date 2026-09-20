@@ -37,6 +37,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { InterviewVoice } from './InterviewVoice';
 import {
   CONFIDENCE_FLOOR,
   QUESTION_KIND_LABEL,
@@ -515,6 +516,18 @@ export function InterviewRoom({ jobId, jobTitle, company }: Props) {
           )}
           {cameraError ? <p className="iv-warn">{cameraError}</p> : null}
 
+          {/* Persona 2, mounted only while the interview is actually running and
+              only when the server minted a signed URL. Mounting it earlier would
+              put a "connect" button on the briefing screen, and a conversation
+              costs money per minute. */}
+          {phase === 'live' && session.signedUrl ? (
+            <InterviewVoice
+              signedUrl={session.signedUrl}
+              dynamicVariables={session.dynamicVariables}
+              onAgentLine={(line) => setNotice(line)}
+            />
+          ) : null}
+
           <VitalsPanel
             ready={session.vitalsReady}
             off={vitalsOff}
@@ -731,7 +744,21 @@ function VitalsPanel({
       {off ? (
         <p className="iv-warn">{off}</p>
       ) : !cameraOn ? (
-        <p className="iv-muted">Turn the camera on and this reads your pulse and breathing from the video.</p>
+        <>
+          {/* SAY WHAT IT READS, not that it "reads signals". The first version of
+              this line was abstract enough that someone looking at it could not
+              tell what the feature did, which for a camera pointed at your face
+              is the wrong thing to be vague about. */}
+          <p className="iv-muted">
+            With the camera on, this reads three things from the video itself, with no wearable: your{' '}
+            <strong>pulse</strong>, your <strong>breathing rate</strong>, and the <strong>expression</strong> on your
+            face.
+          </p>
+          <p className="iv-muted">
+            You get one sentence at the end — whether your pulse held steady across the call or climbed, and roughly
+            where. Nerves you cannot feel while they are happening.
+          </p>
+        </>
       ) : (
         <>
           {/* aria-live off: a number that changes every second is unusable read aloud. */}
