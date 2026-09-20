@@ -1,0 +1,234 @@
+/* ===========================================================================
+   /applicant/interview/[jobId] — the mock interview room.
+
+   Follows globals.css and the pipeline board: two base colours, no radius, no
+   shadow, whitespace first and a hairline second.
+
+   CONTRAST. --iv-muted mixes ink at 72% (about 5.9:1 on --paper) rather than
+   reusing the shared --muted token, which measures 4.33:1 and is under the
+   4.5:1 CLAUDE.md hard rule 6 commits to. Same fix, same reason, as
+   pipeline.css.
+
+   LAYOUT REFLOWS. The two columns collapse to one below 900px rather than
+   scrolling sideways, so a keyboard user is never trapped in a horizontal
+   scroll container (WCAG 1.4.10). Reading order is the DOM order either way:
+   self-view first, then the question and the answer box.
+   =========================================================================== */
+
+.iv-room,
+.iv-panel {
+  --iv-muted: color-mix(in srgb, var(--ink) 72%, transparent);
+  --iv-hairline: color-mix(in srgb, var(--ink) 18%, transparent);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+
+.iv-muted {
+  color: var(--iv-muted);
+  line-height: 1.6;
+}
+
+.iv-warn {
+  color: var(--failure, #8a1c1c);
+  line-height: 1.6;
+}
+
+.iv-h3 {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 12px;
+}
+
+/* The always-present status line. Visible, not sr-only: a sighted user needs to
+   see "Transcribing your answer" as much as a screen reader user needs to hear
+   it. Reserves its height so the layout does not jump as it fills. */
+.iv-live {
+  min-height: 1.5em;
+  margin: 0 0 16px;
+  color: var(--iv-muted);
+}
+
+.iv-stage {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .iv-stage {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Self-view ---------------------------------------------------------- */
+
+.iv-video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border: 1px solid var(--iv-hairline);
+  display: block;
+  margin-bottom: 12px;
+  /* Mirrored, because an unmirrored self-view is disorienting to rehearse in.
+     Only the PREVIEW is flipped; the frames sent for measurement are drawn from
+     the unflipped video element. */
+  transform: scaleX(-1);
+}
+
+/* --- Vitals ------------------------------------------------------------- */
+
+.iv-vitals {
+  margin-top: 28px;
+  border-top: 1px solid var(--iv-hairline);
+  padding-top: 20px;
+}
+
+.iv-vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.iv-vitals-grid dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--iv-muted);
+}
+
+.iv-vitals-grid dd {
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1rem;
+}
+
+/* --- Question and answer ------------------------------------------------ */
+
+.iv-progress {
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--iv-muted);
+  margin: 0 0 8px;
+}
+
+.iv-question {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 20px;
+  margin: 0 0 24px;
+}
+
+.iv-question-text {
+  font-size: 1.35rem;
+  line-height: 1.4;
+  margin: 0 0 8px;
+}
+
+.iv-label {
+  display: block;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.iv-answer {
+  width: 100%;
+  font: inherit;
+  line-height: 1.6;
+  padding: 12px;
+  border: 1px solid var(--iv-hairline);
+  background: var(--paper);
+  color: var(--ink);
+  resize: vertical;
+}
+
+/* globals.css gives a:focus-visible and button a visible ring but not textarea
+   or summary, and the answer box is this page's primary control. */
+.iv-answer:focus-visible,
+.iv-hint summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.iv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.iv-button {
+  font: inherit;
+  padding: 10px 18px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.iv-button-quiet {
+  background: transparent;
+  color: var(--ink);
+}
+
+.iv-button[disabled] {
+  /* Not opacity alone: a disabled control is marked by its cursor and its border
+     too, so the state does not depend on colour perception. */
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.iv-hint {
+  margin: 12px 0;
+}
+
+.iv-hint summary {
+  cursor: pointer;
+}
+
+.iv-hint ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+/* --- Critiques and readout ---------------------------------------------- */
+
+.iv-critiques {
+  margin-top: 40px;
+  border-top: 1px solid var(--iv-hairline);
+  padding-top: 24px;
+}
+
+.iv-critiques ol {
+  padding-left: 20px;
+}
+
+.iv-critiques li {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.iv-critique-q {
+  margin: 0 0 6px;
+  font-style: italic;
+  color: var(--iv-muted);
+}
+
+.iv-summary {
+  font-size: 1.15rem;
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+
+.iv-panel h2 {
+  margin-top: 0;
+}

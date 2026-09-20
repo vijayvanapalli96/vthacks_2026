@@ -29,8 +29,10 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { interviewUnlocked } from '@/lib/interview-contract';
 import {
   FUNNEL_STAGES,
   PIPELINE_STATUSES,
@@ -276,22 +278,69 @@ function Card({
   const noteId = `pipe-note-${card.job_id}`;
   const [note, setNote] = useState('');
   const stalled = stalledSentence(card);
+  const router = useRouter();
+
+  /**
+   * Record the employer's reply, then open the room.
+   *
+   * Reuses `onChange`, which is the board's single write path to
+   * POST /api/pipeline/status — hard rule 5 again, no private implementation. The
+   * navigation waits for the write because the room re-checks the stage server-side
+   * and would otherwise greet a student with "not yet" in a race they cannot see.
+   * If the write fails, `onChange` puts the reason in the board's alert region and
+   * this stays put rather than walking them into a locked door.
+   */
+  /** See the comment on the title below: one honest destination per stage. */
+  const roleHref = interviewUnlocked(card.status)
+    ? `/applicant/interview/${encodeURIComponent(card.job_id)}`
+    : `/applicant/jobs/${encodeURIComponent(card.job_id)}`;
+
+  const replyAndRehearse = useCallback(async () => {
+    await onChange(card, 'interviewing');
+    router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`);
+  }, [card, onChange, router]);
 
   return (
     <li className="pipe-card">
+      {/* CLICKING THE ROLE OPENS ITS MENU, which is the thing a card on a board is
+          expected to do and previously did not: the title used to be an outbound
+          link to the original posting, so the one obvious click left the product.
+
+          WHERE IT GOES DEPENDS ON THE STAGE, because there is only one honest
+          destination per stage. At Interviewing or Offer the rehearsal exists, so
+          it goes straight to the interview room. Everywhere else it goes to the
+          job page, which carries the document toolbox and the interview panel —
+          sending an Applied card into the room would land on "not yet", and a
+          click that reaches a locked door is worse than one that never offered.
+
+          NOT A WHOLE-CARD CLICK TARGET. The card holds a <select>, a <textarea>
+          and a button; wrapping all of that in a link nests interactive elements,
+          which breaks keyboard navigation and makes a screen reader announce the
+          lot as one control. Hard rule 6. The title is the target, the posting
+          keeps its own link below, and both are reachable by Tab in reading
+          order. */}
       <p className="pipe-card-title">
-        {card.source_url ? (
-          <a href={card.source_url} target="_blank" rel="noreferrer">
-            {card.title ?? 'Untitled role'}
-          </a>
-        ) : (
-          (card.title ?? 'Untitled role')
-        )}
+        <Link href={roleHref}>
+          {card.title ?? 'Untitled role'}
+          <span className="sr-only">
+            {' '}
+            at {card.company ?? 'this company'} &mdash;{' '}
+            {interviewUnlocked(card.status) ? 'open the mock interview room' : 'open this role and its tools'}
+          </span>
+        </Link>
       </p>
       <p className="pipe-card-company">
         {card.company ?? 'Company not recorded'}
         {card.location ? <span className="pipe-muted"> · {card.location}</span> : null}
       </p>
+      {card.source_url ? (
+        <p className="pipe-muted pipe-card-source">
+          <a href={card.source_url} target="_blank" rel="noreferrer">
+            Original posting
+            <span className="sr-only"> for {card.title ?? 'this role'}, opens in a new tab</span>
+          </a>
+        </p>
+      ) : null}
 
       {/* Score and reason only when the match cache has them. A pipeline card is
           useful without a score, so there is no "—" placeholder to read past. */}
@@ -314,6 +363,50 @@ function Card({
 
       {stalled ? <p className="pipe-card-stalled">{stalled}</p> : null}
       {card.note ? <p className="pipe-card-note">“{card.note}”</p> : null}
+
+      {/* The one thing this board could never offer: something to DO the moment an
+          employer replies.
+          
+          TWO SHAPES, ONE DESTINATION. On a card that is already Interviewing or
+          Offer it is a plain link. On an APPLIED card it is a button that records
+          the reply first and then opens the room, because the interview room is
+          gated on the stage and a link that lands on "not yet" is a dead end.
+          
+          The button says what it writes. It is the same append-only event the
+          <select> above produces — one more row in the log, not a silent edit —
+          and the label has to make that obvious, because a student who has not
+          actually heard back must not click it by accident. Nothing below Applied
+          gets it: rehearsing for an interview nobody offered is anxiety with a
+          button on it. */}
+      {interviewUnlocked(card.status) ? (
+        <p className="pipe-card-rehearse">
+          <Link href={`/applicant/interview/${encodeURIComponent(card.job_id)}`}>
+            Begin interview
+            <span className="sr-only">
+              {' '}
+              for {card.title ?? 'this role'} at {card.company ?? 'this company'}
+            </span>
+          </Link>
+        </p>
+      ) : card.status === 'applied' ? (
+        <p className="pipe-card-rehearse">
+          <button
+            type="button"
+            className="pipe-rehearse-button"
+            disabled={saving}
+            aria-busy={saving}
+            onClick={() => void replyAndRehearse()}
+          >
+            They replied &mdash; begin interview
+            <span className="sr-only">
+              {' '}
+              for {card.title ?? 'this role'} at {card.company ?? 'this company'}. This marks the role as
+              Interviewing on your board and opens the mock interview room.
+            </span>
+          </button>
+          <span className="pipe-muted pipe-rehearse-hint">Marks this Interviewing, then opens the room.</span>
+        </p>
+      ) : null}
 
       <div className="pipe-field">
         {/* A real label, visible, associated by htmlFor. It names the JOB as well

@@ -131,13 +131,34 @@ if (-not $AppOnly) {
   }
 }
 
+function Get-OptionalHirewireSecret([string]$key) {
+  $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile 2>$null | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0 -or -not $json) { $global:LASTEXITCODE = 0; return $null }
+  [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($json.value))
+}
+
+function Get-HirewireSecret([string]$key) {
+  $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0) { throw "Could not read secret '$key' from scope 'hirewire'." }
+  [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($json.value))
+}
+
 # ---------------------------------------------------------------------------
 # The web app. It is served from here rather than Databricks Apps because that
 # platform gates every anonymous request behind a workspace OAuth login, so a
 # visitor without a Databricks account can never reach our own sign-in page.
 # ---------------------------------------------------------------------------
+# FALL BACK TO THE SECRET SCOPE, which is where every other runtime secret in
+# this script already comes from. Before this, the service principal's OAuth
+# secret lived only in whoever-deployed-last's shell history: a secret's VALUE is
+# shown once at creation and the API returns hashes afterwards, so a deploy from
+# a fresh machine meant minting a new credential. The two Get-*HirewireSecret
+# helpers are hoisted above this block so the lookup can happen here, before the
+# first use of the credentials.
+if (-not $DatabricksClientId) { $DatabricksClientId = Get-OptionalHirewireSecret "databricks-client-id" }
+if (-not $DatabricksClientSecret) { $DatabricksClientSecret = Get-OptionalHirewireSecret "databricks-client-secret" }
 if (-not $DatabricksClientId -or -not $DatabricksClientSecret) {
-  throw "Pass -DatabricksClientId and -DatabricksClientSecret (or set HIREWIRE_DB_CLIENT_ID / HIREWIRE_DB_CLIENT_SECRET). The app cannot reach the SQL warehouse without them, and nobody can sign in."
+  throw "No service principal credentials. Put them in the hirewire scope as databricks-client-id / databricks-client-secret, or pass -DatabricksClientId and -DatabricksClientSecret (or set HIREWIRE_DB_CLIENT_ID / HIREWIRE_DB_CLIENT_SECRET). The app cannot reach the SQL warehouse without them, and nobody can sign in."
 }
 
 $appSource = Join-Path $repoRoot "app/vthacks-career-app"
@@ -154,18 +175,6 @@ $global:LASTEXITCODE = 0
 # Google sign-in is optional by design: src/lib/providers.ts hides the button
 # when the client is not configured, so a missing key degrades to email/password
 # rather than to a button that throws when pressed.
-function Get-OptionalHirewireSecret([string]$key) {
-  $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile 2>$null | ConvertFrom-Json
-  if ($LASTEXITCODE -ne 0 -or -not $json) { $global:LASTEXITCODE = 0; return $null }
-  [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($json.value))
-}
-
-function Get-HirewireSecret([string]$key) {
-  $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile | ConvertFrom-Json
-  if ($LASTEXITCODE -ne 0) { throw "Could not read secret '$key' from scope 'hirewire'." }
-  [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($json.value))
-}
-
 # Multi-line PEMs cannot survive a Docker env_file; src/lib/ans/envelope.ts
 # un-escapes \n for exactly this case.
 function ConvertTo-EnvLine([string]$name, [string]$value) {
@@ -186,6 +195,29 @@ $appEnv = @(
   (ConvertTo-EnvLine "EMPLOYER_IDENTITY_CERT" (Get-HirewireSecret "employer-identity-cert")),
   (ConvertTo-EnvLine "MONGODB_URI" (Get-HirewireSecret "mongodb-uri"))
 )
+
+# The mock interview room's own keys. ALL OPTIONAL, each independently: a missing
+# one degrades to a stated reason on screen rather than a crash, which is the
+# contract that feature is built to.
+#
+# ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID are deliberately NOT in this list —
+# the Voice block below already carries them, and it pairs them because a key
+# without an agent id has nothing to connect to. The same key also serves Scribe
+# speech-to-text and persona 2, so the interviewer agent id below is useless
+# without that block having run.
+foreach ($pair in @(
+    @{ Secret = "elevenlabs-interviewer-agent-id"; Env = "ELEVENLABS_INTERVIEWER_AGENT_ID" },
+    @{ Secret = "presage-api-key"; Env = "PRESAGE_API_KEY" },
+    @{ Secret = "google-generative-ai-api-key"; Env = "GOOGLE_GENERATIVE_AI_API_KEY" }
+  )) {
+  $value = Get-OptionalHirewireSecret $pair.Secret
+  if ($value) {
+    $appEnv += (ConvertTo-EnvLine $pair.Env $value)
+    Write-Host "$($pair.Env): configured."
+  } else {
+    Write-Host "$($pair.Env): not set in the hirewire scope; the feature behind it will say so on screen."
+  }
+}
 
 $googleId = Get-OptionalHirewireSecret "google-client-id"
 $googleSecret = Get-OptionalHirewireSecret "google-client-secret"

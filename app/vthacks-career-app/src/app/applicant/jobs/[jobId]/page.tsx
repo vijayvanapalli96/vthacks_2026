@@ -15,15 +15,16 @@
  * SERVER-RENDERED, and the reads are the same ones the endpoints use
  * (`loadContext`, `listArtifacts`). No duplicate query lives in this file.
  */
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { SavePipelineButton } from '@/components/SavePipelineButton';
 import { loadContext } from '@/lib/artifacts/context.mjs';
-import { readHistory } from '@/lib/pipeline';
-import { toStage, type PipelineStatus } from '@/lib/pipeline-contract';
 import { listArtifacts } from '@/lib/artifacts/store.mjs';
 import { sql } from '@/lib/databricks';
+import { currentStage } from '@/lib/interview';
+import { interviewUnlocked } from '@/lib/interview-contract';
 import { requireRole } from '@/lib/session';
 
 import { JobDetail } from '@/components/JobDetail';
@@ -103,27 +104,11 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
     // client refetches after the first generation either way.
   }
 
-  // The stage already recorded for this job, so the save control renders the
-  // truth on first paint instead of offering "Save" to someone who saved it
-  // yesterday. Newest event first; toStage() is the same mapping the board uses,
-  // so the two can never disagree about what counts as a stage.
-  let savedStatus: PipelineStatus | null = null;
-  try {
-    const history = await readHistory(sql, user.id, job.job_id);
-    for (const event of history) {
-      const stage = toStage(event.event_type);
-      if (stage) {
-        savedStatus = stage;
-        break;
-      }
-    }
-  } catch {
-    // A failed read renders the button in its default state. Offering to save a
-    // job that is already saved costs one duplicate append-only row; hiding the
-    // control because a query timed out would lose the action entirely.
-  }
-
   const posted = formatDate(job.posted_at);
+
+  // One cheap read of the same view the board reads. A rehearsal is only offered
+  // once the employer has actually replied, so the page has to know the stage.
+  const stage = await currentStage(user.id, job.job_id).catch(() => null);
 
   return (
     <main>
@@ -200,8 +185,29 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
             <h2 id="jd-save-h">Keep this posting</h2>
           </div>
         </header>
-        <SavePipelineButton jobId={job.job_id} initialStatus={savedStatus} />
+        <SavePipelineButton jobId={job.job_id} initialStatus={stage} />
       </section>
+
+      {/* Offered above the document toolbox, not inside it: every tool in that
+          panel produces a DOCUMENT, and this produces a rehearsal. Only rendered
+          once an employer has replied, which is the whole gate. */}
+      {interviewUnlocked(stage) ? (
+        <section className="panel" aria-labelledby="jd-interview-h">
+          <header>
+            <div>
+              <small>THEY REPLIED</small>
+              <h2 id="jd-interview-h">Rehearse this interview</h2>
+            </div>
+          </header>
+          <p>
+            Questions built from this posting and your own match gaps, answered one at a time, on camera if you want
+            it. Nothing is recorded as video.
+          </p>
+          <p>
+            <Link href={`/applicant/interview/${encodeURIComponent(job.job_id)}`}>Open the mock interview room</Link>
+          </p>
+        </section>
+      ) : null}
 
       <section className="panel" aria-labelledby="jd-toolbox-h">
         <header>
