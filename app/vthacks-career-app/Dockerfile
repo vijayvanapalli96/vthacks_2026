@@ -43,6 +43,23 @@ ENV NODE_ENV=production \
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+
+# The Presage SDK, by hand, because nothing else can put it here.
+#
+# It is imported through a variable specifier (see src/lib/presage.ts) so neither
+# the bundler nor Next's file tracing can see it, and it reaches koffi and
+# protobufjs through runtime `require` so naming it in outputFileTracingIncludes
+# is not enough either — that shipped a container that failed with "Cannot find
+# module 'koffi'". Copied from the deps stage, where `npm ci` already picked the
+# one native payload matching this platform.
+#
+# If the steadiness read ever goes quiet in production, the first check is:
+#   docker exec hirewire-app-1 node -e "import('@smartspectra/node-sdk').then(()=>console.log('ok'))"
+COPY --from=deps /app/node_modules/@smartspectra ./node_modules/@smartspectra
+COPY --from=deps /app/node_modules/koffi ./node_modules/koffi
+COPY --from=deps /app/node_modules/protobufjs ./node_modules/protobufjs
+COPY --from=deps /app/node_modules/@protobufjs ./node_modules/@protobufjs
+COPY --from=deps /app/node_modules/long ./node_modules/long
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]

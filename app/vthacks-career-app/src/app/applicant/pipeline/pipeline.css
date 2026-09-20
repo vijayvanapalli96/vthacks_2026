@@ -313,3 +313,28 @@
 .pipe-card-rehearse {
   margin: 12px 0 0;
 }
+
+/* The rehearse control on an Applied card writes a stage before it navigates, so
+   it is a real <button>, not a link dressed as one. Styled as a link because that
+   is what it does from the student's point of view — the visible hint underneath
+   is what carries the "this records something" meaning, not the styling. */
+.pipe-rehearse-button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pipe-rehearse-button[disabled] {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.pipe-rehearse-hint {
+  display: block;
+  font-size: 0.85rem;
+  margin-top: 2px;
+}

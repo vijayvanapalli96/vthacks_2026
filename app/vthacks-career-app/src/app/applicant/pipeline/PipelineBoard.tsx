@@ -29,6 +29,7 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { interviewUnlocked } from '@/lib/interview-contract';
@@ -277,6 +278,22 @@ function Card({
   const noteId = `pipe-note-${card.job_id}`;
   const [note, setNote] = useState('');
   const stalled = stalledSentence(card);
+  const router = useRouter();
+
+  /**
+   * Record the employer's reply, then open the room.
+   *
+   * Reuses `onChange`, which is the board's single write path to
+   * POST /api/pipeline/status — hard rule 5 again, no private implementation. The
+   * navigation waits for the write because the room re-checks the stage server-side
+   * and would otherwise greet a student with "not yet" in a race they cannot see.
+   * If the write fails, `onChange` puts the reason in the board's alert region and
+   * this stays put rather than walking them into a locked door.
+   */
+  const replyAndRehearse = useCallback(async () => {
+    await onChange(card, 'interviewing');
+    router.push(`/applicant/interview/${encodeURIComponent(card.job_id)}`);
+  }, [card, onChange, router]);
 
   return (
     <li className="pipe-card">
@@ -317,19 +334,46 @@ function Card({
       {card.note ? <p className="pipe-card-note">“{card.note}”</p> : null}
 
       {/* The one thing this board could never offer: something to DO the moment an
-          employer replies. Rendered only for the stages where a rehearsal is real
-          (interviewing, offer) so it is not an eighth identical link on every card,
-          and it names the role in its accessible name because "Rehearse" repeated
-          down a column tells a screen-reader user nothing. */}
+          employer replies.
+          
+          TWO SHAPES, ONE DESTINATION. On a card that is already Interviewing or
+          Offer it is a plain link. On an APPLIED card it is a button that records
+          the reply first and then opens the room, because the interview room is
+          gated on the stage and a link that lands on "not yet" is a dead end.
+          
+          The button says what it writes. It is the same append-only event the
+          <select> above produces — one more row in the log, not a silent edit —
+          and the label has to make that obvious, because a student who has not
+          actually heard back must not click it by accident. Nothing below Applied
+          gets it: rehearsing for an interview nobody offered is anxiety with a
+          button on it. */}
       {interviewUnlocked(card.status) ? (
         <p className="pipe-card-rehearse">
           <Link href={`/applicant/interview/${encodeURIComponent(card.job_id)}`}>
-            Rehearse this interview
+            Begin interview
             <span className="sr-only">
               {' '}
               for {card.title ?? 'this role'} at {card.company ?? 'this company'}
             </span>
           </Link>
+        </p>
+      ) : card.status === 'applied' ? (
+        <p className="pipe-card-rehearse">
+          <button
+            type="button"
+            className="pipe-rehearse-button"
+            disabled={saving}
+            aria-busy={saving}
+            onClick={() => void replyAndRehearse()}
+          >
+            They replied &mdash; begin interview
+            <span className="sr-only">
+              {' '}
+              for {card.title ?? 'this role'} at {card.company ?? 'this company'}. This marks the role as
+              Interviewing on your board and opens the mock interview room.
+            </span>
+          </button>
+          <span className="pipe-muted pipe-rehearse-hint">Marks this Interviewing, then opens the room.</span>
         </p>
       ) : null}
 
