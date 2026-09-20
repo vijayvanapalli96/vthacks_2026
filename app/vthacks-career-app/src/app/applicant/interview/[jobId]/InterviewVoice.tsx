@@ -37,6 +37,13 @@ type Props = {
   dynamicVariables: Record<string, string>;
   /** Shown in the transcript line so the student can see what it just asked. */
   onAgentLine?: (text: string) => void;
+  /**
+   * The question the ROOM is on, and its position. The room owns the order; this
+   * is how the agent is told where it has got to. See the effect below.
+   */
+  currentQuestion: { id: string; text: string } | null;
+  questionNumber: number;
+  questionCount: number;
 };
 
 /**
@@ -59,13 +66,23 @@ export function InterviewVoice(props: Props) {
   );
 }
 
-function InterviewVoicePanel({ signedUrl, dynamicVariables, onAgentLine }: Props) {
+function InterviewVoicePanel({
+  signedUrl,
+  dynamicVariables,
+  onAgentLine,
+  currentQuestion,
+  questionNumber,
+  questionCount,
+}: Props) {
   const [failed, setFailed] = useState<string | null>(null);
 
   // useConversation returns a fresh object every render, so anything read inside
   // an animation frame or an unmount handler goes through a ref. Same discipline,
   // and the same reason, as the `live` ref in VoiceAgent.tsx.
-  const live = useRef<{ end: () => void }>({ end: () => {} });
+  const live = useRef<{ end: () => void; update: (text: string) => void }>({
+    end: () => {},
+    update: () => {},
+  });
 
   const conversation = useConversation({
     onMessage: ({ message, source }) => {
@@ -79,7 +96,39 @@ function InterviewVoicePanel({ signedUrl, dynamicVariables, onAgentLine }: Props
 
   useEffect(() => {
     live.current.end = conversation.endSession;
+    live.current.update = conversation.sendContextualUpdate;
   }, [conversation]);
+
+  /**
+   * KEEP THE AGENT IN STEP WITH THE ROOM.
+   *
+   * The agent was handed the whole queue at the start and then asked it on its
+   * own clock. The room advances when an answer is SENT, so the moment a student
+   * typed an answer instead of speaking it the two drifted: the screen showed
+   * question three while the voice was still on question two.
+   *
+   * The room owns the order. Every time the current question changes, the agent
+   * is told where we are with a CONTEXTUAL UPDATE - a message it reads but does
+   * not speak - and asked for that exact question next. One source of truth, and
+   * the thing critiqued stays the thing on screen.
+   *
+   * The first question is skipped: the agent's own opening line already asks it,
+   * and an update racing the greeting makes it ask twice.
+   */
+  const askedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== 'connected' || !currentQuestion) return;
+    if (askedRef.current === currentQuestion.id) return;
+
+    const first = askedRef.current === null;
+    askedRef.current = currentQuestion.id;
+    if (first) return;
+
+    live.current.update(
+      `The candidate has answered. You are now on question ${questionNumber} of ${questionCount}. ` +
+        `Acknowledge briefly and neutrally, then ask exactly this question next: "${currentQuestion.text}"`,
+    );
+  }, [currentQuestion, questionCount, questionNumber, status]);
 
   // End the session on unmount, and again when the tab is hidden. A conversation
   // left running in a background tab bills by the minute.

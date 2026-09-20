@@ -540,6 +540,12 @@ export function InterviewRoom({ jobId, jobTitle, company }: Props) {
               signedUrl={session.signedUrl}
               dynamicVariables={session.dynamicVariables}
               onAgentLine={(line) => setNotice(line)}
+              // The room owns the question order; the agent is told where it has
+              // got to every time this changes. Without it the voice keeps asking
+              // its own next question while the screen has already moved on.
+              currentQuestion={question ? { id: question.id, text: question.text } : null}
+              questionNumber={index + 1}
+              questionCount={session.questions.length}
             />
           ) : null}
 
