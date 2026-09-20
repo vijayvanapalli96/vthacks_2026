@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { verifyRemoteAgent } from "../shared/remote-agent.mjs";
 import { explainMutualMatch } from "../shared/mutual-match.mjs";
+import { screen } from "../shared/screening.mjs";
 import { createReplayGuard, peekIssuer, verifyEnvelope } from "../shared/signed-envelope.mjs";
 
 const port = Number(process.env.PORT ?? 8787);
@@ -44,12 +45,36 @@ createServer(async (request, response) => {
         requiredSkills: packet.job?.required_skills,
         preferredSkills: packet.job?.preferred_skills,
       });
-      return send(response, 202, {
-        status: "accepted",
+
+      /**
+       * A REAL SCREEN, NOT A HANDSHAKE.
+       *
+       * This used to answer "accepted" to everything that verified. It now
+       * checks the application against the ROLE'S OWN prerequisites, and when
+       * something is missing it says what and why instead of accepting silently.
+       * The first thing it asks for is the resume, because that is the document
+       * a human screener opens first and the packet carries only the fields the
+       * candidate chose to release.
+       */
+      const screening = screen({
+        candidate: packet.candidate,
+        job: packet.job,
+        match: employerMatch,
+      });
+
+      // 202 for anything still alive, 200 for a decline. Neither is an error:
+      // an employer asking for a document is the system working.
+      return send(response, screening.verdict === "declined" ? 200 : 202, {
+        status: screening.verdict,
         receipt_id: randomUUID(),
         applicant_verification: verification,
         applicant_explanation: packet.match_explanation ?? null,
         employer_explanation: employerMatch,
+        // What the employer still needs, each item with the reason it needs it.
+        requests: screening.requests,
+        prerequisites: screening.prerequisites,
+        resume_attached: screening.resume_attached,
+        spoken_reason: screening.spoken_reason,
       });
     } catch (error) {
       return send(response, 403, { status: "refused", reason: error instanceof Error ? error.message : "Applicant verification failed." });
