@@ -25,9 +25,8 @@
 import { CornerDownLeft, MapPin, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
-import type { MatchBrief, TranscriptEntry, VoiceJobStatus } from '@/lib/voice-contract';
+import type { TranscriptEntry } from '@/lib/voice-contract';
 
-import { MatchDigest } from './MatchDigest';
 import { TranscriptAction } from './TranscriptAction';
 
 export type TypedOption = { fieldKey: string; question: string };
@@ -58,15 +57,8 @@ export function TranscriptPanel({
   busy,
   note,
   pageName,
-  matches,
-  matchesStale,
-  refreshing,
   proactive,
   onDismissProactive,
-  onRefreshMatches,
-  onOpenJob,
-  onExplainJob,
-  onSetJobStatus,
 }: {
   entries: TranscriptEntry[];
   options: TypedOption[];
@@ -77,21 +69,22 @@ export function TranscriptPanel({
   note: string | null;
   /** What the server says this page is. Never parsed from the URL in the browser. */
   pageName: string | null;
-  matches: MatchBrief[];
-  matchesStale: boolean;
-  refreshing: boolean;
   proactive: ProactivePrompt | null;
   onDismissProactive: () => void;
-  onRefreshMatches: () => void;
-  onOpenJob: (jobId: string, target: 'job' | 'apply') => void;
-  onExplainJob: (jobId: string) => void;
-  onSetJobStatus: (jobId: string, status: VoiceJobStatus) => void;
 }) {
   const panelId = useId();
-  const selectId = useId();
   const inputId = useId();
-  const [chosen, setChosen] = useState('');
   const [value, setValue] = useState('');
+  /**
+   * Which questions this panel has already filed an answer for.
+   *
+   * Tracked locally because `options` is the queue the SERVER handed us and it is
+   * only refetched on mount and on each connect — so it does not shrink as
+   * answers land, and reading "the first outstanding question" straight off it
+   * would park the form on question one forever. Keyed by fieldKey rather than by
+   * index so a fresh session with a different queue simply stops matching.
+   */
+  const [answered, setAnswered] = useState<string[]>([]);
   const listRef = useRef<HTMLOListElement | null>(null);
 
   // Tell the document the drawer is open, so the page can make room for it
@@ -105,14 +98,20 @@ export function TranscriptPanel({
     };
   }, [open]);
 
-  // DERIVED, not synchronised in an effect. The select defaults to the first
-  // outstanding question and honours an explicit choice for as long as that choice
-  // is still in the list. Doing this with a useEffect + setState would re-render
-  // twice for no reason and, worse, could momentarily file an answer against the
-  // wrong field in the gap between the two renders.
-  const fieldKey = options.some((option) => option.fieldKey === chosen)
-    ? chosen
-    : (options[0]?.fieldKey ?? '');
+  // DERIVED, not synchronised in an effect: the current question is simply the
+  // first one in the server's order that has not been answered yet. An effect that
+  // mirrored this into state would re-render twice for no reason and, worse, could
+  // momentarily file an answer against the wrong field between the two renders.
+  const current = options.find((option) => !answered.includes(option.fieldKey)) ?? null;
+  const fieldKey = current?.fieldKey ?? '';
+
+  /* Don't print the question twice. While a conversation is live the agent SAYS it
+     and that arrives as a real entry, so the pending prompt would sit directly
+     under an identical agent bubble. Exact match only: speech is usually a
+     rephrasing, and a fuzzy comparison here would be guesswork. */
+  const lastAgentText = entries.filter((entry) => entry.role === 'agent').at(-1)?.text?.trim();
+  const promptQuestion =
+    current && lastAgentText !== current.question.trim() ? current.question : null;
 
   // Keep the newest turn in view. scrollTop rather than scrollIntoView: the latter
   // scrolls the whole page when the panel is taller than the viewport.
@@ -131,6 +130,9 @@ export function TranscriptPanel({
     // the same sentence when someone presses Enter twice.
     setValue('');
     await onTypedAnswer(fieldKey, trimmed);
+    // Advance only once the write has actually returned, so a failed answer leaves
+    // the same question on screen rather than silently skipping it.
+    setAnswered((prev) => (prev.includes(fieldKey) ? prev : [...prev, fieldKey]));
   }
 
   return (
@@ -158,10 +160,6 @@ export function TranscriptPanel({
         <section className="vt-panel" id={panelId} aria-label="Voice conversation transcript">
           <header className="vt-panel-head">
             <h2>Transcript</h2>
-            <p>
-              Everything said and everything done, in order. Voice and typing go to the same
-              endpoints — there is no action here you can only reach with a microphone.
-            </p>
             {/* The agent's page awareness, shown rather than merely claimed. If the
                 agent is wrong about where you are, you can see that it is wrong. */}
             {pageName ? (
@@ -209,6 +207,19 @@ export function TranscriptPanel({
                 </li>
               ),
             )}
+
+            {/* The outstanding question, as a turn in the conversation rather than
+                as a field label above a form. It is the agent asking, in the same
+                bubble the spoken agent uses, and the reply box below is just a
+                reply box. Typed answers already push a 'user' turn (see
+                onTypedAnswer in VoiceAgent), so question and answer alternate the
+                way they do when it is spoken aloud. */}
+            {promptQuestion ? (
+              <li className="vt-entry vt-agent vt-asking" aria-live="polite">
+                <span className="vt-who">Agent</span>
+                <span className="vt-said">{promptQuestion}</span>
+              </li>
+            ) : null}
           </ol>
 
           {note ? (
@@ -217,52 +228,30 @@ export function TranscriptPanel({
             </p>
           ) : null}
 
-          {/* Every spoken action has its button here, calling the same endpoint. */}
-          <MatchDigest
-            matches={matches}
-            stale={matchesStale}
-            refreshing={refreshing}
-            busy={busy}
-            onRefresh={onRefreshMatches}
-            onOpen={onOpenJob}
-            onExplain={onExplainJob}
-            onSetStatus={onSetJobStatus}
-          />
-
-          <form className="vt-typed" onSubmit={submit}>
-            <h3>Type an answer instead</h3>
-            <div className="vt-typed-row">
-              <label htmlFor={selectId}>Which question</label>
-              <select
-                id={selectId}
-                value={fieldKey}
-                onChange={(event) => setChosen(event.target.value)}
-                disabled={options.length === 0}
-              >
-                {options.length === 0 ? <option value="">Nothing outstanding</option> : null}
-                {options.map((option) => (
-                  <option key={option.fieldKey} value={option.fieldKey}>
-                    {option.question}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="vt-typed-row">
-              <label htmlFor={inputId}>Your answer</label>
-              <input
-                id={inputId}
-                type="text"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                placeholder="Type it exactly as you would say it"
-                autoComplete="off"
-                maxLength={600}
-                disabled={options.length === 0}
-              />
-            </div>
-            <button type="submit" className="vt-send" disabled={busy || !value.trim() || !fieldKey}>
-              <CornerDownLeft size={15} aria-hidden="true" />
-              {busy ? 'Saving…' : 'Record this answer'}
+          {/* Just a reply box. No heading, no "question N of M", no field labels —
+              the question is in the conversation above, which is where a question
+              belongs. One question is answerable at a time and it is always the
+              current one, so a typist walks the same queue in the same order the
+              voice agent does and cannot jump ahead to question seven. */}
+          <form className="vt-reply" onSubmit={submit}>
+            <input
+              id={inputId}
+              type="text"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder={current ? 'Type your reply' : 'Nothing to answer right now'}
+              aria-label={current ? current.question : 'Your reply'}
+              autoComplete="off"
+              maxLength={600}
+              disabled={!current}
+            />
+            <button
+              type="submit"
+              className="vt-send vt-send-icon"
+              disabled={busy || !value.trim() || !current}
+            >
+              <CornerDownLeft size={16} aria-hidden="true" />
+              <span className="vt-sr-only">{busy ? 'Sending your reply' : 'Send reply'}</span>
             </button>
           </form>
         </section>

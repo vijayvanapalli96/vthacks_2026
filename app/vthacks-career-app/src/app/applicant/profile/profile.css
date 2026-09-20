@@ -147,3 +147,53 @@
 @media (max-width: 900px) {
   .profile-grid { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* --- Narrow screens ------------------------------------------------------ */
+/* The single-column collapse above was the only thing here, and collapsing the
+   grid is not the same as fitting on a phone. Everything below is about content
+   that is WIDER THAN THE VIEWPORT rather than about layout.
+
+   Long unbroken tokens are the real overflow source on this page, and they are
+   everywhere on it by design: a provenance line reads "read by
+   databricks-llama-4-maverick", contact rows carry email addresses and portfolio
+   URLs, and none of those contain a space to break at. Without an explicit rule
+   they push the page sideways and produce a horizontal scrollbar on a document
+   whose own nav is already eating 56px. */
+.provenance,
+.profile-contact,
+.profile-contact a,
+.meta,
+.sources,
+.entry li,
+.gap-question {
+  overflow-wrap: anywhere;
+}
+
+/* `min-width: 0` so a long child cannot force a grid track wider than its
+   column — without it, the track sizes to the longest token and the collapse
+   above silently stops working. */
+.profile-grid > * { min-width: 0; }
+.entry, .profile-section { min-width: 0; }
+
+@media (max-width: 760px) {
+  /* 56px of top padding is a third of a phone screen before anything is read. */
+  .profile-shell { padding: 28px 0 56px; gap: 22px; }
+  .profile-head { padding-bottom: 22px; }
+
+  /* The clamp floor was 38px at every width, so a long single-word name
+     overflowed a 390px screen no matter what the viewport said. */
+  .profile-head h1 { font-size: clamp(27px, 8vw, 38px); }
+  .profile-head .muted { font-size: 17px; }
+
+  .profile-section { padding-top: 20px; }
+  .profile-section h2 { font-size: 21px; }
+  .entry h3 { font-size: 17px; }
+  .entry li, .gap-question { font-size: 16px; }
+
+  /* Tighter rows, and a narrower bullet indent: 20-22px of indent is a real
+     fraction of the text column at this width. */
+  .entry ul { padding-left: 16px; }
+  .gap-list { padding-left: 18px; }
+
+  .chips li { padding: 6px 10px; font-size: 14px; }
+}

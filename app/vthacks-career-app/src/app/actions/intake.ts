@@ -75,14 +75,15 @@ export async function uploadResumeAction(
 ): Promise<IntakeState> {
   const user = await requireRole('applicant');
 
-  // The row must land BEFORE the redirect. intakeState() reads these rows to
-  // decide where to send people, so skipping without writing one would loop the user
-  // back to this page forever.
-  if (formData.get('intent') === 'skip') {
-    const result = await skipIntake(user.id, 'resume_pdf');
-    if (!result.ok) return { status: 'error', message: result.error };
-    redirect('/applicant/intake/linkedin');
-  }
+  // THE RESUME CANNOT BE SKIPPED, and that is enforced here rather than by leaving a
+  // button out of the form. It is the only thing intake collects (see intakeGate) and
+  // the only source of skills, roles and coursework, so a skipped resume leaves the
+  // matcher with nothing to match on and every downstream screen empty. A step that a
+  // crafted POST can walk past is not a required step, so `intent=skip` is not honoured
+  // for this kind at all — it falls through to the same "choose a PDF" answer as an
+  // empty submit.
+  //
+  // skipIntake() is untouched and still used by linkedInAction, which IS optional.
 
   const candidate = formData.get('resume');
   const file = candidate instanceof File ? candidate : null;
@@ -96,7 +97,7 @@ export async function uploadResumeAction(
   const result = await stageDocumentDeferred({ userId: user.id, kind: 'resume_pdf', file });
   if (!result.ok) return { status: 'error', message: result.error, field: 'resume' };
 
-  redirect('/applicant/intake/linkedin');
+  redirect('/applicant');
 }
 
 /**

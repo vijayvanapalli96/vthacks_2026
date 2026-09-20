@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { BadgeCheck, ChevronRight, Radio, Target } from 'lucide-react';
 
 import { A2ALaneCard } from '@/components/A2ALaneCard';
+import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { MatchList } from '@/components/MatchList';
 import { MatchRunButton } from '@/components/MatchRunButton';
@@ -50,7 +51,7 @@ export default async function JobsPage() {
 
   return (
     <main>
-      <ApplicantNav current="jobs" />
+      <ApplicantNav current="jobs" account={<AccountButton />} />
       <section className="hero trust-hero">
         <p className="eyebrow">JOBS</p>
         <h1>Real openings, checked before you apply.</h1>

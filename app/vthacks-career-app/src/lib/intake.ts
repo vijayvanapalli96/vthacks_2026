@@ -113,7 +113,18 @@ export async function intakeGate(userId: string): Promise<IntakeGate> {
   const truthy = (value: unknown) => String(value ?? '0') === '1';
 
   if (!truthy(row[0])) return { nextStep: '/applicant/intake/resume', needsAnalysis: false };
-  if (!truthy(row[1])) return { nextStep: '/applicant/intake/linkedin', needsAnalysis: false };
+
+  // COLLECTING IS ONE STEP: the resume. LinkedIn used to gate here too —
+  // `if (!truthy(row[1])) return { nextStep: '/applicant/intake/linkedin' }` — which made
+  // every new account walk a second screen before it could reach the dashboard. The URL
+  // alone was never readable (no public API, login wall on anonymous requests), so that
+  // screen collected a string we could display and nothing we could act on, and the
+  // resume is what actually produces skills, roles and coursework.
+  //
+  // The page still exists and is still linked from /applicant/profile as an optional
+  // addition. It is simply not a gate. `has_linkedin` stays SELECTed on purpose:
+  // dropping the column would renumber row[2] and row[3] under the two reads below,
+  // which is a far better way to introduce a silent bug than it is to save a column.
 
   // Something is staged and unread. Analysis is separate from collecting precisely
   // so the two upload pages stay fast: the model call is the slow part, and it should
@@ -297,9 +308,9 @@ export const GAP_FIELDS: ReadonlyArray<{
   // signed up. Gaps in the number line are free; a silent per-user reordering is not.
   { field: 'target_role', priority: 200, question: 'What kind of role are you looking for?', fromDocument: false },
   { field: 'employment_type', priority: 202, question: 'Are you looking for full-time, an internship, or a co-op?', fromDocument: false },
-  { field: 'work_location_pref', priority: 204, question: 'Onsite, hybrid, or remote — and which cities work for you?', fromDocument: false },
+  { field: 'work_location_pref', priority: 204, question: 'Onsite, hybrid, or remote, and which cities work for you?', fromDocument: false },
   { field: 'sponsorship', priority: 210, question: 'Will you need visa sponsorship, now or later?', fromDocument: false },
-  { field: 'work_authorization', priority: 212, question: 'How are you authorised to work in the US right now — citizen, permanent resident, F-1 or OPT, or something else?', fromDocument: false },
+  { field: 'work_authorization', priority: 212, question: 'How are you authorised to work in the US right now? Citizen, permanent resident, F-1 or OPT, or something else?', fromDocument: false },
   { field: 'graduation_date', priority: 214, question: 'When do you graduate?', fromDocument: false },
   { field: 'comp_floor', priority: 220, question: 'Is there a salary below which you would rather not be contacted?', fromDocument: false },
   { field: 'start_date', priority: 230, question: 'When could you start?', fromDocument: false },
@@ -1103,7 +1114,7 @@ const NOT_READ =
   'I did not read your LinkedIn page: LinkedIn has no public profile API and serves a login wall to anonymous requests, so the only honest options are the public web or a file you export yourself.';
 
 const EXPORT_FIX =
-  'To make this certain, go to LinkedIn → Settings → Data privacy → Get a copy of your data, then upload the archive on the LinkedIn step — that file is yours and it produces real roles, skills and schools.';
+  'To make this certain, go to LinkedIn → Settings → Data privacy → Get a copy of your data, then upload the archive on the LinkedIn step. That file is yours, and it produces real roles, skills and schools.';
 
 export type AnalysisSummary = {
   factsAppended: number;
@@ -1168,21 +1179,16 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
       'Checking what you gave me',
       at,
       'ok',
-      [
-        pending.length > 0
-          ? `${documents.length} document(s) and ${links.length} link(s) waiting.`
-          : // "Nothing pending" has two causes and they are not the same sentence. It
-            // used to say "you skipped both steps" either way, which on a re-run told a
-            // user whose export we had just read that they had given us nothing.
-            alreadyRead > 0
-            ? 'Nothing new to read — everything you gave me has already been read, so this pass only re-checks what is still an open question.'
-            : 'Nothing new to read — you skipped both steps, so everything becomes a question instead.',
-        alreadyRead > 0
-          ? `${alreadyRead} source(s) were already read on an earlier pass; I load what they established rather than reading them again.`
-          : undefined,
-      ]
-        .filter(Boolean)
-        .join(' '),
+      pending.length > 0
+        ? documents.length === 1 && links.length === 0
+          ? 'Your resume is here and ready to read.'
+          : `${documents.length} file${documents.length === 1 ? '' : 's'} ready to read.`
+        : // "Nothing pending" has two causes and they are not the same sentence. It
+          // used to say "you skipped both steps" either way, which on a re-run told a
+          // user whose export we had just read that they had given us nothing.
+          alreadyRead > 0
+          ? 'I have read this already, so this time I am only checking what is still missing.'
+          : 'There is nothing to read yet, so everything becomes a question instead.',
     );
 
     /**
@@ -1195,10 +1201,6 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
     const extracted: ExtractedProfile[] = [];
     if (alreadyRead > 0) extracted.push(await knownProfile(userId));
     let linkedinUrl: string | undefined;
-    // Sources actually READ on this pass, which is not extracted.length: that array
-    // also carries the baseline and the link-only contribution below.
-    let sourcesRead = 0;
-
     for (const doc of documents) {
       const what = doc.fileName ?? 'your document';
       if (!doc.storagePath) {
@@ -1209,15 +1211,11 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
 
       try {
         at = Date.now();
-        yield step(`fetch:${doc.documentId}`, `Fetching ${what} back from secure storage`);
+        yield step(`fetch:${doc.documentId}`, `Opening ${what}`);
         const bytes = await getUpload(doc.storagePath);
-        yield settle(
-          `fetch:${doc.documentId}`,
-          `Fetching ${what} back from secure storage`,
-          at,
-          'ok',
-          `${(bytes.byteLength / 1024).toFixed(0)} KB from the Unity Catalog volume.`,
-        );
+        // No byte count and no "Unity Catalog volume". Where the file is stored is our
+        // problem, not something the person waiting needs to be taught.
+        yield settle(`fetch:${doc.documentId}`, `Opening ${what}`, at, 'ok', undefined);
 
         const isExport = doc.kind === 'linkedin_export_pdf';
         at = Date.now();
@@ -1225,8 +1223,8 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
           `read:${doc.documentId}`,
           `Reading ${what}`,
           isExport
-            ? 'Your LinkedIn data export has a fixed shape, so this is parsed directly — no model, nothing to invent.'
-            : 'Extracting text, then asking the model for structured fields. This is the slow part.',
+            ? 'Reading it straight off the file. Nothing is guessed here.'
+            : 'Picking out your skills, jobs and coursework. This is the part that takes a moment.',
         );
         // Typed as the wider outcome so `outcome.export` is reachable without an `in`
         // narrowing, which TypeScript cannot do through an optional property.
@@ -1241,7 +1239,6 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
         // otherwise put it on the profile page twice.
         const known = mergeProfiles(extracted);
         extracted.push(outcome.profile);
-        sourcesRead += 1;
 
         // The export path can name exactly which sheets it understood, which is a far
         // better answer than a count — "Positions, Skills, Education" tells the user
@@ -1253,24 +1250,43 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
           at,
           outcome.warnings.length || (exported && exported.sections.length === 0) ? 'warn' : 'ok',
           [
-            `${providerLabel(outcome.provider)} · ${outcome.model}`,
+            // Names the provider but NOT the pinned model id. Which company read the
+            // file is worth saying out loud; `gemini-flash-latest` is a version string
+            // and means nothing to the person waiting.
+            `Read with ${providerLabel(outcome.provider)}.`,
             exported?.sections.length
               ? `Understood ${exported.sections.join(', ')}.`
               : undefined,
-            `${outcome.profile.skills.length} skills, ${outcome.profile.experience.length} roles, ${outcome.profile.education.length} schools, ${outcome.profile.courses.length} courses.`,
+            [
+              `${outcome.profile.skills.length} skill${outcome.profile.skills.length === 1 ? '' : 's'}`,
+              `${outcome.profile.experience.length} role${outcome.profile.experience.length === 1 ? '' : 's'}`,
+              `${outcome.profile.education.length} school${outcome.profile.education.length === 1 ? '' : 's'}`,
+              `${outcome.profile.courses.length} course${outcome.profile.courses.length === 1 ? '' : 's'}`,
+            ].join(', ') + '.',
             // Said out loud because a user who exported everything WILL wonder where
             // their connections went, and "we chose not to keep other people's data"
             // is a better answer than silence.
             exported?.connectionsSeen
-              ? `Saw ${exported.connectionsSeen} connections and stored none of them — those are other people's details, not your profile.`
+              ? `Saw ${exported.connectionsSeen} connections and stored none of them. Those are other people's details, not your profile.`
               : undefined,
             exported?.unrecognised.length
               ? `Did not recognise ${exported.unrecognised.slice(0, 4).join(', ')}.`
               : undefined,
-            ...outcome.warnings,
+            // `outcome.warnings` is NOT shown here any more. It carried two things, and
+            // both were wrong for this surface: a restatement of the provider and model
+            // ("Extracted with Databricks ai_query (databricks-llama-4-maverick)"),
+            // which the line above already says in plain words, and the raw text of any
+            // fallback failure — which meant a depleted Gemini balance printed a whole
+            // JSON error body, complete with a billing URL, into a student's onboarding.
+            //
+            // Nothing is being concealed by this: the line still names the provider that
+            // actually did the work, so the claim stays true. The warnings remain on the
+            // ExtractionResult for anything that wants to log them.
           ]
             .filter(Boolean)
-            .join(' — '),
+            // Sentences, joined by a space. Each part above ends in a full stop, so the
+            // em dash that used to sit between them was doing no work.
+            .join(' '),
         );
 
         at = Date.now();
@@ -1411,7 +1427,7 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
           yield step(
             'linkedin:web',
             'Looking for anything public about you',
-            'Searching the public web — not LinkedIn itself, which blocks anonymous requests. Seeded with your name, employer and school so I do not describe someone else.',
+            'Searching the public web, not LinkedIn itself, which blocks anonymous requests. Seeded with your name, employer and school so I do not describe someone else.',
           );
 
           const enriched = await enrichFromPublicWeb({
@@ -1452,7 +1468,7 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
               'Looking for anything public about you',
               at,
               'warn',
-              `${NOT_READ} A public web search turned up nothing I could confidently tie to you — the model either found no pages about you or would not vouch that they were about the right person, and I would rather record nothing than guess. ${EXPORT_FIX}`,
+              `${NOT_READ} A public web search turned up nothing I could confidently tie to you. The model either found no pages about you or would not vouch that they were about the right person, and I would rather record nothing than guess. ${EXPORT_FIX}`,
             );
           } else if (!novel || isEmptyProfile(novel)) {
             yield settle(
@@ -1522,19 +1538,24 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
     at = Date.now();
     yield step('combine', 'Combining every source into one profile');
     const merged = mergeProfiles(extracted);
-    // Counted separately from the baseline, because "3 sources" when two of them are
-    // last pass's work read back out of Delta would overstate what just happened.
-    const freshSources = sourcesRead;
+    // This used to open with "Union of N new source(s)", counted separately from the
+    // baseline so that last pass's work read back out of Delta could not be passed off
+    // as something that just happened. Both the count and its counter are gone: it
+    // described our pipeline rather than the reader's profile. If a future line reports
+    // on a pass again, count sources read on THIS pass — `extracted.length` is not that
+    // number, because the array also carries the baseline.
     yield settle(
       'combine',
       'Combining every source into one profile',
       at,
       'ok',
+      // Plain counts, correctly pluralised. "1 schools" was showing on a real run.
       [
-        `Union of ${freshSources || 'no'} new source(s)${alreadyRead > 0 ? ' plus what your profile already held' : ''}:`,
-        `${merged.skills.length} skills, ${merged.experience.length} roles, ${merged.education.length} schools, ${merged.courses.length} courses.`,
-        'A gap in one source is filled by another before I decide what to ask you.',
-      ].join(' '),
+        `${merged.skills.length} skill${merged.skills.length === 1 ? '' : 's'}`,
+        `${merged.experience.length} role${merged.experience.length === 1 ? '' : 's'}`,
+        `${merged.education.length} school${merged.education.length === 1 ? '' : 's'}`,
+        `${merged.courses.length} course${merged.courses.length === 1 ? '' : 's'}`,
+      ].join(', ') + ' so far.',
     );
 
     at = Date.now();
@@ -1545,7 +1566,9 @@ export async function* analyzeIntake(userId: string): AsyncGenerator<IntakeProgr
       'Working out what I still need to ask',
       at,
       'ok',
-      `${openGaps} open question(s) queued for the voice agent.`,
+      openGaps === 0
+        ? 'Nothing missing. I did not need to leave anything open.'
+        : `${openGaps} thing${openGaps === 1 ? '' : 's'} I could not find. I will ask you about ${openGaps === 1 ? 'it' : 'those'}.`,
     );
 
     yield {

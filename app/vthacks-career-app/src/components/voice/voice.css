@@ -27,11 +27,12 @@
   --vt-fail: #9b1c1c;
 
   position: fixed;
-  /* A drawer flush to the right edge, running the full height beneath the nav —
-     the pattern a code host uses for its file sidebar. Fixed, so opening it
-     never reflows the page behind it. */
+  /* A drawer flush to the right edge, running the FULL height — it used to start
+     below the workspace top bar, and that bar no longer exists, so an 84px offset
+     was just a gap with nothing in it. Fixed, so opening it never reflows the
+     page behind it. */
   right: 0;
-  top: var(--nav-h, 84px);
+  top: 0;
   bottom: 0;
   z-index: 60;
   display: flex;
@@ -56,10 +57,18 @@
    side-nav toggle on the opposite side — the two panel controls then read as a
    pair rather than one in the chrome and one floating in the page. The offset
    follows the drawer, so an open panel is never covered by its own button. */
+/* INSIDE the panel, not floating beside it.
+   It used to sit at `right: drawer-w + gutter`, which parked it in the page
+   content to the LEFT of the open drawer — a control for the transcript that was
+   not on the transcript. Pinned to the viewport's right edge instead, it lands in
+   the panel's own top-right corner while open and becomes the collapsed tab while
+   shut, which is the same single-button arrangement the left nav rail uses.
+   It stays a child of .vt-dock and never unmounts, because a toggle inside the
+   panel would disappear with the panel and there would be no way back. */
 .vt-tab {
   position: fixed;
-  top: calc((var(--nav-h, 84px) - 44px) / 2);
-  right: calc(var(--drawer-w, 0px) + var(--gutter, 34px));
+  top: 16px;
+  right: 14px;
   z-index: 70;
   display: grid;
   place-items: center;
@@ -67,13 +76,16 @@
   height: 44px;
   margin: 0;
   padding: 0;
-  transition: right 0.42s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease,
-    background 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease;
   border: 1px solid var(--line-strong);
   background: var(--paper);
   color: var(--ink);
 }
 .vt-tab:hover { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 4%, var(--paper)); }
+
+/* Room for the button in the header, so "Transcript" and its blurb never run
+   underneath it. */
+.vt-dock.is-open .vt-panel-head { padding-right: 70px; }
 
 /* Unread count while the drawer is shut, so closing it does not hide that the
    conversation moved on. */
@@ -171,6 +183,13 @@
   border-radius: 10px;
 }
 
+/* The question still waiting on an answer. Identical bubble to anything else the
+   agent says — it IS the agent asking — with one hairline to mark that this is the
+   turn the reply box belongs to. */
+.vt-asking .vt-said {
+  border: 1px solid color-mix(in srgb, var(--vt-agent) 30%, transparent);
+}
+
 .vt-user .vt-said {
   background: #f4f6f0;
   padding: 8px 11px;
@@ -232,49 +251,39 @@
 
 /* --- the typed fallback. P0: this is the path that survives a broken mic. --- */
 
-.vt-typed {
+/* --- The reply box -------------------------------------------------------- */
+/* Was a titled form: a heading, a "question N of M" counter, a question
+   paragraph, two labelled rows and a wide "Record this answer" button. The
+   question now lives in the conversation above as an agent turn, so all that is
+   left down here is one line to type in and one key to send it — the same shape
+   as any chat composer. */
+
+.vt-reply {
   border-top: 1px solid var(--line);
-  padding: 14px 18px 16px;
-  display: grid;
-  gap: 9px;
+  padding: 10px 12px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.vt-typed h3 {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.12em;
-  color: var(--vt-dim);
-}
-
-.vt-typed-row {
-  display: grid;
-  gap: 4px;
-}
-
-.vt-typed label {
-  font-size: 11px;
-  font-weight: 750;
-  color: var(--vt-dim);
-}
-
-.vt-typed select,
-.vt-typed input {
+.vt-reply input {
+  flex: 1;
+  min-width: 0;
   font: inherit;
   font-size: 13px;
-  padding: 8px 10px;
+  padding: 9px 12px;
   border: 1px solid #b9c4bb;
-  border-radius: 9px;
+  border-radius: 999px;
   background: white;
   color: var(--vt-ink);
-  width: 100%;
 }
 
-.vt-typed select:focus-visible,
-.vt-typed input:focus-visible {
+.vt-reply input:focus-visible {
   outline: 3px solid var(--green);
   outline-offset: 2px;
 }
+
+.vt-reply input:disabled { background: #f4f6f0; color: #565f58; }
 
 .vt-send {
   display: flex;
@@ -288,6 +297,15 @@
   color: white;
   font-weight: 750;
   font-size: 13px;
+}
+
+/* Icon-only, round, the size of the input beside it. */
+.vt-send-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
 }
 
 .vt-send:disabled {
@@ -599,23 +617,8 @@
 .vw.is-live .vw-caption { color: var(--ink); }
 .vw-caption.is-failure { color: var(--failure); }
 
-/* Hidden until focused. A control that a keyboard user can reach but never see
-   is worse than no control: they cannot tell where they are. */
-.vw-mute-a11y:focus-visible {
-  position: static;
-  width: auto;
-  height: auto;
-  margin: 0;
-  clip: auto;
-  clip-path: none;
-  overflow: visible;
-  white-space: normal;
-  padding: 4px 10px;
-  border: 1px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 12px;
-}
+/* The .vw-mute-a11y rule that lived here is gone with the mute control itself:
+   there is no hidden keyboard mute to reveal on focus any more. */
 
 .vt-sr-only {
   position: absolute;
@@ -658,7 +661,8 @@
 
 @media (max-width: 760px) {
   .vt-dock {
-    top: var(--nav-h, 72px);
+    /* Full height here too: the top bar this cleared is gone. */
+    top: 0;
     bottom: 0;
   }
 
@@ -666,8 +670,10 @@
     width: calc(100vw - 72px);
   }
 
+  /* Still inside the panel, just tighter to the edge. */
   .vt-tab {
-    right: calc(var(--drawer-w, 0px) + 16px);
+    top: 12px;
+    right: 10px;
   }
 
   .vw {

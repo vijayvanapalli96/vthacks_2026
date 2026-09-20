@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { MessagesSquare, ShieldAlert, ShieldCheck } from 'lucide-react';
 
+import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { recentTranscripts } from '@/lib/a2a/transcript';
 import { recentAudits } from '@/lib/audit';
@@ -29,7 +30,7 @@ export default async function ActivityPage() {
 
   return (
     <main>
-      <ApplicantNav current="activity" />
+      <ApplicantNav current="activity" account={<AccountButton />} />
       <section className="hero trust-hero">
         <p className="eyebrow">AUDIT TRAIL</p>
         <h1>Every decision your agent made, and what it sent.</h1>

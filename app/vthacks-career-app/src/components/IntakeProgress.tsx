@@ -54,23 +54,14 @@ const MARK: Record<Line['state'], string> = {
   start: '…',
   ok: '✓',
   warn: '!',
-  skip: '–',
+  // A circle, not an en dash. The dash was the only one left in the log column.
+  skip: '○',
 };
 
-/** The shape of the bits of `/api/match` this component reads. */
-type MatchApiResponse = {
-  matches?: {
-    company?: unknown;
-    title?: unknown;
-    score?: unknown;
-    reason?: unknown;
-  }[];
-  run?: { wall_clock_seconds?: unknown; reranked?: unknown; candidates_total?: unknown; cached?: unknown };
-  error?: unknown;
-};
-
-/** The id of the match line in the log, so a re-run replaces it rather than stacking. */
-const MATCH_LINE_ID = 'match';
+/* `MatchApiResponse` and `MATCH_LINE_ID` lived here to type and key the match line this
+   component used to append to the log. Both went with it: the response body is no longer
+   read at all — runFirstMatch fires the request purely to prime the cache and ignores
+   what comes back. */
 
 function seconds(ms: number): string {
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)}s`;
@@ -81,14 +72,13 @@ export function IntakeProgress() {
   const [lines, setLines] = useState<Line[]>([]);
   const [outcome, setOutcome] = useState<Outcome>({ kind: 'running' });
   /**
-   * The match line, held apart from `lines`.
+   * `lines` is now a pure mirror of what the SERVER streamed, and nothing else.
    *
-   * `lines` is a mirror of what the SERVER streamed. Keeping the client-side line
-   * separate means there is never a question about which events came from the
-   * analysis and which this component added, and it makes resetting one without the
-   * other trivial.
+   * There used to be a second piece of state holding a client-side match line, kept
+   * apart so it was always obvious which events came from the analysis and which this
+   * component had added. With the match run gone silent there is no second source, so
+   * the distinction it protected no longer exists.
    */
-  const [matchLine, setMatchLine] = useState<Line | null>(null);
   /** One match per analysis run, even though React 19 runs effects twice. */
   const matchStarted = useRef(false);
   // React 19 runs effects twice in development. Without this the analysis would be
@@ -105,98 +95,34 @@ export function IntakeProgress() {
    * `started` guard would still be set and nothing would re-run.
    */
   /**
-   * Run the first match, narrating it into the same log.
+   * Warm the first match run. SILENT — it writes no line into the log.
    *
-   * Never rejects and never throws at its caller: the analysis has already
-   * succeeded by the time this runs, and a match failure must not be able to turn a
-   * finished intake into an error state.
+   * It used to narrate itself: a "Matching you against the freshest US postings" line
+   * describing cosine similarity over embedded postings, settling into a count, a top
+   * score, that score's reason, the model-call count and the wall clock. All of it is
+   * gone from this screen, because matches belong to the screen that shows matches.
+   *
+   * THE FETCH STAYS, and that is the point of keeping the function at all. It primes
+   * run.mjs's 45-minute cache, so the match panel renders from a finished run the
+   * moment the dashboard appears instead of making the user wait through it there.
+   * No body on purpose: the route reads an absent body as defaults, defaults mean no
+   * `refresh`, and the cache therefore applies to a double fire.
+   *
+   * Still never throws at its caller. The analysis has already succeeded by the time
+   * this runs, and a match failure must not turn a finished intake into an error
+   * state — it simply means the dashboard runs the match itself, and says so there.
    */
   const runFirstMatch = useCallback(async () => {
-    const startedAt = Date.now();
-    setMatchLine({
-      id: MATCH_LINE_ID,
-      label: 'Matching you against the freshest US postings',
-      detail:
-        'Embedding your profile, scanning every embedded posting by cosine similarity, then asking the model to read the top 20 against what you actually know.',
-      state: 'start',
-    });
-
     try {
-      // Deliberately NO body. The route reads an absent body as "defaults", and
-      // defaults mean no `refresh`, which means the 45-minute cache applies.
-      const res = await fetch('/api/match', { method: 'POST' });
-      const payload = (await res.json()) as MatchApiResponse;
-
-      if (!res.ok) {
-        setMatchLine({
-          id: MATCH_LINE_ID,
-          label: 'Matching you against the freshest US postings',
-          // "Did not finish" and not "no matches". The distinction is the whole
-          // point: an empty list is an answer, a failure is not.
-          detail: `That did not finish — ${
-            typeof payload.error === 'string' ? payload.error : `the match agent answered ${res.status}`
-          }. Your profile is saved; the jobs panel will say the same thing rather than pretend the list is empty.`,
-          state: 'warn',
-          ms: Date.now() - startedAt,
-        });
-        return;
-      }
-
-      const matches = Array.isArray(payload.matches) ? payload.matches : [];
-      if (matches.length === 0) {
-        setMatchLine({
-          id: MATCH_LINE_ID,
-          label: 'Matching you against the freshest US postings',
-          detail:
-            'The run finished and nothing cleared the bar. That is a real answer rather than a failure — the panel below shows what was scanned and what the eligibility gate removed.',
-          state: 'ok',
-          ms: Date.now() - startedAt,
-        });
-        return;
-      }
-
-      // `score` is ALREADY 0-100 — rerank.mjs clamps it before storing — so it is
-      // the percentage directly. Multiplying by 100 here would print 7800%.
-      const best = matches.reduce((leader, row) =>
-        (Number(row.score) || 0) > (Number(leader.score) || 0) ? row : leader,
-      );
-      const top = Math.round(Number(best.score) || 0);
-      const reason = typeof best.reason === 'string' ? best.reason.trim() : '';
-      const who = [best.title, best.company].filter((part) => typeof part === 'string').join(' · ');
-      const wall = Number(payload.run?.wall_clock_seconds);
-      const calls = Number(payload.run?.reranked);
-
-      setMatchLine({
-        id: MATCH_LINE_ID,
-        label: `${matches.length} match${matches.length === 1 ? '' : 'es'}, top score ${top}%`,
-        // HARD RULE 4: the number never appears without its reason sentence. The
-        // top score is a score, so the top match's reason comes with it.
-        detail: [
-          who ? `Best: ${who} at ${top}%.` : `Top score ${top}%.`,
-          reason || 'No explanation came back with it, which is itself worth knowing.',
-          Number.isFinite(calls) && calls > 0 ? `${calls} model calls spent.` : null,
-          Number.isFinite(wall) && wall > 0 ? `Run took ${wall}s.` : null,
-          payload.run?.cached === true ? 'Served from the cached run — no model calls.' : null,
-        ]
-          .filter(Boolean)
-          .join(' '),
-        state: 'ok',
-        ms: Date.now() - startedAt,
-      });
-    } catch (error) {
-      setMatchLine({
-        id: MATCH_LINE_ID,
-        label: 'Matching you against the freshest US postings',
-        detail: `That did not finish — ${(error as Error).message}. Your profile is saved.`,
-        state: 'warn',
-        ms: Date.now() - startedAt,
-      });
+      await fetch('/api/match', { method: 'POST' });
+    } catch {
+      // Swallowed deliberately. Nothing on this screen reports match state any more,
+      // and the jobs panel is where a failure has somewhere honest to be shown.
     }
   }, []);
 
   const run = useCallback(async () => {
     setLines([]);
-    setMatchLine(null);
     matchStarted.current = false;
     setOutcome({ kind: 'running' });
 
@@ -310,14 +236,15 @@ export function IntakeProgress() {
   // means nobody ever reads it. The button is focused instead.
   // The match line is appended, so it reads as the step after the analysis rather
   // than a separate widget. Same markup, same aria-live region, same timing column.
-  const logLines = matchLine ? [...lines, matchLine] : lines;
+  // Just the analysis steps now. The match run appends nothing here.
+  const logLines = lines;
 
   return (
     <div className="progress">
       <ol
         className="progress-log"
         aria-live="polite"
-        aria-busy={outcome.kind === 'running' || matchLine?.state === 'start'}
+        aria-busy={outcome.kind === 'running'}
       >
         {logLines.map((line) => (
           <li key={line.id} className={`progress-line is-${line.state}`}>
@@ -337,10 +264,11 @@ export function IntakeProgress() {
               …
             </span>
             <span className="progress-body">
-              <strong>Starting up</strong>
-              <small>
-                The first query wakes the Databricks warehouse, which can take 20-30 seconds.
-              </small>
+              <strong>Getting started</strong>
+              {/* Was "the first query wakes the Databricks warehouse". Which warehouse
+                  and why it is cold is our problem; the only part that helps the person
+                  waiting is how long to expect. */}
+              <small>This can take up to half a minute to get going.</small>
             </span>
             <span className="progress-ms" />
           </li>
@@ -354,19 +282,16 @@ export function IntakeProgress() {
           Not automatic on purpose. This log is the most informative thing the product
           shows about itself, and replacing it the instant it finishes means nobody
           ever reads it. */}
+      {/* One action, and no summary line above it. The elapsed time, the fact count and
+          the question count were a receipt for work the log has just narrated line by
+          line — and "0 facts recorded" as the closing word on a successful run reads as
+          a failure to anyone not holding the data model in their head. "See my profile"
+          is gone too: the workspace it opens links there anyway. */}
       {outcome.kind === 'complete' ? (
         <div className="progress-done">
-          <p role="status">
-            <strong>Done in {seconds(outcome.ms)}.</strong> {outcome.factsAppended} facts recorded,{' '}
-            {outcome.openGaps} question{outcome.openGaps === 1 ? '' : 's'} left for the voice agent
-            to ask.
-          </p>
           <button className="primary" type="button" onClick={() => router.refresh()} ref={doneAction}>
-            Show my workspace
+            Next
           </button>
-          <a className="ghost" href="/applicant/profile">
-            See my profile
-          </a>
         </div>
       ) : null}
 
@@ -376,8 +301,8 @@ export function IntakeProgress() {
             <strong>That did not finish.</strong> {outcome.message}
           </p>
           <p className="muted">
-            Your uploads are safe — they are already stored. Retrying re-reads only what is left,
-            so nothing is recorded twice.
+            Your uploads are safe. They are already stored, and retrying reads only what is
+            left, so nothing is recorded twice.
           </p>
           <button className="primary" type="button" onClick={() => void run()}>
             Try again

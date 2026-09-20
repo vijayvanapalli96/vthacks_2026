@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { AccountButton } from '@/components/AccountButton';
+import { ApplicantNav } from '@/components/ApplicantNav';
 import { describeSource, loadProfile, type SourceRow } from '@/lib/profile-repo';
 import { requireRole } from '@/lib/session';
 
@@ -36,11 +38,12 @@ export default async function ProfilePage() {
 
   return (
     <main>
-      <nav>
-        <Link href="/applicant">Overview</Link>
-        <Link href="/applicant/intake/resume">Add resume</Link>
-        <Link href="/applicant/intake/linkedin">Add LinkedIn</Link>
-      </nav>
+      {/* The workspace drawer, same as every other applicant route. This page used to
+          carry its own three-link <nav> — Overview, Add resume, Add LinkedIn — which
+          made it the one page with different navigation, and two of those links are now
+          wrong: /applicant/intake/resume redirects away once a resume is on file. The
+          sources list further down already offers whatever is genuinely still missing. */}
+      <ApplicantNav current="profile" account={<AccountButton />} />
 
       <div className="profile-shell">
         <header className="profile-head">

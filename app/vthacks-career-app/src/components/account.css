@@ -1,0 +1,142 @@
+/* ===========================================================================
+   ACCOUNT — the side nav's foot, and /applicant/account.
+
+   Its own file rather than more of globals.css, so it does not collide with the
+   landing-page work in flight there. Uses only the existing tokens: no new
+   colours, no radius (the global reset forbids one anyway), no shadow.
+   =========================================================================== */
+
+/* --- The nav foot: a link, not a disclosure ------------------------------- */
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color 0.16s ease;
+}
+.account:hover { background: var(--wash); }
+.account:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.account__avatar {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.account__who {
+  min-width: 0; /* lets the ellipsis below actually happen inside a flex child */
+  display: grid;
+}
+
+.account__who strong {
+  font-weight: 400;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Not <small>: globals.css styles the bare element as tracked-out uppercase, and
+   three separate rules in intake.css have already had to undo that. */
+.account__role {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* Points right, because this goes somewhere. It used to be a chevron-down on a
+   disclosure that expanded in place; the direction was the tell that the control
+   was the wrong one. */
+.account__caret {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 0.16s ease;
+}
+.account:hover .account__caret { transform: translateX(2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .account, .account__caret { transition: none; }
+}
+
+/* --- /applicant/account --------------------------------------------------- */
+/* Same tokens, page scale. A definition list and hairlines, no cards. */
+
+.account-page__facts {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.account-page__facts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.account-page__facts > div:last-of-type { border-bottom: 0; }
+
+.account-page__facts dt {
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 3px;
+}
+
+/* Email and the account id are the long ones, so they wrap rather than overflow. */
+.account-page__facts dd {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.account-page__facts dd code { font-size: 15px; color: var(--muted); }
+
+.account-page__out {
+  margin-top: 6px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-strong);
+}
+
+/* THE SIGN-OUT BUTTON HAS ALWAYS HAD A DEFAULT BROWSER BORDER.
+   globals.css declares `.signout { background: transparent; border: 0; color:
+   var(--muted); font-size: 16px }` — but `.signout` is the class on the <form>,
+   and none of those properties inherit to a <button>. So the button fell back to
+   the UA stylesheet: a grey bevelled box, in a design system whose first rule is
+   "no white, no shadows, a box never".
+   Fixed here and not there, because globals.css has other work in flight. Scoped
+   to this container rather than `.signout button` globally, so the auth pages that
+   also use SignOutForm are not restyled from under someone. */
+.account-page__out .signout button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+.account-page__out .signout button:hover { color: var(--failure); }
+.account-page__out .signout button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .account-page__facts > div { grid-template-columns: 1fr; gap: 6px; }
+}

@@ -12,7 +12,7 @@ const SCRIPT: { mood: FaceMood; caption: string; hold: number }[] = [
   { mood: 'listening', caption: 'Listening…', hold: 2400 },
   { mood: 'thinking', caption: 'Matching 512 roles to your skills and coursework…', hold: 3000 },
   { mood: 'speaking', caption: '“Nine fit. Shall I tailor your resume for the top three?”', hold: 3600 },
-  { mood: 'happy', caption: 'Applied to Northstar Labs — employer verified.', hold: 3000 },
+  { mood: 'happy', caption: 'Applied to Northstar Labs. Employer verified.', hold: 3000 },
   { mood: 'refusing', caption: 'Stopped. That employer could not prove who it is.', hold: 3800 },
 ];
 

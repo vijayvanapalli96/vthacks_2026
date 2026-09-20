@@ -24,7 +24,7 @@ export default async function SignUpPage({
 
   return (
     <main className="auth-shell">
-      <section className="auth-card panel">
+      <section className="auth-card">
         <h1>
           {chosen === 'applicant'
             ? 'Create your applicant account'
@@ -34,17 +34,14 @@ export default async function SignUpPage({
         </h1>
         <p className="muted">
           {chosen
-            ? 'Both sides of the handshake are real accounts, because both sides have to be able to prove who they are.'
-            : 'Pick your side of the handshake. Both sides are real accounts, because both sides have to be able to prove who they are.'}
+            ? 'Both sides are real accounts, because both sides have to prove who they are.'
+            : 'Pick your side. Both are real accounts, because both sides have to prove who they are.'}
         </p>
 
         <SignUpForm role={chosen} />
 
         {isGoogleConfigured() ? (
-          <>
-            <p className="divider">or</p>
-            <GoogleSignInForm label="Sign up with Google" role={chosen} />
-          </>
+          <GoogleSignInForm label="Sign up with Google" role={chosen} />
         ) : null}
 
         <p className="muted">

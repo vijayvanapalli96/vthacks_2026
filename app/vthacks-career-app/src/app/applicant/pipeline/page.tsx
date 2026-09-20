@@ -11,6 +11,7 @@
  */
 import Link from 'next/link';
 
+import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { hasDatabricks, sql } from '@/lib/databricks';
 import { readBoard, readMatchMap } from '@/lib/pipeline';
@@ -51,7 +52,7 @@ export default async function PipelinePage() {
 
   return (
     <main>
-      <ApplicantNav current="pipeline" />
+      <ApplicantNav current="pipeline" account={<AccountButton />} />
       {/* Trimmed: the how-it-works paragraph was three lines of explanation
           above a board that demonstrates the same thing by existing. The
           append-only promise still appears where it is actually relevant --

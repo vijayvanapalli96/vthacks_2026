@@ -1,4 +1,4 @@
-import { VoiceAgent } from '@/components/voice/VoiceAgent';
+import { VoiceAgentMount } from '@/components/voice/VoiceAgentMount';
 import { requireRole } from '@/lib/session';
 
 /**
@@ -14,11 +14,17 @@ import { requireRole } from '@/lib/session';
  * control, rather than making every keyboard user pass through it first. It connects
  * nothing until asked: there is no auto-connect anywhere in the component.
  *
- * `rank={1}` is the seam with the other lane. `app/applicant/page.tsx` still renders a
- * bare `<VoiceAgent />` (rank 0) and belongs to someone else this hour, so instead of
- * editing their file the two instances arbitrate: rank 1 takes the slot and rank 0
- * renders nothing. See components/voice/mount-claim.ts. When that page is next touched,
- * delete its `<VoiceAgent />` and the ranking can go with it.
+ * `rank={1}` WAS the seam with the other lane: `app/applicant/page.tsx` rendered a
+ * second, bare `<VoiceAgent />` and the two arbitrated so only one painted. That page
+ * no longer renders one, so this is the only instance and nothing is being arbitrated
+ * against. The rank is kept because it also decides who paints during SSR — a ranked
+ * instance renders while the slot is free, which is what stops the dock appearing a
+ * tick late — but the second half of mount-claim.ts is now dead weight and can go with
+ * the next person who touches it. See components/voice/mount-claim.ts.
+ *
+ * It goes through VoiceAgentMount rather than rendering VoiceAgent directly, because the
+ * two intake screens are deliberately bare and render no dock at all. That file says
+ * which routes and why.
  */
 export default async function ApplicantLayout({
   children,
@@ -27,7 +33,7 @@ export default async function ApplicantLayout({
   return (
     <>
       {children}
-      <VoiceAgent rank={1} />
+      <VoiceAgentMount rank={1} />
     </>
   );
 }

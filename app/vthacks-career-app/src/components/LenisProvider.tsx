@@ -19,7 +19,11 @@ export function LenisProvider() {
 
     import('lenis').then(({ default: Lenis }) => {
       if (cancelled) return;
-      lenis = new Lenis({ lerp: 0.1, wheelMultiplier: 1 });
+      // A lower lerp is a longer glide: the page keeps easing toward the target
+      // after the wheel stops, which is what the architecture rail needs to read
+      // as a carousel rather than as eleven notches. Below ~0.06 it starts to
+      // feel like lag rather than momentum.
+      lenis = new Lenis({ lerp: 0.075, wheelMultiplier: 1, touchMultiplier: 1.4 });
       const loop = (time: number) => {
         lenis?.raf(time);
         frame = requestAnimationFrame(loop);

@@ -18,6 +18,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { SavePipelineButton } from '@/components/SavePipelineButton';
 import { loadContext } from '@/lib/artifacts/context.mjs';
@@ -78,7 +79,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
     if (context.status === 404) notFound();
     return (
       <main>
-        <ApplicantNav current="jobs" />
+        <ApplicantNav current="jobs" account={<AccountButton />} />
         <section className="hero trust-hero">
           <p className="eyebrow">JOB</p>
           <h1>We could not read this posting just now.</h1>
@@ -112,7 +113,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
 
   return (
     <main>
-      <ApplicantNav current="jobs" />
+      <ApplicantNav current="jobs" account={<AccountButton />} />
 
       <section className="hero trust-hero">
         <p className="eyebrow">{job.company_name ?? 'POSTING'}</p>

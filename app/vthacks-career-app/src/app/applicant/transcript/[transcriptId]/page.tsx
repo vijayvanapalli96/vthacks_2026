@@ -14,6 +14,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 import { A2ATranscript } from '@/components/A2ATranscript';
+import { AccountButton } from '@/components/AccountButton';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { readTranscript } from '@/lib/a2a/transcript';
 import { requireRole } from '@/lib/session';
@@ -39,7 +40,7 @@ export default async function TranscriptPage({ params }: { params: Promise<{ tra
 
   return (
     <main>
-      <ApplicantNav current="activity" />
+      <ApplicantNav current="activity" account={<AccountButton />} />
       <section className="hero trust-hero">
         <p className="eyebrow">SAVED TRANSCRIPT</p>
         <h1>{outcomeLabel[transcript.outcome] ?? transcript.outcome}</h1>
