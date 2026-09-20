@@ -44,7 +44,18 @@ export type DetailJob = {
  * not: one proves who receives the data, the other only types it into a public
  * form the candidate could have filled themselves.
  */
-export function JobDetail({ job }: { job: DetailJob }) {
+export function JobDetail({
+  job,
+  /**
+   * The job detail page already leads with title, company, location and the
+   * link to the original posting, so it asks for the check alone. Standalone
+   * callers get the role panel too.
+   */
+  renderRole = true,
+}: {
+  job: DetailJob;
+  renderRole?: boolean;
+}) {
   const [check, setCheck] = useState<Check>({ state: 'checking' });
   const [prepared, setPrepared] = useState<Prepared>({ state: 'idle' });
 
@@ -128,6 +139,7 @@ export function JobDetail({ job }: { job: DetailJob }) {
 
   return (
     <>
+      {renderRole ? (
       <section className="panel trust-step" aria-labelledby="job-detail-h">
         <header>
           <div>
@@ -185,6 +197,7 @@ export function JobDetail({ job }: { job: DetailJob }) {
           ) : null}
         </div>
       </section>
+      ) : null}
 
       <section
         className={`panel trust-card ${

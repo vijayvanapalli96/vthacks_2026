@@ -3,7 +3,7 @@ import { auth } from '../../../auth';
 import { envelopeClaims, recordAudit } from '../../../lib/audit';
 import { signEnvelope } from '../../../lib/ans/envelope';
 import { APPLICANT_ANS_NAME, verifyProductionAgent } from '../../../lib/ans/production';
-import { failedTrustDimensions } from '../../../lib/ans/policy';
+import { failedTrustDimensions, type TrustDimension } from '../../../lib/ans/policy';
 import { explainMutualMatch } from '../../../lib/ans/match';
 import { recordAgentVerificationSafely, recordMatchExplanationSafely } from '../../../lib/ans/store';
 import { getJob } from '../../../lib/jobs';
@@ -156,7 +156,15 @@ export async function POST(request: Request) {
   }
 
   let response: Response | null = null;
-  let receipt: { status?: string; receipt_id?: string } = {};
+  // F7.9: the receipt also carries the employer's OWN verification of us and its
+  // side of the match. Both were being parsed and dropped; keeping them is what
+  // turns "we verified them" into a mutual, auditable handshake.
+  let receipt: {
+    status?: string;
+    receipt_id?: string;
+    applicant_verification?: { verdict?: string; dimensions?: TrustDimension[]; spoken_reason?: string };
+    employer_explanation?: { score: number; verdict: string; reasons: string[] } | null;
+  } = {};
   try {
     response = await fetch(verification.evidence.agentCard.endpoint, {
       method: 'POST',
@@ -169,6 +177,16 @@ export async function POST(request: Request) {
     console.error('Could not reach the employer agent', error);
   }
   const delivered = Boolean(response?.ok);
+  // Only trust the shape, never the claim: an employer saying "pass" does not
+  // make it so, it records what they told us. It is evidence in the audit log,
+  // not an input to our own gate -- ours already ran, above.
+  const counterpartyVerification =
+    receipt.applicant_verification && Array.isArray(receipt.applicant_verification.dimensions)
+      ? {
+          verdict: receipt.applicant_verification.verdict === 'pass' ? ('pass' as const) : ('refuse' as const),
+          dimensions: receipt.applicant_verification.dimensions as TrustDimension[],
+        }
+      : null;
   const spokenReason = delivered
     ? `Application submitted to verified employer ${verification.evidence.agentCard.name}.`
     : `The verified employer agent did not accept the application (${response ? `HTTP ${response.status}` : 'unreachable'}).`;
@@ -204,6 +222,7 @@ export async function POST(request: Request) {
         status: receipt.status,
         receipt_id: receipt.receipt_id,
       },
+      counterparty_verification: counterpartyVerification,
     }),
   ]);
 
@@ -216,5 +235,10 @@ export async function POST(request: Request) {
     match_persisted: matchPersisted,
     match_explanation: matchExplanation,
     employer_receipt_id: receipt.receipt_id ?? null,
+    // F7.9 -- the employer's five-dimension verdict on our applicant agent, and
+    // its own reading of the match. The answer to "isn't this just spam?".
+    counterparty_verification: counterpartyVerification,
+    counterparty_reason: receipt.applicant_verification?.spoken_reason ?? null,
+    employer_explanation: receipt.employer_explanation ?? null,
   }, { status: delivered ? 200 : 502 });
 }
