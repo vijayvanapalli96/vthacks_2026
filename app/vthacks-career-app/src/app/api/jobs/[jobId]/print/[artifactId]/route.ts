@@ -27,7 +27,12 @@
 import { getArtifact } from '@/lib/artifacts/store.mjs';
 import { loadFactSource } from '@/lib/artifacts/facts.mjs';
 import { loadJob } from '@/lib/artifacts/job.mjs';
-import { renderDocumentHtml, renderResumeHtml, renderBlockedHtml } from '@/lib/artifacts/render-html.mjs';
+import {
+  renderDocumentHtml,
+  renderResumeHtml,
+  renderBlockedHtml,
+  renderNoticeHtml,
+} from '@/lib/artifacts/render-html.mjs';
 import { sql } from '@/lib/databricks';
 import { requireRole } from '@/lib/session';
 
@@ -71,11 +76,13 @@ export async function GET(
     // a posting that does not exist is a 404, not a blank page.
     const job = await loadJob(sql, decodedJobId);
     if (!job) {
+      // renderNoticeHtml, NOT renderBlockedHtml: a missing posting is not a
+      // document that failed the fact gate, and the refusal page's copy ("fix
+      // the claims above") is nonsense here.
       return htmlResponse(
-        renderBlockedHtml({
+        renderNoticeHtml({
           title: 'Unknown posting',
-          findings: [],
-          sentence: 'No posting with that id exists in job_snapshots, so there is nothing to print against it.',
+          message: 'No posting with that id exists in job_snapshots, so there is nothing to print against it.',
         }),
         404,
       );
@@ -88,10 +95,9 @@ export async function GET(
       const facts = await loadFactSource(sql, user.id);
       if (facts.factCount === 0) {
         return htmlResponse(
-          renderBlockedHtml({
+          renderNoticeHtml({
             title: 'Resume',
-            findings: [],
-            sentence:
+            message:
               'Your profile has no saved facts yet, so there is no resume to render. Run resume intake first.',
           }),
           422,
@@ -113,10 +119,9 @@ export async function GET(
       // Same answer for "does not exist" and "belongs to someone else" — the
       // distinction is exactly what an id-guessing probe is trying to learn.
       return htmlResponse(
-        renderBlockedHtml({
+        renderNoticeHtml({
           title: 'Not found',
-          findings: [],
-          sentence: 'No document with that id exists for this posting in your workspace.',
+          message: 'No document with that id exists for this posting in your workspace.',
         }),
         404,
       );
@@ -153,10 +158,9 @@ export async function GET(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return htmlResponse(
-      renderBlockedHtml({
+      renderNoticeHtml({
         title: 'Could not open the print view',
-        findings: [],
-        sentence: `${message} The warehouse cold-starts in 20 to 30 seconds; reloading usually fixes it.`,
+        message: `${message} The warehouse cold-starts in 20 to 30 seconds; reloading usually fixes it.`,
       }),
       502,
     );

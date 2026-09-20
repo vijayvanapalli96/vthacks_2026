@@ -218,6 +218,23 @@ export function renderBlockedHtml({ title, findings, sentence }) {
 }
 
 /**
+ * A plain notice page — "no such posting", "no facts yet", "the warehouse is
+ * down". NOT the same page as a fact-gate refusal, and that distinction is the
+ * reason this function exists: the first live run reused `renderBlockedHtml` for
+ * a 404 and rendered "Fix the claims above" and "no printable version exists for
+ * a document that overclaims" over a document that had never been generated.
+ * Telling a student their missing document overclaims is worse than telling them
+ * nothing.
+ */
+export function renderNoticeHtml({ title, message }) {
+  return page(
+    title,
+    `<h1>${escapeHtml(title)}</h1>
+  <p class="meta">${escapeHtml(message)}</p>`,
+  );
+}
+
+/**
  * A resume, built from the student's OWN facts, optionally with the tailored
  * bullets substituted in.
  *

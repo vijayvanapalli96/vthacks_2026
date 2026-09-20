@@ -47,6 +47,7 @@ import {
 import { classifyTier, tierRead, yearsRequired } from '../../app/vthacks-career-app/src/lib/artifacts/classify-tier.mjs';
 import { textOverlapRead, jaccardSimilarity } from '../../app/vthacks-career-app/src/lib/artifacts/jd-similarity.mjs';
 import { validateGeneration } from '../../app/vthacks-career-app/src/lib/artifacts/generate.mjs';
+import { renderAnswers, renderBullets } from '../../app/vthacks-career-app/src/lib/artifacts/prompts.mjs';
 import { renderResumeHtml, renderDocumentHtml, renderBlockedHtml } from '../../app/vthacks-career-app/src/lib/artifacts/render-html.mjs';
 
 /**
@@ -194,6 +195,68 @@ test('the company being applied to is allowed — a letter may name its addresse
     'an allow_facts entry must actually suppress its fact',
   );
   assert.ok(blocked.verdict === 'pass' || blocked.verdict === 'warn' || blocked.verdict === 'block');
+});
+
+// ── 2b. The three false positives the FIRST LIVE RUN produced ──────────────
+//
+// All three blocked a document that was entirely truthful. Each one is a
+// regression test for a specific thing observed in a real browser session
+// against a real Affirm posting, not a hypothetical.
+
+test('a rendered list marker is not a count claim', () => {
+  // OBSERVED LIVE: `renderBullets` numbered its output `1.`, `2.`, and the gate
+  // extracted the claim "2 services" from "2. Developed Python and TypeScript
+  // services…" — COUNT_CLAIM_RE binds a number to the nearest metric noun
+  // within four words, and a list marker is a number. A truthful document was
+  // blocked, which is the failure direction that gets a gate switched off.
+  const bulletDoc = renderBullets([
+    { original: 'a', tailored: 'Designed and launched a backend system using AWS and FastAPI.', reason: 'x' },
+    { original: 'b', tailored: 'Developed Python and TypeScript services on GCP.', reason: 'y' },
+  ]);
+  assert.ok(!/^\d/m.test(bulletDoc), 'no line may start with a digit');
+  const claims = metricClaims(bulletDoc);
+  assert.ok(!claims.has('2 services'), `list marker leaked a claim: ${[...claims]}`);
+
+  const answerDoc = renderAnswers([
+    { question: 'Why this company?', answer: 'Because of the payments work.' },
+    { question: 'Why you?', answer: 'I have shipped Python and TypeScript services.' },
+  ]);
+  assert.ok(answerDoc.startsWith('Q1.'), 'the question marker must not be a bare digit');
+  assert.ok(!metricClaims(answerDoc).has('2 services'), 'the answer marker leaked a claim');
+});
+
+test('a present participle inside a tool list is prose, not an unsupported tool', () => {
+  // OBSERVED LIVE: the donor's tool capture takes everything after "using" and
+  // splits on `,`/`and`/`with`/`in`, so this real bullet yielded the fragment
+  // "building real-time streaming". The donor's TOOL_PROSE_WORDS has `built` but
+  // not `building`, so it was retained as a tool claim and blocked the document.
+  const document =
+    'Designed a backend system using AWS, LangChain, RAG, Neo4j, pgvector, and FastAPI, ' +
+    'building real-time streaming, cross-session memory, guardrails, and encrypted storage.';
+  const claims = factClaims(document);
+  assert.ok(
+    !claims.some((c) => c.kind === 'tool' && c.value.startsWith('building')),
+    `a participle was read as a tool: ${JSON.stringify(claims.filter((c) => c.kind === 'tool'))}`,
+  );
+  // And the real tool names in the same sentence must still be extracted, or the
+  // fix traded a false positive for a blind spot.
+  assert.ok(claims.some((c) => c.kind === 'tool' && c.value === 'aws'));
+  assert.ok(claims.some((c) => c.kind === 'tool' && c.value === 'fastapi'));
+});
+
+test('an abbreviated time unit is checked, and matches its spelled-out form', () => {
+  // OBSERVED LIVE: the profile says "saving 15+ hrs/week". `hrs` was not in the
+  // donor's METRIC_NOUNS, so that number produced NO claim — meaning a letter
+  // could have said "45+ hrs/week" and passed the gate in silence.
+  assert.ok(metricClaims('saving 15+ hrs/week of manual work').has('15 hours'), 'hrs must fold to hours');
+  const inflated = verifyFacts('I saved the team 45+ hrs/week of manual work.', SOURCE, FACT_CONFIG);
+  assert.equal(inflated.verdict, 'block', 'an inflated abbreviated time unit must block');
+  assert.ok(inflated.invented.includes('45 hours'));
+  // The honest restatement, in either spelling, must pass.
+  for (const phrasing of ['I saved 15+ hrs/week of manual work.', 'I saved 15 hours a week of manual work.']) {
+    const ok = verifyFacts(phrasing, SOURCE, FACT_CONFIG);
+    assert.ok(ok.verdict !== 'block', `"${phrasing}" must not block: ${JSON.stringify(ok.invented)}`);
+  }
 });
 
 test('factClaims reads the capitalised phrasings a real document uses', () => {

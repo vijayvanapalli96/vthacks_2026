@@ -87,6 +87,16 @@ const TOOL_PROSE_WORDS = new Set([
   'deploying', 'architecting', 'enabling', 'launching', 'leading',
   'raising', 'boosting', 'allowing', 'increasing', 'reducing', 'cutting',
   'saving', 'supporting', 'maintaining', 'automating', 'integrating',
+  // The "and so on" words. OBSERVED LIVE: "using AWS, LangChain, and other
+  // technologies" split into the fragment "other technologies", which is not
+  // tool-shaped, contains no donor prose word, and was therefore retained as an
+  // unsupported TOOL CLAIM — blocking a truthful answer. `technologies` alone
+  // would not be enough (`other tools`, `related frameworks` are the same
+  // shape), so the hedge words go in too. `services` is deliberately absent:
+  // "Amazon Web Services" is a real product name.
+  'other', 'others', 'technologies', 'technology', 'stack', 'stacks',
+  'frameworks', 'libraries', 'etc', 'more', 'various', 'several',
+  'related', 'similar', 'tooling',
 ]);
 const TOOL_PHRASE_PATTERN = /^(?=.{1,80}$)[\p{L}\p{N}.][\p{L}\p{N}+#./-]*(?:\s+[\p{L}\p{N}.][\p{L}\p{N}+#./-]*){0,2}$/u;
 const DELEGATED_PARTY_RE = /\b(?:vendors?|agenc(?:y|ies)|contractors?|consultanc(?:y|ies)|consultants?|external teams?|outsourc(?:ed|ing)|implementation partners?)\b/i;
@@ -507,7 +517,26 @@ export function factClaims(text, sourceNormalized = null) {
     for (const match of clean.matchAll(pattern)) {
       const rawText = kind === 'tool' ? match[1].trim() : '';
       const rawValues = kind === 'tool'
-        ? (/^the\s+/i.test(rawText) ? [] : rawText.split(/,|\band\b|\bwith\b|\bin\b/i))
+        // ── THE ONE HIREWIRE CHANGE INSIDE THIS OTHERWISE-VERBATIM FUNCTION ──
+        //
+        // The donor splits a tool list on `,` / `and` / `with` / `in`. It does
+        // not split on `at` or `on`, so a bullet ending in a place clause —
+        //   "having worked with GCP, Qdrant, and Neo4j at Noether"
+        // — produces the single fragment "Neo4j at Noether". That fragment
+        // contains `at`, which IS one of the donor's TOOL_PROSE_WORDS, but the
+        // prose-word check never runs on it: `looksToolShaped` short-circuits
+        // to TRUE on the digit in "Neo4j" first. So the whole phrase became one
+        // tool claim, no source contains it verbatim, and a truthful answer was
+        // BLOCKED. Observed live against a real Affirm posting.
+        //
+        // Splitting on `at`/`on` instead of rejecting the fragment is the safer
+        // of the two fixes, and strictly INCREASES what the gate catches: the
+        // phrase becomes "Neo4j" and "Noether", each checked on its own, so a
+        // fabricated "Neo4j at Stripe" now flags `stripe` — where rejecting the
+        // fragment would have checked neither. Splitting can only ever produce
+        // more claims, never fewer, which is the same argument the donor's
+        // MODIFIER_WINDOW comment makes about widening.
+        ? (/^the\s+/i.test(rawText) ? [] : rawText.split(/,|\band\b|\bwith\b|\bin\b|\bat\b|\bon\b/i))
         : [match[1] || match[2]];
       for (const raw of rawValues) {
         const value = normalizeFact(raw);
@@ -1037,8 +1066,16 @@ export function explainFindings(result) {
   return out;
 }
 
-/** The one-sentence summary of a verdict, for the aria-live region. */
-export function verdictSentence(result, claimsChecked) {
+/**
+ * The one-sentence summary of a verdict, for the aria-live region.
+ *
+ * `claimsChecked` counts METRIC claims and `factsChecked` counts named
+ * employers, titles, tools and authorship claims. Both are reported because a
+ * document can have one number and six named technologies, and "all 1 checkable
+ * claim passed" read next to two flagged facts is a sentence that contradicts
+ * the list under it — which is what the first live run printed.
+ */
+export function verdictSentence(result, claimsChecked, factsChecked = 0) {
   if (result.verdict === 'block') {
     const n =
       result.invented.length + result.unsupportedFacts.length + result.forbidden.length;
@@ -1055,8 +1092,10 @@ export function verdictSentence(result, claimsChecked) {
       `claim traces to your profile, but some wording is worth a second look.`
     );
   }
+  const total = claimsChecked + factsChecked;
   return (
-    `Verification PASSED: all ${claimsChecked} checkable claim${claimsChecked === 1 ? '' : 's'} ` +
-    `in this document trace back to a fact in your profile.`
+    `Verification PASSED: all ${total} checkable claim${total === 1 ? '' : 's'} in this document ` +
+    `trace back to a fact in your profile — ${claimsChecked} number${claimsChecked === 1 ? '' : 's'} ` +
+    `and ${factsChecked} named employer, title or technology.`
   );
 }

@@ -31,7 +31,14 @@
  * implemented.
  */
 
-import { verifyFacts, FACT_CONFIG, explainFindings, verdictSentence, metricClaims } from './verify-cv-facts.mjs';
+import {
+  verifyFacts,
+  FACT_CONFIG,
+  explainFindings,
+  verdictSentence,
+  metricClaims,
+  factClaims,
+} from './verify-cv-facts.mjs';
 import {
   MODEL_NAME,
   coverLetterSystem,
@@ -383,7 +390,11 @@ export async function generateDocument({ sql, kind, job, facts, profile, analysi
   const verification = verifyFacts(validated.value.text, facts.sourceText, config);
   const findings = explainFindings(verification);
   const claimsChecked = metricClaims(validated.value.text).size;
-  const sentence = verdictSentence(verification, claimsChecked);
+  // Both halves of "what was checked". A document can carry one number and six
+  // named technologies, and reporting only the number made "all 1 checkable
+  // claim passed" appear directly above two flagged facts.
+  const factsChecked = factClaims(validated.value.text).length;
+  const sentence = verdictSentence(verification, claimsChecked, factsChecked);
 
   return {
     ok: true,
@@ -400,6 +411,7 @@ export async function generateDocument({ sql, kind, job, facts, profile, analysi
       ...verification,
       findings,
       claims_checked: claimsChecked,
+      facts_checked: factsChecked,
       facts_available: facts.factCount,
       sentence,
     },
