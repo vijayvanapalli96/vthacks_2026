@@ -23,7 +23,35 @@
  * Nothing here may be pulled into a client component.
  */
 import { sql } from '@/lib/databricks';
-import { CACHE_TTL_MINUTES, readCachedRun } from '@/lib/match/run.mjs';
+import { readCachedRun } from '@/lib/match/run.mjs';
+
+/**
+ * How old a run may be and still be DISPLAYED. Seven days.
+ *
+ * This is NOT `CACHE_TTL_MINUTES`, and conflating the two was a real bug with a
+ * measured symptom. They answer different questions:
+ *
+ *   CACHE_TTL_MINUTES (45)   "may I skip re-scoring and save 21 model calls?"
+ *   DISPLAY_MAX_AGE (7 days) "do I have anything true to show this student?"
+ *
+ * Sharing the 45-minute number meant a student who came back to their dashboard 46
+ * minutes after intake saw their twenty scored matches REPLACED by three unscored
+ * postings in posted order — the ANS demo row plus whatever the scanner most
+ * recently caught, which for a software engineer was a real-estate counsel vacancy
+ * at Anthropic. The scored rows were still sitting in `match_evaluations`, intact
+ * and correct; the read simply refused to look at them. Nothing had failed, and
+ * nothing said so, which is the worst of the available failures.
+ *
+ * Showing a stale run is honest here because `MatchList` already prints "Run at
+ * <timestamp>" and the page already offers a re-score button, so the age is on
+ * screen next to the fix for it. Seven days rather than forever: a run older than
+ * that was scored against a corpus and a profile that have both moved on, and at
+ * some point "here is what I thought last week" stops being an answer.
+ *
+ * `runMatch()` keeps the 45-minute cache untouched, so this changes what the
+ * dashboard will SHOW and never what a run COSTS.
+ */
+export const DISPLAY_MAX_AGE_MINUTES = 60 * 24 * 7;
 
 /**
  * One ranked match, as the page renders it.
@@ -89,7 +117,11 @@ export type RemovedRole = {
 };
 
 export type CachedMatches =
-  /** A run exists inside the TTL. `matches` may still be empty — that is a real answer. */
+  /**
+   * A run exists inside DISPLAY_MAX_AGE_MINUTES. `matches` may still be empty —
+   * that is a real answer. The run may be older than the 45-minute re-score cache,
+   * in which case it is shown WITH its timestamp rather than hidden.
+   */
   | {
       state: 'ok';
       matches: MatchRow[];
@@ -133,7 +165,7 @@ function asNumber(value: unknown): number {
  */
 export async function readMatches(
   userId: string,
-  ttlMinutes: number = CACHE_TTL_MINUTES,
+  ttlMinutes: number = DISPLAY_MAX_AGE_MINUTES,
 ): Promise<CachedMatches> {
   if (!userId) return { state: 'none' };
 
