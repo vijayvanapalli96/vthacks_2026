@@ -1,0 +1,12 @@
+# Keep the build context to the sources. node_modules and .next are rebuilt in
+# the image, and shipping a Windows node_modules into an Alpine image would be
+# both enormous and wrong.
+node_modules
+.next
+.git
+.databricks
+.env
+.env.local
+*.tsbuildinfo
+Dockerfile
+.dockerignore

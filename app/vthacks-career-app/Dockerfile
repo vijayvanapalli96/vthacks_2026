@@ -19,6 +19,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
+# Next puts the standalone bundle under the inferred workspace root, so a stray
+# lockfile in a parent directory moves server.js into a subdirectory and the
+# COPY below would silently produce an image that exits on start. .dockerignore
+# keeps the context clean; this makes the failure loud if that ever slips.
+RUN test -f .next/standalone/server.js || { echo "standalone server.js is not at .next/standalone/ - check for a stray lockfile above the app"; find .next/standalone -name server.js; exit 1; }
 
 FROM node:22-alpine AS runner
 WORKDIR /app
