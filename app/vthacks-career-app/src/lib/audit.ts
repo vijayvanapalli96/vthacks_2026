@@ -35,6 +35,12 @@ export type AuditEvent = {
   envelope?: { jti: string; aud: string; iat: number; exp: number } | null;
   counterparty_response?: { http_status: number; status?: string; receipt_id?: string } | null;
   attack?: { id: string; label: string } | null;
+  /**
+   * Which tier the company check reached when ANS found no agent. Recorded so a
+   * reload can tell "real employer, no agent registered" apart from "nothing
+   * checks out" without re-running the check.
+   */
+  company_tier?: 'agent_verified' | 'known_employer' | 'unverified' | null;
 };
 
 export type AuditDocument = AuditEvent & { audit_id: string; at: Date };
@@ -114,7 +120,7 @@ export async function recentAudits(filter: { userId?: string; limit?: number } =
 }
 
 export type ApplicantJobVerificationMemory = {
-  status: 'verified' | 'refused';
+  status: 'verified' | 'known_employer' | 'refused';
   ansName: string;
   reason: string;
   checkedAt: string;
@@ -141,7 +147,15 @@ export async function applicantJobVerificationMemory(
     for (const event of events) {
       if (!event.job_id || memory[event.job_id]) continue;
       memory[event.job_id] = {
-        status: event.verdict === 'pass' ? 'verified' : 'refused',
+        // A refusal is not one outcome. "No ANS agent, but the posting came
+        // from the company's own ATS" is remembered as known_employer, or a
+        // reload turns yesterday's "Real company" back into a red "Not
+        // verified" sitting above text that says the employer is real.
+        status: event.verdict === 'pass'
+          ? 'verified'
+          : event.company_tier === 'known_employer'
+            ? 'known_employer'
+            : 'refused',
         ansName: event.subject,
         reason: event.spoken_reason,
         checkedAt: event.at.toISOString(),

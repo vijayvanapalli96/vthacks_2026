@@ -12,7 +12,10 @@ RUN npm install --no-save playwright@1.56.0
 
 # Artifacts (filled-form screenshots, would-submit records) land here. Mounted as
 # a volume in compose so a review can outlive a container restart.
-RUN mkdir -p /app/work/ats /app/audit
+# chown matters: these are created as root, and a named volume mounted over them
+# inherits that ownership, so pwuser could not write its own audit log - the
+# service started, took one request and died with EACCES on /app/audit.
+RUN mkdir -p /app/work/ats /app/audit && chown -R pwuser:pwuser /app/work /app/audit
 
 # Drop the root privileges the base image starts with — this process opens
 # attacker-influenced URLs in a browser, which is exactly where you want a

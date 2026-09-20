@@ -50,6 +50,28 @@ New-Item -ItemType Directory -Path (Join-Path $stagingRoot "app") -Force | Out-N
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "docker-compose.yml") -Destination $stagingRoot
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Caddyfile") -Destination $stagingRoot
 
+# The ATS worker. Independent of -AppOnly: it carries no ANS key material, so
+# there is no reason for it to ride along with the agent certificates.
+if ($IncludeAts) {
+  New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/ats") -Force | Out-Null
+  New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/shared") -Force | Out-Null
+  foreach ($atsFile in "Dockerfile", "server.mjs", "providers.mjs", "form-filler.mjs") {
+    Copy-Item -LiteralPath (Join-Path $repoRoot "agents/ats/$atsFile") -Destination (Join-Path $stagingRoot "agents/ats")
+  }
+  # server.mjs imports ../shared/audit.mjs. Under -AppOnly the shared directory
+  # is not staged, so without this the worker builds and then dies on start with
+  # ERR_MODULE_NOT_FOUND.
+  Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/audit.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
+  # docker compose reads ATS_WORKER_TOKEN from a .env beside the compose file and
+  # refuses to start the service without it. Fail here, with a useful message,
+  # rather than half-deploying and leaving the stack down.
+  $atsEnv = Join-Path $PSScriptRoot ".env"
+  if (-not (Test-Path -LiteralPath $atsEnv)) {
+    throw "Missing $atsEnv. Copy infra/vultr/.env.example to .env and set ATS_WORKER_TOKEN before deploying with -IncludeAts."
+  }
+  Copy-Item -LiteralPath $atsEnv -Destination (Join-Path $stagingRoot ".env")
+}
+
 # The agents and their ANS key material. Skipped by -AppOnly: they are already
 # on the server and unchanged, and an app deploy has no business handling the
 # identity keys.
@@ -58,10 +80,6 @@ if (-not $AppOnly) {
   New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/applicant") -Force | Out-Null
   New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/shared") -Force | Out-Null
   New-Item -ItemType Directory -Path (Join-Path $stagingRoot "certs") -Force | Out-Null
-  if ($IncludeAts) {
-    New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/ats") -Force | Out-Null
-  }
-
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/employer/Dockerfile") -Destination (Join-Path $stagingRoot "agents/employer")
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/employer/server.mjs") -Destination (Join-Path $stagingRoot "agents/employer")
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/employer/agent-card.json") -Destination (Join-Path $stagingRoot "agents/employer")
@@ -72,19 +90,6 @@ if (-not $AppOnly) {
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/trust-policy.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/mutual-match.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/signed-envelope.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
-  if ($IncludeAts) {
-    foreach ($atsFile in "Dockerfile", "server.mjs", "providers.mjs", "form-filler.mjs") {
-      Copy-Item -LiteralPath (Join-Path $repoRoot "agents/ats/$atsFile") -Destination (Join-Path $stagingRoot "agents/ats")
-    }
-    # docker compose reads ATS_WORKER_TOKEN from a .env beside the compose file and
-    # refuses to start the service without it. Fail here, with a useful message,
-    # rather than half-deploying and leaving the stack down.
-    $atsEnv = Join-Path $PSScriptRoot ".env"
-    if (-not (Test-Path -LiteralPath $atsEnv)) {
-      throw "Missing $atsEnv. Copy infra/vultr/.env.example to .env and set ATS_WORKER_TOKEN before deploying with -IncludeAts."
-    }
-    Copy-Item -LiteralPath $atsEnv -Destination (Join-Path $stagingRoot ".env")
-  }
   Copy-Item -LiteralPath $requiredFiles[0] -Destination (Join-Path $stagingRoot "certs/employer.leaf.pem")
   Copy-Item -LiteralPath $requiredFiles[1] -Destination (Join-Path $stagingRoot "certs/employer.key")
   Copy-Item -LiteralPath $requiredFiles[2] -Destination (Join-Path $stagingRoot "certs/applicant.leaf.pem")
@@ -195,6 +200,20 @@ if ($googleId -and $googleSecret) {
 # Keys that never made it into the Databricks scope (ElevenLabs, Gemini, Google
 # OAuth) go in this gitignored file, one KEY=value per line. Absent is fine:
 # every feature behind them degrades to a stated reason, not a crash.
+# The app calls the ATS worker over the compose network and needs the same
+# shared token the worker checks. It lives in infra/vultr/.env, which is where
+# the worker's own compose variables already are.
+$atsEnvFile = Join-Path $PSScriptRoot ".env"
+if (Test-Path -LiteralPath $atsEnvFile) {
+  $atsToken = (Get-Content -LiteralPath $atsEnvFile |
+    Where-Object { $_ -match "^ATS_WORKER_TOKEN=(.+)$" } |
+    ForEach-Object { $matches[1].Trim() } | Select-Object -First 1)
+  if ($atsToken) {
+    $appEnv += "ATS_WORKER_TOKEN=$atsToken"
+    Write-Host "Autofill worker: token wired to the app."
+  }
+}
+
 $extras = Join-Path $PSScriptRoot "app.env.local"
 if (Test-Path -LiteralPath $extras) {
   $appEnv += (Get-Content -LiteralPath $extras | Where-Object { $_ -match "^[A-Z0-9_]+=" })
