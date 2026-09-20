@@ -262,7 +262,7 @@ export function JobDetail({
                   >
                     <BadgeCheck size={18} aria-hidden="true" /> Start agent-to-agent apply
                   </Link>
-                  <p className="muted">Signed, audited, and you approve every field before it leaves.</p>
+                  <p className="muted">Signed, audited, and released only once that agent has proved who it is.</p>
                 </div>
               ) : check.tier === 'known_employer' ? (
                 <div className="trust-actions">

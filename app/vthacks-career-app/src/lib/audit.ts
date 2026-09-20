@@ -30,6 +30,15 @@ export type AuditEvent = {
   fields_requested?: string[];
   fields_released: string[];
   human_approved?: boolean;
+  /**
+   * 'confirmed' — a person ticked the fields and pressed send.
+   * 'auto'      — the fields were released the moment the employer's agent
+   *               cleared the Trust Index, with nobody asked a second time.
+   * Written from what happened, never from what the client claimed, so this
+   * log can still answer "was a human in the loop" long after the screen that
+   * did it has changed.
+   */
+  approval_mode?: 'confirmed' | 'auto';
   user_id?: string | null;
   job_id?: string | null;
   envelope?: { jti: string; aud: string; iat: number; exp: number } | null;

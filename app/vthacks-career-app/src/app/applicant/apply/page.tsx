@@ -38,8 +38,8 @@ export default async function ApplyPage({
         <h1>Prove who is asking before anything leaves.</h1>
         <p>
           Your agent looks this employer up in GoDaddy&apos;s Agent Name Service, checks its certificates and published
-          card, and scores five trust dimensions — before you are asked to send anything. If it cannot prove who it
-          is, your agent refuses and says why.
+          card, and scores five trust dimensions — before a single field moves. Your details are released only once
+          that passes. If it cannot prove who it is, your agent refuses and says why.
         </p>
       </section>
       <TrustApply
