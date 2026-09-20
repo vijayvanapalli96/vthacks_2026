@@ -40,9 +40,69 @@ export type SqlResult = {
   rows: (string | null)[][];
 };
 
-const WAIT_TIMEOUT = '30s';
-const POLL_LIMIT_MS = 90_000;
+/**
+ * HOW LONG A DEAD WAREHOUSE IS ALLOWED TO COST.
+ *
+ * These were 30s + 90s, so one statement against a warehouse that cannot start
+ * burned two minutes before admitting it, and a page that issues three of them
+ * burned six. That is not a cold start being patient, it is a hang.
+ *
+ * A warehouse that is genuinely cold answers inside 20-30 seconds, which 15 + 25
+ * still covers. Past that it is not warming up, it is broken, and every extra
+ * second is spent making the site feel dead rather than saving a query.
+ */
+const WAIT_TIMEOUT = '15s';
+const POLL_LIMIT_MS = 25_000;
 const POLL_INTERVAL_MS = 1_500;
+
+/* ---------------------------------------------------------- circuit breaker */
+
+/**
+ * STOP ASKING A WAREHOUSE THAT CANNOT ANSWER.
+ *
+ * Found while chasing "the app is slow": this workspace hit its Free Edition
+ * daily compute limit, so the warehouse reported RUNNING with health FAILED and
+ * every statement sat PENDING until it timed out. Each page then paid the full
+ * timeout, several times over, for data that was never coming.
+ *
+ * After CONSECUTIVE_FAILURES timeouts in a row the breaker opens and every call
+ * fails instantly for OPEN_MS. The pages already handle a read that throws —
+ * the board says it could not be read, the job page says so too — so an open
+ * breaker turns a two minute hang into an honest page in milliseconds.
+ *
+ * It closes on the next success, so a warehouse that comes back is picked up on
+ * the first request after the cooldown rather than needing a restart.
+ *
+ * Per process, deliberately: the app is one long-lived container behind Caddy.
+ */
+const CONSECUTIVE_FAILURES = 2;
+const OPEN_MS = 60_000;
+
+const breaker = { failures: 0, openedAt: 0 };
+
+function breakerOpen(): boolean {
+  if (breaker.openedAt === 0) return false;
+  if (Date.now() - breaker.openedAt < OPEN_MS) return true;
+  // Cooldown elapsed: let exactly one request through to test the water.
+  breaker.openedAt = 0;
+  breaker.failures = 0;
+  return false;
+}
+
+function recordFailure(): void {
+  breaker.failures += 1;
+  if (breaker.failures >= CONSECUTIVE_FAILURES && breaker.openedAt === 0) {
+    breaker.openedAt = Date.now();
+    console.error(
+      `[databricks] ${breaker.failures} statements in a row did not complete. Failing fast for ${OPEN_MS / 1000}s rather than making every page wait for a warehouse that is not answering.`,
+    );
+  }
+}
+
+function recordSuccess(): void {
+  breaker.failures = 0;
+  breaker.openedAt = 0;
+}
 
 let cached: { token: string; expiresAt: number } | null = null;
 
@@ -160,6 +220,15 @@ function shape(response: StatementResponse): SqlResult {
  * why the first sign-in after an idle period feels slow.
  */
 export async function sql(statement: string, parameters: SqlParam[] = []): Promise<SqlResult> {
+  // Fail in microseconds rather than making this page wait for a warehouse that
+  // has not answered the last two requests. Callers already handle a throw by
+  // rendering the page with the reason on it.
+  if (breakerOpen()) {
+    throw new DatabricksError(
+      'The SQL warehouse is not answering, so this was not sent. Recent statements timed out without starting.',
+    );
+  }
+
   let response = (await api('/api/2.0/sql/statements', {
     method: 'POST',
     body: JSON.stringify({
@@ -186,10 +255,15 @@ export async function sql(statement: string, parameters: SqlParam[] = []): Promi
 
   const state = response.status?.state;
   if (state !== 'SUCCEEDED') {
+    // PENDING or RUNNING here means the poll deadline passed, which is the shape
+    // a warehouse that cannot start takes. Count it: enough of these in a row
+    // and the breaker stops the bleeding for everyone else.
+    if (state === 'PENDING' || state === 'RUNNING') recordFailure();
     throw new DatabricksError(
       `Databricks statement ${state ?? 'unknown'}: ${response.status?.error?.message ?? 'no error message'}`,
     );
   }
+  recordSuccess();
   return shape(response);
 }
 
