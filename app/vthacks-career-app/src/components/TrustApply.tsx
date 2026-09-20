@@ -87,6 +87,9 @@ export function TrustApply({
   // result lands, the student is still reading it.
   const [turns, setTurns] = useState<Turn[]>([]);
   const resultHeading = useRef<HTMLHeadingElement>(null);
+  // Once per visit. "Check again" re-runs the verification but must not fire a
+  // second application at the same employer.
+  const autoSent = useRef(false);
 
   const target = host;
   const verification = 'verification' in phase ? phase.verification : null;
@@ -145,7 +148,7 @@ export function TrustApply({
     ? new Date(job.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : null;
 
-  async function apply(humanApproved: boolean, fields: string[]) {
+  async function apply(humanApproved: boolean, fields: string[], mode: 'confirmed' | 'auto' = 'confirmed') {
     if (!verification) return;
     setPhase({ kind: 'sending', verification });
     setTurns([]);
@@ -159,6 +162,7 @@ export function TrustApply({
         body: JSON.stringify({
           employer_host: target,
           human_approved: humanApproved,
+          approval_mode: mode,
           requested_fields: fields,
           candidate: {
             full_name: name,
@@ -229,8 +233,32 @@ export function TrustApply({
     }
   }
 
-  const approvedFields = Object.keys(fieldLabels).filter((field) => approved[field] && values[field]);
+  // Ticked by default now: these are the fields that WENT, and unticking one is
+  // how you take it out of a deliberate re-send.
+  const approvedFields = Object.keys(fieldLabels).filter((field) => values[field] && (approved[field] ?? true));
   const busy = phase.kind === 'verifying' || phase.kind === 'sending';
+  /** Every field that actually has a value. Empty ones are not sent as blanks. */
+  const releasable = Object.keys(fieldLabels).filter((field) => values[field]);
+
+  /**
+   * THE SEND, WITH NO CONFIRMATION STEP. Owner decision, 2026-09-20: once the
+   * employer's agent has cleared the Trust Index in front of the student, asking
+   * them to tick the same fields again was asking them to re-approve a check
+   * they had just watched run. A refusal still sends nothing — this changes who
+   * presses send, not whether the gate has to pass — and the audit log and the
+   * transcript both record that it went automatically rather than by hand.
+   *
+   * The fields below the result stay editable, and a changed set can be sent
+   * again deliberately.
+   */
+  useEffect(() => {
+    if (phase.kind !== 'verified' || autoSent.current || releasable.length === 0) return;
+    autoSent.current = true;
+    void apply(false, releasable, 'auto');
+    // `apply` and the field values are read at call time; adding them here would
+    // re-fire this on every keystroke in the skills box.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase.kind]);
 
   return (
     <div className="trust-flow">
@@ -393,15 +421,44 @@ export function TrustApply({
         />
       ) : null}
 
-      {phase.kind === 'verified' || (phase.kind === 'sending' && verification?.verdict === 'pass') ? (
+      {/* STEP 2 IS NO LONGER A GATE. Nothing is held here waiting to be ticked:
+          the fields go the moment the check passes, and this panel says which
+          ones went and offers a deliberate re-send after an edit. The list is
+          still shown field by field, because "we sent your name, email and
+          skills" has to be readable without opening the transcript. */}
+      {phase.kind === 'verified' || phase.kind === 'sending' || phase.kind === 'done' ? (
         <section className="panel trust-step" aria-labelledby="step-approve">
           <header>
             <div>
-              <small>STEP 2 · YOUR APPROVAL</small>
-              <h2 id="step-approve">Choose exactly what to send</h2>
+              <small>STEP 2 · RELEASED AUTOMATICALLY</small>
+              <h2 id="step-approve">
+                {phase.kind === 'sending' ? 'Sending these fields now' : 'These fields were sent'}
+              </h2>
             </div>
           </header>
           <div className="trust-body">
+            <p className="muted">
+              A verified employer agent is a proven recipient, so your agent released these the moment the
+              Trust Index passed, with no second confirmation. A refusal still sends nothing, and the audit
+              log records that this went automatically rather than by hand.
+            </p>
+            <fieldset className="trust-fields" disabled={busy}>
+              <legend>Released to {verification?.registry?.ans_name ?? target}</legend>
+              {Object.entries(fieldLabels).map(([field, label]) => (
+                <label key={field} className={values[field] ? '' : 'is-empty'}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(values[field]) && (approved[field] ?? true)}
+                    disabled={!values[field] || busy}
+                    onChange={(event) => setApproved({ ...approved, [field]: event.target.checked })}
+                  />
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{values[field] || 'Not provided'}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
             <div className="field">
               <label htmlFor="trust-skills">Skills to share</label>
               <input id="trust-skills" value={skills} onChange={(event) => setSkills(event.target.value)} />
@@ -416,26 +473,12 @@ export function TrustApply({
                 placeholder="https://"
               />
             </div>
-            <fieldset className="trust-fields">
-              <legend>Release to {verification?.registry?.ans_name ?? target}</legend>
-              {Object.entries(fieldLabels).map(([field, label]) => (
-                <label key={field} className={values[field] ? '' : 'is-empty'}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(approved[field])}
-                    disabled={!values[field] || busy}
-                    onChange={(event) => setApproved({ ...approved, [field]: event.target.checked })}
-                  />
-                  <span>
-                    <strong>{label}</strong>
-                    <small>{values[field] || 'Not provided'}</small>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+            {/* The one remaining button, and it is a re-send rather than the
+                approval: changing the skills line or adding a resume link after
+                the fact is the reason it exists. */}
             <button
               type="button"
-              className="primary"
+              className="secondary"
               disabled={busy || approvedFields.length === 0}
               onClick={() => apply(true, approvedFields)}
             >
@@ -445,7 +488,7 @@ export function TrustApply({
                 </>
               ) : (
                 <>
-                  Send {approvedFields.length} approved {approvedFields.length === 1 ? 'field' : 'fields'}{' '}
+                  Send again with {approvedFields.length} {approvedFields.length === 1 ? 'field' : 'fields'}{' '}
                   <ArrowRight size={18} aria-hidden="true" />
                 </>
               )}

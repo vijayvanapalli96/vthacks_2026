@@ -60,8 +60,8 @@ export function A2ALaneCard() {
 
         <p className="match-reason">
           A placeholder internship at HireWire, not a real posting and not scored against your profile. Opening it
-          goes straight to the agent-to-agent screen, where your agent verifies the employer agent, you approve each
-          field, and the exchange is shown message by message as it happens.
+          goes straight to the agent-to-agent screen, where your agent verifies the employer agent and, once it
+          passes, releases your details without asking again. The exchange is shown message by message as it happens.
         </p>
 
         <p className="match-meta">

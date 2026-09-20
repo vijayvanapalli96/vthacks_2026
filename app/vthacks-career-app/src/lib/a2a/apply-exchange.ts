@@ -33,6 +33,20 @@ export type ApplyBody = {
   employer_host?: string;
   application_id?: string;
   human_approved?: boolean;
+  /**
+   * 'confirmed' — a human ticked the exact fields and pressed send.
+   * 'auto'      — the screen released a standing field set the moment the
+   *               employer's agent passed the Trust Index, with no second
+   *               confirmation. Owner decision, 2026-09-20: a verified agent is
+   *               a proven recipient, and the confirm step was asking the
+   *               student to re-approve a check they had just watched run.
+   *
+   * It is recorded, never inferred, so the audit log always says which of the
+   * two happened. Note that CLAUDE.md hard rule 3 still lists "human confirm"
+   * between the policy gate and the fields; this is the one deliberate
+   * departure from it and the rule needs updating to match.
+   */
+  approval_mode?: 'confirmed' | 'auto';
   candidate?: Record<string, unknown>;
   requested_fields?: string[];
   job?: {
@@ -114,6 +128,13 @@ export async function runApplyExchange(
 
   const requested = Array.isArray(body.requested_fields) ? body.requested_fields : [];
   const releasable = requested.filter((field) => allowedFields.has(field));
+  /**
+   * Automatic release is only ever available BEHIND the gate: it answers "who
+   * presses send", never "does the check have to pass". A refusal still
+   * releases nothing, and the ordering below is unchanged — verdict first.
+   */
+  const autoRelease = body.approval_mode === 'auto' && verification.verdict === 'pass';
+  const cleared = body.human_approved === true || autoRelease;
   const subject = verification.registry?.ans_name ?? claimedIdentity(body);
   const auditBase = {
     kind: 'apply' as const,
@@ -124,6 +145,10 @@ export async function runApplyExchange(
     dimensions: verification.dimensions,
     fields_requested: releasable,
     human_approved: body.human_approved === true,
+    // Recorded as it happened. An automatic release is NOT written down as a
+    // human approval: the log has to be able to answer "did anyone press send"
+    // years later, and conflating the two is how it stops being evidence.
+    approval_mode: autoRelease && body.human_approved !== true ? ('auto' as const) : ('confirmed' as const),
     user_id: userId,
     job_id: job.job_id,
   };
@@ -153,7 +178,7 @@ export async function runApplyExchange(
     return { transcript: turns, transcript_id: transcriptId, narrator };
   }
 
-  if (verification.verdict !== 'pass' || body.human_approved !== true || !verification.evidence) {
+  if (verification.verdict !== 'pass' || !cleared || !verification.evidence) {
     const spokenReason = verification.verdict !== 'pass'
       ? verification.spoken_reason
       : 'Application blocked until the candidate approves the exact fields to release.';
@@ -163,7 +188,11 @@ export async function runApplyExchange(
         to: 'applicant_agent',
         label: 'Waiting on the candidate',
         detail: spokenReason,
-        data: { human_approved: body.human_approved === true, fields_requested: releasable },
+        data: {
+          human_approved: body.human_approved === true,
+          approval_mode: body.approval_mode ?? 'confirmed',
+          fields_requested: releasable,
+        },
         outcome: 'refused',
       });
     }
@@ -199,6 +228,21 @@ export async function runApplyExchange(
       },
     };
   }
+
+  // Who released these fields, on the record, next to the turn that sends them.
+  // A reader of the transcript should never have to infer whether a person was
+  // in the loop.
+  recorder.turn({
+    from: 'applicant_agent',
+    to: 'applicant_agent',
+    label: autoRelease && body.human_approved !== true ? 'Released automatically' : 'Released on your confirmation',
+    detail:
+      autoRelease && body.human_approved !== true
+        ? `The employer agent passed the Trust Index, so the standing field set went out without a second confirmation: ${releasable.join(', ') || 'no fields'}.`
+        : `You ticked the fields to release and pressed send: ${releasable.join(', ') || 'no fields'}.`,
+    data: { approval_mode: autoRelease && body.human_approved !== true ? 'auto' : 'confirmed', fields: releasable },
+    outcome: 'ok',
+  });
 
   const candidate = body.candidate ?? {};
   const packet = Object.fromEntries(releasable.map((field) => [field, candidate[field]]));
