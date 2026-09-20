@@ -14,7 +14,7 @@
 import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { HashChainAuditLog } from "../shared/audit.mjs";
-import { fill } from "./form-filler.mjs";
+import { discover, fill } from "./form-filler.mjs";
 
 const PORT = Number(process.env.ATS_WORKER_PORT ?? 8789);
 const TOKEN = process.env.ATS_WORKER_TOKEN ?? "";
@@ -49,7 +49,9 @@ const server = createServer(async (request, response) => {
     return json(response, 200, { status: "ok", service: "ats-worker" });
   }
 
-  if (request.method !== "POST" || request.url !== "/ats/prepare") {
+  const isDiscover = request.method === "POST" && request.url === "/ats/discover";
+  const isPrepare = request.method === "POST" && request.url === "/ats/prepare";
+  if (!isDiscover && !isPrepare) {
     return json(response, 404, { error: "not found" });
   }
 
@@ -65,6 +67,24 @@ const server = createServer(async (request, response) => {
     return json(response, 400, { error: error.message });
   }
 
+  // DISCOVERY IS READ-ONLY: open the page, read the form, close it. The app needs
+  // it because an Ashby application form exists only in the browser — the served
+  // HTML has no inputs at all — so this is the only place the real field list can
+  // be obtained before asking a model what belongs in each box.
+  if (isDiscover) {
+    if (!body.job_url) return json(response, 400, { error: "job_url is required" });
+    try {
+      const found = await discover({ jobUrl: body.job_url });
+      await audit?.append("ats_fields_discovered", {
+        job_url: body.job_url,
+        field_count: found.fields.length,
+      });
+      return json(response, 200, found);
+    } catch (error) {
+      return json(response, 502, { error: `could not read the form: ${error.message}` });
+    }
+  }
+
   if (!body.job_url || !body.candidate) {
     return json(response, 400, { error: "job_url and candidate are required" });
   }
@@ -73,6 +93,9 @@ const server = createServer(async (request, response) => {
     const record = await fill({
       jobUrl: body.job_url,
       candidate: body.candidate,
+      // The per-field plan from the app's Gemini pass. Absent is fine: the
+      // provider's own selector table still fills the standard boxes.
+      planned: Array.isArray(body.planned) ? body.planned : [],
       // The service will submit, but only when the CALLER says so explicitly and
       // the deployment has not been pinned to review-only. ATS_ALLOW_SUBMIT is
       // the kill switch: unset, this box can never send an application, whatever

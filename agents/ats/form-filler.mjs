@@ -32,6 +32,19 @@ import { providerForUrl, splitName } from "./providers.mjs";
 export async function fill({
   jobUrl,
   candidate,
+  /**
+   * A per-field plan from the app's Gemini pass: [{selector, value}].
+   *
+   * The provider table below knows eight selectors — name, email, phone, resume,
+   * cover letter, location, linkedin, website. Every real Ashby form also carries
+   * the questions that actually take time, and those were left blank, so
+   * "autofill" filled the boring half. When a plan is supplied it is typed FIRST
+   * and the provider table fills only what the plan did not cover.
+   *
+   * The plan is data, not code: a selector is passed to page.locator() and a
+   * value to fill(), and a selector that matches nothing is recorded as skipped.
+   */
+  planned = [],
   submit = false,
   identity = process.env.APPLICANT_ANS_NAME ?? null,
   artifactDir = "./work/ats",
@@ -73,12 +86,42 @@ export async function fill({
     await page.goto(jobUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
     const values = { ...candidate };
+    // THE PLANNED FIELDS FIRST. Everything the model could answer from the
+    // profile, including the custom questions no selector table can know about.
+    // A field it could not answer is absent from the plan and stays empty, which
+    // is the correct outcome and is reported as such.
+    const plannedSelectors = new Set();
+    for (const entry of Array.isArray(planned) ? planned : []) {
+      const selector = typeof entry?.selector === "string" ? entry.selector : "";
+      const value = typeof entry?.value === "string" ? entry.value : "";
+      if (!selector || !value.trim()) continue;
+
+      const locator = page.locator(selector).first();
+      if ((await locator.count()) === 0) {
+        skipped.push({ field: entry.label ?? selector, reason: "no matching input on the page" });
+        continue;
+      }
+      try {
+        // A <select> needs selectOption; fill() silently does nothing on one.
+        const tag = await locator.evaluate((node) => node.tagName.toLowerCase());
+        if (tag === "select") await locator.selectOption({ label: value });
+        else await locator.fill(value);
+        plannedSelectors.add(selector);
+        filled.push(entry.label ?? selector);
+      } catch (error) {
+        skipped.push({ field: entry.label ?? selector, reason: error.message.slice(0, 120) });
+      }
+    }
+
     if (provider.fields.full_name === null && candidate.full_name) {
       Object.assign(values, splitName(candidate.full_name));
     }
 
     for (const [field, selector] of Object.entries(provider.fields)) {
       if (!selector || values[field] === undefined || values[field] === null) continue;
+      // Already typed by the plan. Re-filling would overwrite a considered answer
+      // with the raw profile value.
+      if (plannedSelectors.has(selector)) continue;
       const locator = page.locator(selector).first();
       if ((await locator.count()) === 0) {
         skipped.push({ field, reason: "no matching input on the page" });
@@ -145,4 +188,95 @@ export async function fill({
 async function defaultBrowserFactory() {
   const { chromium } = await import("playwright");
   return () => chromium.launch({ headless: true });
+}
+
+/**
+ * DISCOVER EVERY FIELD ON THE PAGE.
+ *
+ * Ashby renders its whole application form in the browser — the HTML served for
+ * an application URL contains zero <input> and zero <label> — so this is the only
+ * place the real field list exists. The app calls this first, hands the list to
+ * Gemini, and posts the plan back to /ats/prepare.
+ *
+ * READ-ONLY. It opens the page, reads the DOM and closes. Nothing is typed,
+ * nothing is clicked, nothing is submitted.
+ *
+ * The label is whatever a human would read: an associated <label>, else
+ * aria-label, else the placeholder, else the name attribute. Getting this right
+ * is most of the quality of the fill, because the label is all the model has to
+ * decide what a box wants.
+ */
+export async function discover({ jobUrl, browserFactory, now = () => new Date().toISOString() }) {
+  const provider = providerForUrl(jobUrl);
+  const launch = browserFactory ?? (await defaultBrowserFactory());
+  const browser = await launch();
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(jobUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    // The form is client-rendered; waiting for the first control beats a fixed
+    // sleep and fails fast when the page has no form at all.
+    await page.waitForSelector("input, textarea, select", { timeout: 20_000 }).catch(() => {});
+
+    const fields = await page.evaluate(() => {
+      const labelFor = (element) => {
+        const id = element.getAttribute("id");
+        if (id) {
+          const label = document.querySelector(`label[for="${CSS.escape(id)}"]`);
+          if (label?.innerText?.trim()) return label.innerText.trim();
+        }
+        const wrapping = element.closest("label");
+        if (wrapping?.innerText?.trim()) return wrapping.innerText.trim();
+        const aria = element.getAttribute("aria-label");
+        if (aria?.trim()) return aria.trim();
+        const labelledBy = element.getAttribute("aria-labelledby");
+        if (labelledBy) {
+          const target = document.getElementById(labelledBy);
+          if (target?.innerText?.trim()) return target.innerText.trim();
+        }
+        return element.getAttribute("placeholder")?.trim() || element.getAttribute("name")?.trim() || "";
+      };
+
+      const selectorFor = (element) => {
+        const name = element.getAttribute("name");
+        if (name) return `${element.tagName.toLowerCase()}[name="${name}"]`;
+        const id = element.getAttribute("id");
+        if (id) return `#${CSS.escape(id)}`;
+        return null;
+      };
+
+      const out = [];
+      for (const element of document.querySelectorAll("input, textarea, select")) {
+        const type = (element.getAttribute("type") || element.tagName).toLowerCase();
+        // Nothing the candidate fills in, and nothing we should ever touch.
+        if (["hidden", "submit", "button", "reset", "file"].includes(type)) continue;
+        const selector = selectorFor(element);
+        if (!selector) continue;
+
+        const options =
+          element.tagName.toLowerCase() === "select"
+            ? [...element.options].map((option) => option.label || option.value).filter(Boolean)
+            : undefined;
+
+        const maxLengthAttribute = Number(element.getAttribute("maxlength"));
+        out.push({
+          selector,
+          label: labelFor(element).slice(0, 300),
+          type,
+          required: element.hasAttribute("required") || element.getAttribute("aria-required") === "true",
+          options,
+          maxLength: Number.isFinite(maxLengthAttribute) && maxLengthAttribute > 0 ? maxLengthAttribute : null,
+        });
+      }
+      // A control with no readable label is one the model cannot reason about,
+      // and guessing from a selector is how you type a cover letter into a
+      // postcode box.
+      return out.filter((field) => field.label.length > 0);
+    });
+
+    await context.close();
+    return { job_url: jobUrl, provider: provider?.id ?? null, fields, discovered_at: now() };
+  } finally {
+    await browser.close().catch(() => {});
+  }
 }
