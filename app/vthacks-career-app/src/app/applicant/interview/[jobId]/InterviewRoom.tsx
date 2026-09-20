@@ -37,6 +37,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { InterviewVoice } from './InterviewVoice';
 import {
   CONFIDENCE_FLOOR,
   QUESTION_KIND_LABEL,
@@ -514,6 +515,18 @@ export function InterviewRoom({ jobId, jobTitle, company }: Props) {
             </button>
           )}
           {cameraError ? <p className="iv-warn">{cameraError}</p> : null}
+
+          {/* Persona 2, mounted only while the interview is actually running and
+              only when the server minted a signed URL. Mounting it earlier would
+              put a "connect" button on the briefing screen, and a conversation
+              costs money per minute. */}
+          {phase === 'live' && session.signedUrl ? (
+            <InterviewVoice
+              signedUrl={session.signedUrl}
+              dynamicVariables={session.dynamicVariables}
+              onAgentLine={(line) => setNotice(line)}
+            />
+          ) : null}
 
           <VitalsPanel
             ready={session.vitalsReady}
