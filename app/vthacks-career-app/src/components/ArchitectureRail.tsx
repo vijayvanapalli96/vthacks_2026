@@ -3,148 +3,78 @@
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { AgentFace } from './AgentFace';
+
 
 type Stage = {
   n: string;
-  group?: string;
+  act: string;
   title: string;
-  lede: string;
-  points: string[];
-  stack: [string, string][];
+  line: string;
 };
 
-/** Plain language on the card, the technology named in the stack block.
- *  A visitor should understand the benefit; a judge should find their own
- *  product without reading the repo. */
+/** The story, in ten beats. Three of pain, one of arrival, six of how it works.
+ *  Each card is an image; the words live underneath it. */
 const STAGES: Stage[] = [
   {
     n: '01',
-    group: 'Understand you',
-    title: 'Profile agent',
-    lede: 'Upload your resume. It reads it properly.',
-    points: [
-      'Understands the real PDF — columns, tables and all',
-      'Remembers every fact, and where it came from',
-      'Tells you what is still missing',
-    ],
-    stack: [
-      ['Gemini', 'reads the PDF itself, not scraped text'],
-      ['Databricks', 'stores your profile — nothing overwritten'],
-    ],
+    act: 'The problem',
+    title: 'Another hundred applications.',
+    line: 'Every day. Most of them never answered.',
   },
   {
     n: '02',
-    group: 'Understand you',
-    title: 'Voice agent',
-    lede: 'Just talk. It handles the rest.',
-    points: [
-      'Interrupt it mid-sentence, like a real conversation',
-      'Two voices — an assistant, and an interviewer for practice',
-      'Anything you can say, you can also type',
-    ],
-    stack: [['ElevenLabs Agents', 'the whole conversation, voice in and voice out']],
+    act: 'The problem',
+    title: 'The same details. Every single site.',
+    line: 'Name, education, experience, upload the same PDF again.',
   },
   {
     n: '03',
-    group: 'Find the work',
-    title: 'Job sourcing',
-    lede: 'Real openings, straight from the source.',
-    points: [
-      'Reads Greenhouse, Lever and Ashby directly — no scraping',
-      'Drops closed roles before they waste your time',
-      'Keeps the intern and entry-level jobs students want',
-    ],
-    stack: [
-      ['Databricks', 'every posting stored once, never rewritten'],
-      ['career-ops (MIT)', '99 job-board readers'],
-    ],
+    act: 'The problem',
+    title: 'Hours gone. Nothing back.',
+    line: 'Repetitive work that leads nowhere, and no way to tell what worked.',
   },
   {
     n: '04',
-    group: 'Find the work',
-    title: 'Match agent',
-    lede: 'Ranked against your skills and your coursework.',
-    points: [
-      'Tells you why a job fits, not just a score',
-      'Shows exactly which skills you are missing',
-      'Flags postings that are not real',
-    ],
-    stack: [['Databricks', 'embeddings and fit scoring in SQL']],
+    act: 'The turn',
+    title: 'So we built HireWire.',
+    line: 'One agent that does the applying, and refuses when something is wrong.',
   },
   {
     n: '05',
-    group: 'Find the work',
-    title: 'Tailor agent',
-    lede: 'A resume, cover letter and email for each job.',
-    points: [
-      'Written for that one posting, not from a template',
-      'Every claim checked against your real profile',
-      'Nothing invented, ever',
-    ],
-    stack: [['Databricks', 'the whole packet in a single call']],
+    act: 'How it works',
+    title: 'Just talk to it.',
+    line: 'Say what you are looking for. No forms, no mouse, no tabs.',
   },
   {
     n: '06',
-    group: 'Prove who is real',
-    title: 'Applicant agent',
-    lede: 'Checks the employer is real before sending anything.',
-    points: [
-      'Confirms the company owns the domain it claims',
-      'Scores them on five things, each with a reason',
-      'You approve before a single detail leaves',
-    ],
-    stack: [['GoDaddy ANS', 'verified, domain-anchored agent identity']],
+    act: 'How it works',
+    title: 'Your resume in, the right jobs out.',
+    line: 'Add your resume and LinkedIn once. Get roles matched to you, not keywords.',
   },
   {
     n: '07',
-    group: 'Prove who is real',
-    title: 'Employer agent',
-    lede: 'Employers meet people, not bots.',
-    points: [
-      'The checks run in both directions',
-      'Fake applicants stop at the door',
-    ],
-    stack: [
-      ['GoDaddy ANS', 'identity verified both ways'],
-      ['Vultr', 'hosts the employer agent'],
-    ],
+    act: 'How it works',
+    title: 'Wait — is this employer real?',
+    line: 'Before anything is sent, it asks the question you never get to ask.',
   },
   {
     n: '08',
-    group: 'Prove who is real',
-    title: 'Audit console',
-    lede: 'A record of everything, including what we refused.',
-    points: [
-      'Every decision logged, permanently',
-      'Exactly which details went where',
-      'Watch live attacks get blocked',
-    ],
-    stack: [['MongoDB Atlas', 'the permanent audit log']],
+    act: 'How it works',
+    title: 'Our agent asks theirs to prove it.',
+    line: 'Only once the employer is verified does your resume leave your hands.',
   },
   {
     n: '09',
-    group: 'See what works',
-    title: 'Funnel analytics',
-    lede: 'The first honest look at your job search.',
-    points: [
-      'Where every application stands, live',
-      'Which roles reply, and which never do',
-      'Apply sooner, hear back more',
-    ],
-    stack: [['TigerData', 'real-time application tracking']],
+    act: 'How it works',
+    title: 'Hiring? It runs both ways.',
+    line: 'The employer agent verifies the applicant too. No bots at the door.',
   },
   {
     n: '10',
-    group: 'Always',
-    title: 'The guarantees',
-    lede: 'Four rules we do not break.',
-    points: [
-      'Nothing sends until the employer is verified',
-      'A refusal sends zero information',
-      'Every score comes with a reason',
-      'You click apply — not us',
-    ],
-    stack: [],
+    act: 'The future',
+    title: 'Agents talk. You decide.',
+    line: 'The repetitive part disappears. You are brought in only when it matters.',
   },
 ];
 
@@ -215,35 +145,30 @@ export function ArchitectureRail() {
 function Card({ stage }: { stage: Stage }) {
   return (
     <article className="stage">
-      {/* The caption is FIRST in the DOM so the heading labels the card that
-          follows it, and is moved below visually with flex order. Screen
-          readers and tab order follow the DOM; only the paint order changes. */}
+      {/* Words first in the DOM so the heading labels the image that follows it;
+          flex order paints them underneath. Tab and reading order are unchanged. */}
       <div className="stage__caption">
+        <p className="stage__act">
+          <span>{stage.n}</span>
+          {stage.act}
+        </p>
         <h3>{stage.title}</h3>
-        <p>{stage.stack.length ? stage.stack.map(([who]) => who).join(' · ') : stage.group}</p>
+        <p className="stage__line">{stage.line}</p>
       </div>
 
       <div className="stage__card">
-        <p className="stage__n">
-          {stage.n}
-          {stage.group ? <span>{stage.group}</span> : null}
-        </p>
-        <p className="stage__lede">{stage.lede}</p>
-        <ul className="stage__points">
-          {stage.points.map((pt) => (
-            <li key={pt}>{pt}</li>
-          ))}
-        </ul>
-        {stage.stack.length ? (
-        <dl className="stage__stack">
-          {stage.stack.map(([who, what]) => (
-            <div key={who}>
-              <dt>{who}</dt>
-              <dd>{what}</dd>
-            </div>
-          ))}
-        </dl>
-        ) : null}
+        {stage.n === '04' ? (
+          /* The turn. At the moment the copy says we built it, show the thing
+             itself rather than a photograph of an idea. */
+          <div className="stage__agent">
+            <AgentFace mood="happy" size={240} />
+          </div>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element -- the file may not
+             exist yet; next/image throws on a missing local asset, a plain img
+             just leaves the frame empty. */
+          <img src={`/collage/story-${stage.n}.jpg`} alt="" loading="lazy" />
+        )}
       </div>
     </article>
   );

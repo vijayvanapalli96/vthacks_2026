@@ -585,3 +585,73 @@ ALTER TABLE workspace.vthacks_2026.goals ADD COLUMNS (
 
 -- profile_gaps needs NO change: field_key is already a free-form STRING, so the
 -- four new P0 questions are rows, not columns.
+
+
+-- ---------------------------------------------------------------------------
+-- SECTION 7 — the match agent. APPLIED LIVE 2026-09-19.
+-- See docs/MATCH_AGENT_PLAN.md §5.
+--
+-- Numbered 7, not 5: the job pipeline took SECTION 5 and the voice agent took
+-- SECTION 6 while this branch was open. Renumbered on merge rather than
+-- renumbering theirs, because every other lane's notes already refer to their
+-- sections by number.
+--
+-- Read this before re-running the ALTER below:
+--   `ADD COLUMNS IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` are BOTH parse
+--   errors on this warehouse. The ALTER is therefore NOT idempotent — the rest
+--   of this file is. `DESCRIBE TABLE workspace.vthacks_2026.match_evaluations`
+--   first and skip it if `run_id` is already there.
+-- ---------------------------------------------------------------------------
+
+-- match_runs — one row per match run. Same role as scan_runs: observability, and
+--   the "is it working?" answer. Without it a bad run is invisible: you can see
+--   that rows were written but not that 200 candidates collapsed to 3 because a
+--   filter was inverted, or that the eligibility gate dropped 8 roles and why.
+CREATE TABLE IF NOT EXISTS workspace.vthacks_2026.match_runs (
+  run_id             STRING    NOT NULL,
+  user_id            STRING    NOT NULL,
+  started_at         TIMESTAMP NOT NULL,
+  finished_at        TIMESTAMP          COMMENT 'NULL means the run never completed. The cache reader requires NOT NULL.',
+  candidates_total   INT                COMMENT 'Jobs considered before filtering',
+  after_filters      INT                COMMENT 'Survived the hard filters, incl. the eligibility gate',
+  after_similarity   INT                COMMENT 'Survived the cosine cut — the rerank candidate set',
+  reranked           INT                COMMENT 'How many model calls were actually spent',
+  written            INT                COMMENT 'match_evaluations rows written',
+  dropped_ineligible INT                COMMENT 'Filtered by the eligibility gate, each with a stated reason',
+  model_provider     STRING,
+  model_name         STRING,
+  error_message      STRING,
+  CONSTRAINT match_runs_pk PRIMARY KEY (run_id)
+) USING DELTA
+COMMENT 'One row per match run. Observability for the match agent.';
+
+-- The zero-token stage-1 output, kept on the evaluation row so a score can be
+-- explained without a model — and so the coursework lever (a later follow-up)
+-- has `skills_missing` to aggregate. NOT IDEMPOTENT; see the note above.
+--
+-- NOTE on the live table: `overall_score` is DECIMAL(5,2) in the workspace, not
+-- the DOUBLE this file's SECTION 1 records. SECTION 1 documents a table that
+-- predates this file; the live definition wins and the match writer binds a
+-- DOUBLE parameter that Delta narrows on insert.
+--
+-- match_evaluations is the CACHE, not a ledger: a re-score DELETEs the user's
+-- previous rows so there is at most one row per (user_id, job_id). The history
+-- lives in match_runs. Unity Catalog PRIMARY KEYs are informational and Delta
+-- does not enforce them (see the header of this file), so that uniqueness is
+-- arranged by the writer, not declared here.
+ALTER TABLE workspace.vthacks_2026.match_evaluations ADD COLUMNS (
+  run_id             STRING,
+  user_id            STRING        COMMENT 'candidate_profile_id predates users; this is users.user_id',
+  retrieval_rank     INT           COMMENT 'Rank after the stage-1 cosine cut, 1-based',
+  similarity         DOUBLE        COMMENT 'Cosine, job description embedding vs profile summary embedding',
+  skills_matched     ARRAY<STRING> COMMENT 'Profile skills the JD explicitly asks for',
+  skills_missing     ARRAY<STRING> COMMENT 'JD requirements with no trace in the profile',
+  courses_matched    ARRAY<STRING> COMMENT 'Coursework that covers a JD requirement',
+  eligibility        STRING        COMMENT 'pass | fail | unknown',
+  eligibility_reason STRING        COMMENT 'Why. A fail with no reason is a bug — see hard rule 4.'
+);
+
+-- job_embeddings needs NO change. It already existed in SECTION 3 with exactly
+-- the right shape; it was simply EMPTY. scripts/embed-jobs.mjs fills it:
+-- 16,206 rows, 1024-dim, from 16,207 job_snapshots (one row has an empty
+-- description_text and is skipped, not failed).

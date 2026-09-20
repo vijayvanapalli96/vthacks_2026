@@ -328,10 +328,10 @@ main, [id] { scroll-margin-top: 100px; }
    viewport wide, the gap is roughly a tenth, and the card is centred in the
    band rather than filling it. */
 .stage {
-  flex: 0 0 clamp(340px, 34vw, 660px);
+  flex: 0 0 clamp(340px, 38vw, 700px);
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
 }
 
 /* The card is the bordered box; the caption sits outside and below it. */
@@ -363,43 +363,9 @@ main, [id] { scroll-margin-top: 100px; }
   -webkit-text-stroke: 0.3px currentColor;
 }
 
-.stage__n {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  font-size: 14px;
-  letter-spacing: 0.22em;
-  color: var(--muted);
-  margin: 0 0 14px;
-}
-.stage__n span {
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  padding-left: 14px;
-  border-left: 1px solid currentColor;
-}
 
-.stage__lede { color: var(--ink); font-size: 18px; line-height: 1.6; margin: 0 0 22px; }
 
 /* The stack block is what a track judge scans for. Keep it unmissable. */
-.stage__stack {
-  margin: auto 0 0;
-  padding-top: 22px;
-  border-top: 1px solid var(--line-strong);
-  display: grid;
-  gap: 12px;
-}
-.stage__stack div { display: grid; gap: 4px; }
-.stage__stack dt {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--success);
-  -webkit-text-stroke: 0.3px currentColor;
-}
-.stage__stack dd { margin: 0; font-size: 16px; color: var(--muted); line-height: 1.5; margin-top: 2px; }
 
 /* Reduced motion: a stack, not a rail. */
 .rail--static { padding: 80px 0; border-top: 1px solid var(--line); }
@@ -741,56 +707,96 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
 .rail, .rail * { color: #eef4ed; }
 
 .rail .stage__n,
-.rail .stage__stack dd {
-  color: color-mix(in srgb, #eef4ed 68%, transparent);
-}
-
-/* Stack labels are the brightest thing in the block — a track judge scans for
+/* Captions are the brightest thing in the block — a track judge scans for
    these. Paper, not the success tint, which reads blue against navy. */
-.rail .stage__stack dt { color: #eef4ed; }
 .rail .stage__caption p { color: #eef4ed; }
 
 .rail .stage__card { border-color: color-mix(in srgb, #eef4ed 16%, transparent); }
 .rail .stage:hover .stage__card { border-color: #eef4ed; }
-.rail .stage__stack { border-top-color: color-mix(in srgb, #eef4ed 28%, transparent); }
-.rail .stage__points li::before { background: color-mix(in srgb, #eef4ed 40%, transparent); }
 .rail__title { border-bottom-color: color-mix(in srgb, #eef4ed 18%, transparent); }
 
-/* --- Stage bullets ------------------------------------------------------- */
+/* --- Story cards: an image, with the words beneath it -------------------- */
 
-.stage__points { list-style: none; margin: 0 0 26px; padding: 0; display: grid; gap: 11px; }
-.stage__points li {
+.stage__card {
+  order: 1;
+  /* The art is 3:2 landscape. A tall frame would crop the sides off every one
+     of them, so the frame matches the source instead. */
+  aspect-ratio: 3 / 2;
+  width: 100%;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  transition: border-color 0.25s ease;
+  /* Behind the image while it loads, and in any letterboxing. Literal paper
+     rather than var(--paper), which is redefined to navy inside this band. */
+  background: #eef4ed;
+}
+.stage:hover .stage__card { border-color: var(--ink); }
+
+/* Card 04 holds the agent rather than a photograph. */
+.stage__agent {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: #eef4ed;
+}
+.stage__agent .face__head,
+.stage__agent .face__brow path,
+.stage__agent .face__mouth { stroke: #0b2545; }
+.stage__agent .face__eye { fill: #0b2545; }
+
+.stage__card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.stage:hover .stage__card img { transform: scale(1.03); }
+
+.stage__caption { order: 2; }
+
+.stage__act {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 0 0 10px;
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-size: 16px;
+}
+.stage__act span {
+  padding-right: 14px;
+  border-right: 1px solid currentColor;
+  letter-spacing: 0.22em;
+}
+
+.stage__caption h3 {
+  font-size: clamp(26px, 2.3vw, 36px);
+  font-style: italic;
+  font-weight: 700;
+  -webkit-text-stroke: 0.3px currentColor;
+  letter-spacing: -0.012em;
+  line-height: 1.1;
+  margin: 0 0 10px;
+}
+
+.stage__line {
+  margin: 0;
+  font-size: 18px;
   line-height: 1.6;
-  padding-left: 18px;
-  position: relative;
-}
-.stage__points li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0.66em;
-  width: 8px;
-  height: 1px;
-  background: currentColor;
-  opacity: 0.6;
+  color: var(--muted);
+  max-width: 42ch;
 }
 
-/* ---------------------------------------------------------------------------
-   Verified-apply entry points on the applicant dashboard. Links that look like
-   buttons keep link semantics (they navigate), so they stay <a>.
-   --------------------------------------------------------------------------- */
-
-a.primary,
-a.secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  width: auto;
-  text-decoration: none;
+@media (prefers-reduced-motion: reduce) {
+  .stage:hover .stage__card img { transform: none; }
 }
+
+/* ===========================================================================
+   VERIFIED-APPLY PANEL (applicant dashboard)
+   =========================================================================== */
 
 .handshake {
   display: flex;
