@@ -27,7 +27,10 @@
   --vt-fail: #9b1c1c;
 
   position: fixed;
-  left: 0;
+  /* Inset from the window edge rather than welded to it: the card reads as a
+     floating panel over the page, not as a browser chrome element that got cut
+     off by the viewport. */
+  left: clamp(12px, 2vw, 24px);
   top: 96px;
   bottom: 24px;
   z-index: 60;
@@ -64,16 +67,24 @@
   writing-mode: vertical-rl;
 }
 
+/* Closed, the tab is the whole control, so it needs the edge the panel would
+   otherwise have given it — a flat, borderless left side only makes sense when
+   something is butted up against it. */
+.vt-dock.is-closed .vt-tab {
+  border-left: 1px solid var(--line);
+  border-radius: 12px;
+}
+
 .vt-panel {
   order: 1;
-  width: min(420px, calc(100vw - 48px));
+  /* The dock inset and the tab both eat into the room available. */
+  width: min(420px, calc(100vw - 96px));
   max-height: 100%;
   display: flex;
   flex-direction: column;
   background: white;
   border: 1px solid var(--line);
-  border-left: 0;
-  border-radius: 0 16px 16px 0;
+  border-radius: 16px;
   box-shadow: 0 10px 40px rgb(20 33 27 / 14%);
   overflow: hidden;
 }

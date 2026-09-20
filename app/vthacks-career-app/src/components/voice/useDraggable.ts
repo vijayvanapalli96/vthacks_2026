@@ -78,8 +78,16 @@ function stored(): Point | null {
 }
 
 export type Draggable = {
-  /** Spread onto the floating element, along with `attach` as its ref. */
-  style: { left: number; top: number } | undefined;
+  /**
+   * Spread onto the floating element, along with `attach` as its ref.
+   *
+   * `right`/`bottom` are cleared explicitly. The CSS parks the widget in its
+   * default corner with `right`/`bottom`, and an element with BOTH edges pinned
+   * and an auto height stretches between them instead of moving — dragging it up
+   * made it grow taller rather than travel. Setting left/top means the other two
+   * anchors have to let go.
+   */
+  style: { left: number; top: number; right: 'auto'; bottom: 'auto' } | undefined;
   attach: (node: HTMLDivElement | null) => void;
   /** Spread onto the drag handle, which must be a <button>. */
   onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
@@ -204,7 +212,7 @@ export function useDraggable(): Draggable {
   }, [measure]);
 
   return {
-    style: position ? { left: position.x, top: position.y } : undefined,
+    style: position ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : undefined,
     attach,
     onPointerDown,
     onKeyDown,
