@@ -1,4 +1,12 @@
 services:
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    env_file:
+      - ./app.env
+    restart: unless-stopped
+
   employer:
     build:
       context: ./agents
@@ -20,6 +28,7 @@ services:
   caddy:
     image: caddy:2.10-alpine
     depends_on:
+      - app
       - employer
       - applicant
     ports:

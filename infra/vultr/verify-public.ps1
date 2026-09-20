@@ -1,4 +1,20 @@
 $ErrorActionPreference = "Stop"
+
+# The reason this deployment exists: a visitor with no Databricks account has to
+# reach OUR sign-in page. Databricks Apps answered an anonymous request with a
+# 302 to the workspace OAuth login, which is a dead end for every applicant and
+# employer we are asking to sign up.
+$apex = "https://hirewire.biz"
+$anonymous = Invoke-WebRequest -Uri $apex -MaximumRedirection 0 -ErrorAction SilentlyContinue
+$apexStatus = if ($anonymous) { [int]$anonymous.StatusCode } else { 0 }
+if ($apexStatus -ne 200) {
+  $where = if ($anonymous) { $anonymous.Headers.Location } else { "(no response)" }
+  throw "$apex returned $apexStatus -> $where instead of serving the app directly."
+}
+if ($anonymous.Content -match "databricks") {
+  throw "$apex served a page mentioning Databricks; an anonymous visitor is still being sent to the workspace login."
+}
+
 $baseUrl = "https://employer.hirewire.biz"
 $applicantBaseUrl = "https://applicant.hirewire.biz"
 
@@ -22,7 +38,7 @@ try {
 }
 if ($refusalStatus -ne 403) { throw "The refusal probe returned '$refusalStatus' instead of HTTP 403." }
 
-Write-Host "Health, agent cards, and the unverified-caller refusal (HTTP 403) verified."
+Write-Host "Anonymous access to $apex, health, agent cards, and the unverified-caller refusal (HTTP 403) verified."
 $health | ConvertTo-Json
 $card | ConvertTo-Json -Depth 5
 $applicantCard | ConvertTo-Json -Depth 5

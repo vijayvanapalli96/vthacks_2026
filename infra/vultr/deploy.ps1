@@ -2,7 +2,14 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$HostIp,
   [string]$SshUser = "root",
-  [string]$IdentityFile
+  [string]$IdentityFile,
+  # The web app's own Databricks identity. Databricks Apps injected these for us;
+  # off-platform we carry our own service principal. Secret is never written to
+  # the repo - pass it, or export HIREWIRE_DB_CLIENT_SECRET.
+  [string]$DatabricksProfile = "DEFAULT",
+  [string]$DatabricksClientId = $env:HIREWIRE_DB_CLIENT_ID,
+  [string]$DatabricksClientSecret = $env:HIREWIRE_DB_CLIENT_SECRET,
+  [string]$AppOrigin = "https://hirewire.biz"
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +40,7 @@ New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/employer") -F
 New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/applicant") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stagingRoot "agents/shared") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stagingRoot "certs") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $stagingRoot "app") -Force | Out-Null
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "docker-compose.yml") -Destination $stagingRoot
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Caddyfile") -Destination $stagingRoot
@@ -86,6 +94,63 @@ foreach ($kind in "employer", "applicant") {
   )
 }
 
+# ---------------------------------------------------------------------------
+# The web app. It is served from here rather than Databricks Apps because that
+# platform gates every anonymous request behind a workspace OAuth login, so a
+# visitor without a Databricks account can never reach our own sign-in page.
+# ---------------------------------------------------------------------------
+if (-not $DatabricksClientId -or -not $DatabricksClientSecret) {
+  throw "Pass -DatabricksClientId and -DatabricksClientSecret (or set HIREWIRE_DB_CLIENT_ID / HIREWIRE_DB_CLIENT_SECRET). The app cannot reach the SQL warehouse without them, and nobody can sign in."
+}
+
+$appSource = Join-Path $repoRoot "app/vthacks-career-app"
+# robocopy returns 0-7 for success; 8+ is a real failure.
+robocopy $appSource (Join-Path $stagingRoot "app") /MIR /NFL /NDL /NJH /NJS /NP `
+  /XD node_modules .next .git .databricks `
+  /XF ".env" ".env.local" "*.tsbuildinfo" | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "Could not stage the app source (robocopy exit $LASTEXITCODE)." }
+$global:LASTEXITCODE = 0
+
+# One source of truth for the runtime secrets: the `hirewire` Databricks secret
+# scope, the same one the Databricks App reads. Written to a gitignored staging
+# file, shipped inside the archive, and never committed.
+function Get-HirewireSecret([string]$key) {
+  $json = databricks secrets get-secret hirewire $key -p $DatabricksProfile | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0) { throw "Could not read secret '$key' from scope 'hirewire'." }
+  [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($json.value))
+}
+
+# Multi-line PEMs cannot survive a Docker env_file; src/lib/ans/envelope.ts
+# un-escapes \n for exactly this case.
+function ConvertTo-EnvLine([string]$name, [string]$value) {
+  "$name=" + ($value -replace "`r`n", "`n" -replace "`n", "\n")
+}
+
+$appEnv = @(
+  "AUTH_URL=$AppOrigin",
+  "AUTH_TRUST_HOST=true",
+  (ConvertTo-EnvLine "AUTH_SECRET" (Get-HirewireSecret "auth-secret")),
+  "DATABRICKS_HOST=https://dbc-0bfd7b56-c2eb.cloud.databricks.com",
+  "DATABRICKS_WAREHOUSE_ID=441b670a0ff475e0",
+  "DATABRICKS_CLIENT_ID=$DatabricksClientId",
+  "DATABRICKS_CLIENT_SECRET=$DatabricksClientSecret",
+  (ConvertTo-EnvLine "APPLICANT_IDENTITY_KEY" (Get-HirewireSecret "applicant-identity-key")),
+  (ConvertTo-EnvLine "APPLICANT_IDENTITY_CERT" (Get-HirewireSecret "applicant-identity-cert")),
+  (ConvertTo-EnvLine "EMPLOYER_IDENTITY_KEY" (Get-HirewireSecret "employer-identity-key")),
+  (ConvertTo-EnvLine "EMPLOYER_IDENTITY_CERT" (Get-HirewireSecret "employer-identity-cert")),
+  (ConvertTo-EnvLine "MONGODB_URI" (Get-HirewireSecret "mongodb-uri"))
+)
+
+# Keys that never made it into the Databricks scope (ElevenLabs, Gemini, Google
+# OAuth) go in this gitignored file, one KEY=value per line. Absent is fine:
+# every feature behind them degrades to a stated reason, not a crash.
+$extras = Join-Path $PSScriptRoot "app.env.local"
+if (Test-Path -LiteralPath $extras) {
+  $appEnv += (Get-Content -LiteralPath $extras | Where-Object { $_ -match "^[A-Z0-9_]+=" })
+}
+
+[System.IO.File]::WriteAllText((Join-Path $stagingRoot "app.env"), ($appEnv -join "`n") + "`n")
+
 $archive = Join-Path $repoRoot "work/hirewire-vultr.tgz"
 tar -czf $archive -C $stagingRoot .
 if ($LASTEXITCODE -ne 0) { throw "Could not create deployment archive." }
@@ -97,7 +162,8 @@ scp @identityArgs $archive "${destination}:/tmp/hirewire-vultr.tgz"
 if ($LASTEXITCODE -ne 0) { throw "Could not upload the deployment archive." }
 # Docker writes progress to stderr; fold it into stdout so Windows PowerShell 5.1
 # does not treat build progress as a failure. The exit code still decides success.
-ssh @identityArgs $destination "tar -xzf /tmp/hirewire-vultr.tgz -C /opt/hirewire && chmod 600 /opt/hirewire/certs/employer.key /opt/hirewire/certs/applicant.key && cd /opt/hirewire && docker compose up -d --build --quiet-pull 2>&1"
+ssh @identityArgs $destination "tar -xzf /tmp/hirewire-vultr.tgz -C /opt/hirewire && chmod 600 /opt/hirewire/certs/employer.key /opt/hirewire/certs/applicant.key /opt/hirewire/app.env && cd /opt/hirewire && docker compose up -d --build --quiet-pull 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "Remote Docker deployment failed." }
 
-Write-Host "Both agents deployed. Point employer.hirewire.biz and applicant.hirewire.biz A records to $HostIp, then run verify-public.ps1."
+Write-Host "App and both agents deployed."
+Write-Host "Point hirewire.biz, www, employer and applicant A records to $HostIp, then run verify-public.ps1."
