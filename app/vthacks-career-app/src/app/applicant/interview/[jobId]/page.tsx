@@ -43,19 +43,15 @@ export default async function InterviewPage({ params }: { params: Promise<{ jobI
   return (
     <main>
       <ApplicantNav current="pipeline" />
-      <section className="hero">
+      {/* Trimmed to match the pipeline: the room below explains itself as you
+          use it, and the camera note moved next to the camera control where it
+          is actually needed. */}
+      <section className="hero hero-compact">
         <p className="eyebrow">MOCK INTERVIEW</p>
         <h1>
           {job.job_title} at {job.company_name}
         </h1>
-        <p>
-          They replied, so this is worth rehearsing. The questions are built from this posting and the gaps in your
-          own profile, you answer them one at a time, and you get back what a listener would actually notice: length,
-          pace, whether you said &ldquo;I&rdquo; or &ldquo;we&rdquo;, and what a strong answer had that yours did not.
-        </p>
-        <p className="iv-muted">
-          Your camera is optional and is never recorded. Everything here works typed.
-        </p>
+        <p className="iv-muted">Camera optional and never recorded. Everything works typed.</p>
       </section>
 
       <InterviewRoom jobId={decoded} jobTitle={job.job_title} company={job.company_name} />

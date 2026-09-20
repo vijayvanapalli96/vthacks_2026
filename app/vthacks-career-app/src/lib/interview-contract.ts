@@ -87,7 +87,11 @@ export const QUESTION_SOURCES = ['gemini', 'jd-deterministic'] as const;
 export type QuestionSource = (typeof QUESTION_SOURCES)[number];
 
 export const QUESTION_SOURCE_LABEL: Record<QuestionSource, string> = {
-  gemini: 'Written by Gemini from this job description and your profile',
+  // The vendor name is deliberately absent, but the PROVENANCE is not: this
+  // still says the questions were written for this posting, which is what
+  // separates it from the deterministic path below. Dropping the distinction
+  // entirely would be the rule 8 problem this label exists to avoid.
+  gemini: 'Written for this posting from the job description and your profile',
   'jd-deterministic': 'Built from this job description and your match gaps, no model call',
 };
 
