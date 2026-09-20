@@ -218,9 +218,18 @@ if ($voiceKey -and $voiceAgent) {
 
 $atsEnvFile = Join-Path $PSScriptRoot ".env"
 if (Test-Path -LiteralPath $atsEnvFile) {
-  $atsToken = (Get-Content -LiteralPath $atsEnvFile |
-    Where-Object { $_ -match "^ATS_WORKER_TOKEN=(.+)$" } |
-    ForEach-Object { $matches[1].Trim() } | Select-Object -First 1)
+  # Parsed in a plain loop, NOT a Where-Object | ForEach-Object pipeline: in
+  # that form $matches inside the ForEach block is whatever the last -match
+  # anywhere left behind, so the app was handed a 64-character value while the
+  # worker held the real 48-character one, and every call came back
+  # "unauthorized".
+  $atsToken = $null
+  foreach ($line in Get-Content -LiteralPath $atsEnvFile) {
+    if ($line -match '^ATS_WORKER_TOKEN=(.+)$') {
+      $atsToken = $Matches[1].Trim()
+      break
+    }
+  }
   if ($atsToken) {
     $appEnv += "ATS_WORKER_TOKEN=$atsToken"
     Write-Host "Autofill worker: token wired to the app."

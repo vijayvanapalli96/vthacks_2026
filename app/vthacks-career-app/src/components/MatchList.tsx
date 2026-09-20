@@ -35,6 +35,7 @@
  * the run actually scanned and where they came from. It does not say "all US
  * jobs", because they are fresh US roles from the boards the scanner reads.
  */
+import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 
 import type { CachedMatches, MatchRow, MatchRunFacts, RemovedRole } from '@/lib/match-read';
@@ -72,6 +73,15 @@ function MatchRowView({ row, rank }: { row: MatchRow; rank: number }) {
 
   return (
     <li className="match-row">
+      {/* The whole card opens the job. A stretched overlay rather than wrapping
+          the card in an anchor: the card already contains a link to the
+          original posting, and anchors cannot nest. Everything interactive
+          inside sits above this one. */}
+      <Link
+        className="match-row-open"
+        href={`/applicant/jobs/${encodeURIComponent(row.job_id)}`}
+        aria-label={`Open ${row.title ?? 'this role'}${row.company ? ` at ${row.company}` : ''}`}
+      />
       <div className="match-head">
         <span className="match-rank" aria-hidden="true">
           {rank}
