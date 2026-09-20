@@ -79,6 +79,33 @@ const BOARD_HOSTS = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|myworkdayjobs\
  * host postings on their own domains, so for those it guesses from the company
  * name, and the screen lets the student correct it before anything is looked up.
  */
+/**
+ * The employer domain when the POSTING ITSELF names it — i.e. the job links to
+ * the company's own site rather than to an ATS board. Null when all we could do
+ * is guess from the company name, which is the difference between "riotgames.com
+ * is Riot's domain, they linked it" and "andurilindustries.com is our guess, and
+ * it does not exist". Callers that make a claim about the domain must use this,
+ * not guessEmployerDomain.
+ */
+export function employerDomainFromPosting(job: Job): string | null {
+  if (job.demo) return 'hirewire.biz';
+  try {
+    const host = new URL(job.source_url ?? '').hostname.toLowerCase().replace(/^(www|jobs|careers)\./, '');
+    return host && !BOARD_HOSTS.test(host) ? host : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The agent host to verify for a job. With the picker gone the apply screen can
+ * be reached without ?host=, so it needs an answer from the job alone.
+ */
+export function employerHostForJob(job: Job): string {
+  const domain = guessEmployerDomain(job);
+  return domain ? `employer.${domain}` : '';
+}
+
 export function guessEmployerDomain(job: Job): string {
   if (job.demo) return 'hirewire.biz';
   try {

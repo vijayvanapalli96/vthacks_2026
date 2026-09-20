@@ -35,3 +35,7 @@ agents/audit/*.jsonl
 
 # os
 .DS_Store
+
+# generated at deploy time from the hirewire secret scope; never committed
+infra/vultr/app.env
+infra/vultr/app.env.local

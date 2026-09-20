@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
-import { ArrowRight, Loader2, ShieldAlert, ShieldCheck, Volume2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowRight, ArrowUpRight, Loader2, ShieldAlert, ShieldCheck, Volume2 } from 'lucide-react';
 
 import { AgentBadge } from '@/components/AgentBadge';
 import { emitAgentState } from '@/lib/agent-state';
@@ -34,28 +34,14 @@ type Phase =
 
 const MIN_DIMENSION = 65;
 
-const targets = [
-  {
-    host: 'employer.hirewire.biz',
-    label: 'Hirewire employer agent',
-    detail: 'Our ANS-registered employer agent, hosted on Vultr.',
-  },
-  {
-    host: 'fraud.webmesh.ai',
-    label: 'Webmesh fraud test agent',
-    detail: "GoDaddy's adversarial test agent, claiming to hire.",
-  },
-  {
-    host: 'agent.webmesh.ai',
-    label: 'Webmesh lookalike',
-    detail: 'Registered in ANS, but not as an employer.',
-  },
-];
-
 type ApplyJob = {
   job_id: string;
   title: string;
   company: string;
+  location?: string | null;
+  source?: string | null;
+  source_url?: string | null;
+  posted_at?: string | null;
   required_skills?: string[];
   preferred_skills?: string[];
 };
@@ -76,26 +62,23 @@ function speak(text: string) {
 export function TrustApply({
   name,
   email,
-  initialHost,
+  host,
   job,
 }: {
   name: string;
   email: string;
-  initialHost?: string;
+  /** Settled before this screen: the employer agent for the job just chosen. */
+  host: string;
   job: ApplyJob;
 }) {
-  const preset = initialHost && !targets.some((option) => option.host === initialHost) ? initialHost : undefined;
-  const [host, setHost] = useState(preset ? 'custom' : (initialHost ?? targets[0].host));
-  const [customHost, setCustomHost] = useState(preset ?? '');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [speakAloud, setSpeakAloud] = useState(false);
   const [skills, setSkills] = useState('Python, SQL, TypeScript');
   const [resumeUrl, setResumeUrl] = useState('');
   const [approved, setApproved] = useState<Record<string, boolean>>({});
   const resultHeading = useRef<HTMLHeadingElement>(null);
-  const customId = useId();
 
-  const target = host === 'custom' ? customHost.trim().toLowerCase() : host;
+  const target = host;
   const verification = 'verification' in phase ? phase.verification : null;
 
   const values: Record<string, string> = {
@@ -119,7 +102,7 @@ export function TrustApply({
     if (speakAloud) speak(text);
   }
 
-  async function verify() {
+  const verify = useCallback(async function verify() {
     if (!target) return;
     setApproved({});
     setPhase({ kind: 'verifying' });
@@ -136,7 +119,21 @@ export function TrustApply({
     } catch {
       setPhase({ kind: 'error', message: 'Could not reach the verification service. Try again.' });
     }
-  }
+    // announce/speakAloud are read at call time; re-creating this on every
+    // toggle would re-fire the arrival effect below and verify twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  // Verify on arrival. The employer is already decided by the job the user
+  // picked, so making them press a button to confirm the only option was a
+  // step that asked nothing.
+  useEffect(() => {
+    void verify();
+  }, [verify]);
+
+  const postedLabel = job.posted_at
+    ? new Date(job.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null;
 
   async function apply(humanApproved: boolean, fields: string[]) {
     if (!verification) return;
@@ -172,73 +169,72 @@ export function TrustApply({
 
   return (
     <div className="trust-flow">
-      <section className="panel trust-step" aria-labelledby="step-target">
+      {/* The posting itself. Verification starts on arrival: the job was chosen
+          on the previous screen, so asking again who to check was a question
+          with one possible answer. */}
+      <section className="panel trust-step" aria-labelledby="step-job">
         <header>
           <div>
-            <small>STEP 1</small>
-            <h2 id="step-target">Who is asking for your application?</h2>
+            <small>THE ROLE</small>
+            <h2 id="step-job">{job.title}</h2>
+            <p className="trust-who">
+              {job.company}
+              {job.location ? <span> · {job.location}</span> : null}
+              {postedLabel ? <span> · posted {postedLabel}</span> : null}
+            </p>
           </div>
+          <span className={`job-tag ${phase.kind === 'verifying' ? 'checking-tag' : verification?.verdict === 'pass' ? 'verified-tag' : verification ? 'refused-tag' : 'muted-tag'}`}>
+            {phase.kind === 'verifying' ? (
+              <><Loader2 size={13} className="spin" aria-hidden="true" /> Checking</>
+            ) : verification?.verdict === 'pass' ? (
+              <><ShieldCheck size={13} aria-hidden="true" /> Verified agent</>
+            ) : verification ? (
+              <><ShieldAlert size={13} aria-hidden="true" /> Not verified</>
+            ) : (
+              'Waiting'
+            )}
+          </span>
         </header>
         <div className="trust-body">
-          <fieldset className="role-options">
-            <legend>Employer agent to verify</legend>
-            {targets.map((option) => (
-              <label className="role-option" key={option.host}>
-                <input
-                  type="radio"
-                  name="target"
-                  value={option.host}
-                  checked={host === option.host}
-                  onChange={() => setHost(option.host)}
-                  disabled={busy}
-                />
-                <span>
-                  <strong>{option.label}</strong>
-                  <small className="trust-host">{option.host}</small>
-                  <small>{option.detail}</small>
-                </span>
-              </label>
-            ))}
-            <label className="role-option">
-              <input
-                type="radio"
-                name="target"
-                value="custom"
-                checked={host === 'custom'}
-                onChange={() => setHost('custom')}
-                disabled={busy}
-              />
-              <span>
-                <strong>Another agent</strong>
-                <small>Any hostname, checked live against the ANS registry.</small>
-              </span>
-            </label>
-          </fieldset>
-          {host === 'custom' ? (
-            <div className="field">
-              <label htmlFor={customId}>Agent hostname</label>
-              <input
-                id={customId}
-                value={customHost}
-                onChange={(event) => setCustomHost(event.target.value)}
-                placeholder="employer.example.com"
-                autoComplete="off"
-                spellCheck={false}
-              />
+          <dl className="job-facts">
+            <div>
+              <dt>Employer agent</dt>
+              <dd>{target}</dd>
             </div>
+            {job.source ? (
+              <div>
+                <dt>Source</dt>
+                <dd>{job.source}</dd>
+              </div>
+            ) : null}
+            {job.required_skills?.length ? (
+              <div>
+                <dt>Required</dt>
+                <dd>{job.required_skills.join(', ')}</dd>
+              </div>
+            ) : null}
+            {job.preferred_skills?.length ? (
+              <div>
+                <dt>Preferred</dt>
+                <dd>{job.preferred_skills.join(', ')}</dd>
+              </div>
+            ) : null}
+          </dl>
+          {job.source_url ? (
+            <p className="job-source-link">
+              <a href={job.source_url} target="_blank" rel="noopener noreferrer">
+                Read the full posting <ArrowUpRight size={13} aria-hidden="true" />
+              </a>
+            </p>
           ) : null}
           <div className="trust-actions">
-            <button type="button" className="primary" onClick={verify} disabled={busy || !target}>
-              {phase.kind === 'verifying' ? (
-                <>
-                  <Loader2 size={18} className="spin" aria-hidden="true" /> Verifying through ANS…
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={18} aria-hidden="true" /> Verify employer
-                </>
-              )}
-            </button>
+            {/* Only offered once a check has finished, so it reads as a retry
+                rather than as the button that starts the flow. */}
+            {phase.kind !== 'verifying' && verification ? (
+              <button type="button" className="secondary" onClick={verify} disabled={busy}>
+                <ShieldCheck size={16} aria-hidden="true" /> Check again
+              </button>
+            ) : null}
             <label className="trust-toggle">
               <input type="checkbox" checked={speakAloud} onChange={(event) => setSpeakAloud(event.target.checked)} />
               Speak verdicts aloud
@@ -264,7 +260,7 @@ export function TrustApply({
         >
           <header>
             <div>
-              <small>STEP 2 · TRUST CARD</small>
+              <small>STEP 1 · TRUST CARD</small>
               <h2 id="trust-verdict" ref={resultHeading} tabIndex={-1}>
                 {verification.verdict === 'pass' ? (
                   <>
@@ -325,7 +321,7 @@ export function TrustApply({
         <section className="panel trust-step" aria-labelledby="step-approve">
           <header>
             <div>
-              <small>STEP 3 · YOUR APPROVAL</small>
+              <small>STEP 2 · YOUR APPROVAL</small>
               <h2 id="step-approve">Choose exactly what to send</h2>
             </div>
           </header>

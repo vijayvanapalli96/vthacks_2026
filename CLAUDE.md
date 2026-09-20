@@ -57,10 +57,15 @@ High-value lifts — check here before writing anything from scratch:
 
 - **Frontend/API** Next.js 16.3.5 (App Router), React 19, TypeScript, shadcn/ui
   (Radix underneath → keyboard + ARIA correct by default), Tremor for charts.
-- **Hosting** Databricks Apps for the web app (`databricks.yml` is already wired).
-  **The employer agent must live somewhere with public, unauthenticated HTTPS**
-  (Vultr) — ANS has to be able to reach it. These are two different hosts on
-  purpose; don't try to serve the agent from Databricks Apps.
+- **Hosting** The public site is the **Vultr box behind Caddy** (`infra/vultr/`),
+  and so are both agents. Databricks Apps authenticates at its own edge: an
+  anonymous request is answered with a 302 to the workspace OAuth login before
+  our container runs, and no setting turns that off — app permissions only reach
+  workspace users and groups, all of whom have Databricks accounts. It would
+  have put a Databricks login in front of every applicant and employer. The
+  Databricks App (`databricks.yml`) still deploys and is fine for internal use;
+  it is not the public entrance. Databricks stays the **data plane**, reached
+  with the `hirewire-public-app` service principal's OAuth credentials.
 - **Data plane** Databricks `workspace.vthacks_2026` (Delta + UC Volumes) ·
   MongoDB Atlas (`jd_raw`, `a2a_audit`).
   The schema already exists with `job_snapshots`, `match_evaluations`,

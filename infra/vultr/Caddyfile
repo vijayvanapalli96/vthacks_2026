@@ -1,3 +1,9 @@
+# The public site. Caddy gets its own certificate from Let's Encrypt here — the
+# ANS-issued certs below are the agents' identity and are not valid for the apex.
+hirewire.biz, www.hirewire.biz {
+	reverse_proxy app:3000
+}
+
 employer.hirewire.biz {
 	tls /certs/employer.fullchain.pem /certs/employer.key
 	reverse_proxy employer:8787
