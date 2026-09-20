@@ -22,6 +22,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '../../../../auth';
 import { assessCompany } from '../../../../lib/ans/legitimacy';
 import { employerDomainFromPosting, getJob } from '../../../../lib/jobs';
+import { loadProfile } from '../../../../lib/profile-repo';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +66,31 @@ export async function POST(request: Request) {
     }, { status: 403 });
   }
 
+  // The session carries a display name and an email and nothing else, which is
+  // why this used to fill exactly three boxes. The profile is where the phone,
+  // location and links actually live.
+  const profile = await loadProfile(session.user.id ?? '').catch(() => null);
+  const header = profile?.header ?? null;
+
+  // Only facts that exist. A blank stays blank: an empty phone box is a box the
+  // candidate fills in ten seconds, and an invented one is a lie on a real
+  // employer's application. Nothing here is generated.
+  const candidate = Object.fromEntries(
+    Object.entries({
+      full_name: header?.fullName || session.user.name || '',
+      email: header?.email || session.user.email || '',
+      phone: header?.phone ?? '',
+      location: header?.location ?? '',
+      linkedin: header?.linkedinUrl ?? '',
+      website: header?.portfolioUrl ?? '',
+      github: header?.githubUrl ?? '',
+    }).filter(([, value]) => typeof value === 'string' && value.trim() !== ''),
+  );
+
+  // What we could not fill and why, so the screen can say "your profile has no
+  // phone number" rather than silently leaving a box empty.
+  const missing = ['phone', 'location', 'linkedin', 'website'].filter((field) => !candidate[field]);
+
   try {
     const response = await fetch(`${WORKER_URL}/ats/prepare`, {
       method: 'POST',
@@ -73,7 +99,7 @@ export async function POST(request: Request) {
       headers: { 'content-type': 'application/json', 'x-ats-token': token },
       body: JSON.stringify({
         job_url: job.source_url,
-        candidate: { full_name: session.user.name ?? '', email: session.user.email ?? '' },
+        candidate,
         // Never true from here. Submitting is a separate, human-approved act;
         // this endpoint only ever prepares.
         submit: false,
@@ -86,7 +112,15 @@ export async function POST(request: Request) {
         error: (record as { error?: string }).error ?? `The autofill worker returned HTTP ${response.status}.`,
       }, { status: 502 });
     }
-    return NextResponse.json({ job_id: job.job_id, prepared: record, company });
+    return NextResponse.json({
+      job_id: job.job_id,
+      prepared: record,
+      company,
+      // Stated plainly: what was sent, and what the profile could not supply.
+      fields_supplied: Object.keys(candidate),
+      fields_missing_from_profile: missing,
+      profile_fact_count: profile?.factCount ?? 0,
+    });
   } catch (error) {
     return NextResponse.json({
       error: error instanceof Error && error.name === 'TimeoutError'
