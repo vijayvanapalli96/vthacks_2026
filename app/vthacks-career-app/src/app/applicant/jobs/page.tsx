@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { BadgeCheck, ChevronRight, Radio, Target } from 'lucide-react';
 
+import { A2ALaneCard } from '@/components/A2ALaneCard';
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { MatchList } from '@/components/MatchList';
 import { MatchRunButton } from '@/components/MatchRunButton';
 import { applicantJobVerificationMemory } from '@/lib/audit';
-import { A2A_PLACEHOLDER_JOB, DEMO_JOB, employerHostForJob } from '@/lib/jobs';
+import { DEMO_JOB } from '@/lib/jobs';
 import { readMatches } from '@/lib/match-read';
 import { requireRole } from '@/lib/session';
 
@@ -29,10 +30,11 @@ export const dynamic = 'force-dynamic';
  * rank it — so if it were folded into the list above it would either vanish or
  * have to be given a fabricated score. It is labelled as a demo on screen.
  *
- * A THIRD, LAST SECTION is a placeholder internship at HireWire whose row does
- * not open a job at all: it links into /applicant/apply, the agent-to-agent
- * screen. It is there so the A2A lane can be reached in one click without first
- * passing the employer check on a detail page, and it is labelled a placeholder.
+ * FIRST ON THE PAGE is a placeholder internship at HireWire whose card does not
+ * open a job at all: it links into /applicant/apply, the agent-to-agent screen.
+ * It is there so the A2A lane can be reached in one click without first passing
+ * the employer check on a detail page, and it is labelled a placeholder — it
+ * wears the ranked cards' skin but carries no score, because nothing scored it.
  *
  * Reads the CACHED run — zero model calls — so navigating here does not re-run
  * the agent.
@@ -56,6 +58,22 @@ export default async function JobsPage() {
           Select a posting and your agent checks the employer in the background. The result stays attached to
           that job in your workspace. No verified agent, no data sent.
         </p>
+      </section>
+
+      {/* FIRST ON THE PAGE, and in the same card skin as the ranked roles below.
+          It is a placeholder, not a posting and not scored — see A2ALaneCard for
+          what it borrows from a match card and what it refuses to borrow. It is
+          first because the agent-to-agent handshake is the thing this product is
+          for, and at the bottom of the page it read as a footnote to it. */}
+      <section className="panel" aria-labelledby="a2a-h">
+        <header>
+          <div>
+            <small>AGENT TO AGENT</small>
+            <h2 id="a2a-h">Open the A2A lane directly</h2>
+          </div>
+          <Radio aria-hidden="true" />
+        </header>
+        <A2ALaneCard />
       </section>
 
       <section className="panel" aria-labelledby="match-h">
@@ -121,45 +139,6 @@ export default async function JobsPage() {
         </ul>
       </section>
 
-      {/* A PLACEHOLDER, kept deliberately separate from both the ranked list and
-          the demo employer above. It is not a posting and it is not scored; it
-          exists so the agent-to-agent lane is reachable in one click. Its row
-          skips the job detail page and opens /applicant/apply — the A2A screen
-          that already exists — with the registered employer agent host attached,
-          which is the only reason this card is worth a row at all. */}
-      <section className="panel" aria-labelledby="a2a-h">
-        <header>
-          <div>
-            <small>AGENT TO AGENT</small>
-            <h2 id="a2a-h">Open the A2A lane directly</h2>
-          </div>
-          <Radio aria-hidden="true" />
-        </header>
-        <p>
-          A placeholder internship at HireWire. Opening it goes straight to the agent-to-agent screen, where
-          your agent verifies the employer agent and you approve each field before anything is sent.
-        </p>
-        <ul className="job-list">
-          <li>
-            <Link
-              className="job-row job-row-link"
-              href={`/applicant/apply?host=${encodeURIComponent(
-                employerHostForJob(A2A_PLACEHOLDER_JOB),
-              )}&job=${encodeURIComponent(A2A_PLACEHOLDER_JOB.job_id)}`}
-            >
-              <span>
-                <strong>{A2A_PLACEHOLDER_JOB.job_title}</strong>
-                <small>
-                  {A2A_PLACEHOLDER_JOB.company_name}
-                  {A2A_PLACEHOLDER_JOB.location_text ? ` · ${A2A_PLACEHOLDER_JOB.location_text}` : ''}
-                </small>
-              </span>
-              <span className="job-tag">A2A communication</span>
-              <ChevronRight size={17} aria-hidden="true" />
-            </Link>
-          </li>
-        </ul>
-      </section>
     </main>
   );
 }
