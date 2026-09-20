@@ -20,13 +20,31 @@
  * cannot be given orders by it. Worth more here than there, because these questions
  * are read out loud to a person.
  */
-import { GEMINI_MODEL, GeminiError, getGeminiKey } from '@/lib/extract/gemini';
+import { GeminiError, getGeminiKey } from '@/lib/extract/gemini';
 import { parseJsonObject } from '@/lib/extract/json';
 import {
   isQuestionKind,
   type InterviewQuestion,
   type QuestionKind,
 } from '@/lib/interview-contract';
+
+/**
+ * ITS OWN MODEL, AND THE CHEAPEST TIER.
+ *
+ * Deliberately not the `GEMINI_MODEL` the resume extractor uses. That path sends PDF
+ * BYTES and depends on reading a two-column page layout correctly, which is the one
+ * job worth paying the flash tier for. Writing six interview questions from text we
+ * have already extracted is not, and a mock interview can be re-run any number of
+ * times by one student in an afternoon.
+ *
+ * An ALIAS, not a pinned version, for the reason documented in extract/gemini.ts: a
+ * pinned `gemini-2.5-flash` began returning 404 "no longer available to new users"
+ * on a fresh key mid-build. Override with GEMINI_QUESTIONS_MODEL if the lite tier
+ * turns out to be too weak — the validator below rejects a bad set wholesale and the
+ * room falls back to the deterministic questions, so the failure is visible and safe
+ * rather than silent.
+ */
+export const QUESTIONS_MODEL = process.env.GEMINI_QUESTIONS_MODEL ?? 'gemini-flash-lite-latest';
 
 /** Matches the cover-letter path's budget for the same reason: cost and injection surface. */
 const JD_PROMPT_CHARS = 6000;
@@ -162,7 +180,7 @@ export async function geminiQuestions(input: QuestionInputs): Promise<InterviewQ
   const key = getGeminiKey();
   if (!key) throw new GeminiError('GOOGLE_GENERATIVE_AI_API_KEY is not set.');
 
-  const response = await fetch(ENDPOINT(GEMINI_MODEL), {
+  const response = await fetch(ENDPOINT(QUESTIONS_MODEL), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     cache: 'no-store',
