@@ -1,7 +1,10 @@
 'use client';
 
 /**
- * The left collapsible tab: the transcript, and the typed way in.
+ * The right-hand drawer: the transcript, and the typed way in.
+ *
+ * Collapses to a single square icon button at the edge, the way a code host's
+ * file sidebar does. Fixed, so opening it never reflows the page behind it.
  *
  * TWO NON-NEGOTIABLES LIVE HERE.
  *
@@ -19,7 +22,7 @@
  *
  * Collapsed state is persisted by the parent, which owns the localStorage read.
  */
-import { ChevronLeft, ChevronRight, CornerDownLeft, MapPin } from 'lucide-react';
+import { CornerDownLeft, MapPin, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import type { MatchBrief, TranscriptEntry, VoiceJobStatus } from '@/lib/voice-contract';
@@ -91,6 +94,17 @@ export function TranscriptPanel({
   const [value, setValue] = useState('');
   const listRef = useRef<HTMLOListElement | null>(null);
 
+  // Tell the document the drawer is open, so the page can make room for it
+  // instead of being covered. One attribute on <html>; the width and the easing
+  // live in CSS next to everything else that has to respond to it.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.transcript = open ? 'open' : 'closed';
+    return () => {
+      delete root.dataset.transcript;
+    };
+  }, [open]);
+
   // DERIVED, not synchronised in an effect. The select defaults to the first
   // outstanding question and honours an explicit choice for as long as that choice
   // is still in the list. Doing this with a useEffect + setState would re-render
@@ -128,11 +142,16 @@ export function TranscriptPanel({
         aria-controls={panelId}
         onClick={onToggle}
       >
-        {open ? <ChevronLeft size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
-        <span className="vt-tab-label">
-          Transcript
-          {entries.length ? ` (${entries.length})` : ''}
+        {open ? (
+          <PanelRightClose size={20} aria-hidden="true" />
+        ) : (
+          <PanelRightOpen size={20} aria-hidden="true" />
+        )}
+        <span className="sr-only">
+          {open ? 'Hide transcript' : 'Show transcript'}
+          {entries.length ? `, ${entries.length} entries` : ''}
         </span>
+        {!open && entries.length ? <span className="vt-tab-count">{entries.length}</span> : null}
       </button>
 
       {open ? (

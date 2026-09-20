@@ -63,7 +63,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { AgentFace } from '@/components/AgentFace';
+import { AgentFaceLive } from '@/components/AgentFaceLive';
 import { explainMatch, resolveJobRef } from '@/lib/voice-brief';
 import {
   isVoiceJobStatus,
@@ -249,6 +249,16 @@ function VoiceAgentShell() {
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * The SPEAKER, not the microphone — the nose is drawn as a speaker cone and
+   * that is what it should do. It is plain local state because output volume is
+   * a playback preference, not an operation on a live session: you can silence
+   * the agent before it has said anything, and useConversation applies `volume`
+   * whenever a session does start. conversation.setMuted, by contrast, is
+   * setMicMuted underneath and only means something while connected — that one
+   * stays on the hidden keyboard control.
+   */
+  const [speakerMuted, setSpeakerMuted] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pageContext, setPageContext] = useState<PageBrief | null>(null);
   const [proactiveText, setProactiveText] = useState<string | null>(null);
@@ -336,6 +346,9 @@ function VoiceAgentShell() {
       setOptions(payload.gaps.map((gap) => ({ fieldKey: gap.fieldKey, question: gap.question })));
       setGapsRemaining(payload.gaps.length);
       setUnavailable(payload.unavailableReason);
+      // The face only says "voice is off"; the why belongs next to the typed
+      // input that replaces it.
+      if (payload.unavailableReason) setNote(payload.unavailableReason);
       return payload;
     } catch (error) {
       setUnavailable(`The voice session could not be prepared — ${(error as Error).message}. You can still type your answers.`);
@@ -782,6 +795,7 @@ function VoiceAgentShell() {
   );
 
   const conversation = useConversation({
+    volume: speakerMuted ? 0 : 1,
     clientTools,
     onConnect: ({ conversationId: id }) => {
       live.current.conversationId = id;
@@ -885,6 +899,23 @@ function VoiceAgentShell() {
     conversation.endSession();
   }, [conversation]);
 
+  /**
+   * Flips a flag and nothing else, deliberately.
+   *
+   * Calling conversation.setVolume() here threw "No active conversation. Call
+   * startSession() first." on every click, because the react wrapper's
+   * getConversation() throws rather than no-oping when there is no session —
+   * and with voice unconfigured there never is one. It was also a side effect
+   * inside a setState updater, which StrictMode double-invokes.
+   *
+   * None of it was needed: useConversation already watches the `volume` option
+   * above in an effect guarded on the conversation existing, so the value is
+   * applied when it changes AND when a session later starts.
+   */
+  const toggleSpeaker = useCallback(() => {
+    setSpeakerMuted((wasMuted) => !wasMuted);
+  }, []);
+
   const toggleMute = useCallback(() => {
     conversation.setMuted(!conversation.isMuted);
   }, [conversation]);
@@ -927,6 +958,7 @@ function VoiceAgentShell() {
         status={status}
         isSpeaking={conversation.isSpeaking}
         isMuted={conversation.isMuted}
+        speakerMuted={speakerMuted}
         gapsRemaining={gapsRemaining}
         unavailableReason={unavailable}
         busy={busy}
@@ -934,7 +966,17 @@ function VoiceAgentShell() {
         onDisconnect={disconnect}
         onToggleMute={toggleMute}
         visualState={visualState}
-        visual={<AgentFace mood={visualState} size={120} />}
+        /* The seam PR #14 and #16 both described, closed — and the flat face
+           swapped for the lit one, which speaks the same five states. */
+        visual={
+          <AgentFaceLive
+            mood={visualState}
+            size={120}
+            muted={speakerMuted}
+            nose
+            onNose={toggleSpeaker}
+          />
+        }
       />
     </>
   );

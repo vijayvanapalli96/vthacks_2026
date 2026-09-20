@@ -37,7 +37,6 @@ export default async function ProfilePage() {
   return (
     <main>
       <nav>
-        <strong>Application Workspace</strong>
         <Link href="/applicant">Overview</Link>
         <Link href="/applicant/intake/resume">Add resume</Link>
         <Link href="/applicant/intake/linkedin">Add LinkedIn</Link>
