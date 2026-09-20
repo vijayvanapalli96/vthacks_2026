@@ -97,6 +97,15 @@ export function employerDomainFromPosting(job: Job): string | null {
   }
 }
 
+/**
+ * The agent host to verify for a job. With the picker gone the apply screen can
+ * be reached without ?host=, so it needs an answer from the job alone.
+ */
+export function employerHostForJob(job: Job): string {
+  const domain = guessEmployerDomain(job);
+  return domain ? `employer.${domain}` : '';
+}
+
 export function guessEmployerDomain(job: Job): string {
   if (job.demo) return 'hirewire.biz';
   try {

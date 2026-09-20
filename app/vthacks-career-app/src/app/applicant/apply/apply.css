@@ -521,6 +521,45 @@ nav a[aria-current='page'] {
   font-weight: 800;
 }
 
+/* The posting's own facts, on the screen where the agent is being checked. */
+.job-facts {
+  margin: 0;
+  display: grid;
+  gap: 10px 26px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.job-facts div {
+  min-width: 0;
+}
+
+.job-facts dt {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.job-facts dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.job-source-link {
+  margin: 14px 0 0;
+  font-size: 12px;
+}
+
+.job-source-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 800;
+}
+
 .job-empty {
   margin: 0;
   padding: 18px 22px;

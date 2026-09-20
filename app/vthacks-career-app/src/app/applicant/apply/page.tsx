@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 
 import { SignOutForm } from '@/components/SignOutForm';
 import { TrustApply } from '@/components/TrustApply';
-import { DEMO_JOB, getJob } from '@/lib/jobs';
+import { DEMO_JOB, employerHostForJob, getJob } from '@/lib/jobs';
 import { requireRole } from '@/lib/session';
 
 import './apply.css';
@@ -38,19 +38,23 @@ export default async function ApplyPage({
         <p className="eyebrow">VERIFIED APPLY</p>
         <h1>Prove who is asking before anything leaves.</h1>
         <p>
-          Your agent looks the employer up in GoDaddy&apos;s Agent Name Service, checks its certificates and published
-          card, and scores five trust dimensions. Only then do you choose what to send. If it cannot prove who it is,
-          your agent refuses and says why.
+          Your agent looks this employer up in GoDaddy&apos;s Agent Name Service, checks its certificates and published
+          card, and scores five trust dimensions — before you are asked to send anything. If it cannot prove who it
+          is, your agent refuses and says why.
         </p>
       </section>
       <TrustApply
         name={user.name ?? ''}
         email={user.email ?? ''}
-        initialHost={initialHost}
+        host={initialHost ?? employerHostForJob(selectedJob)}
         job={{
           job_id: selectedJob.job_id,
           title: selectedJob.job_title,
           company: selectedJob.company_name,
+          location: selectedJob.location_text,
+          source: selectedJob.source,
+          source_url: selectedJob.source_url,
+          posted_at: selectedJob.posted_at,
           required_skills: selectedJob.demo ? ['Python', 'SQL'] : undefined,
           preferred_skills: selectedJob.demo ? ['TypeScript'] : undefined,
         }}
