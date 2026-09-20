@@ -19,6 +19,27 @@
 
   --nav-h: 84px;
   --gutter: 34px;
+
+  /* How much of the window the transcript drawer is occupying. The page makes
+     room for it rather than sitting underneath it. */
+  --drawer-w: 0px;
+  --nav-w: 0px;
+  --vw-avail: calc(100vw - var(--drawer-w) - var(--nav-w));
+}
+
+html[data-transcript='open'] { --drawer-w: min(420px, calc(100vw - 72px)); }
+html[data-sidenav='open'] { --nav-w: 248px; }
+
+/* The push itself. On body, so main's auto margins re-centre inside what is
+   left rather than the content simply being clipped. */
+body {
+  padding-right: var(--drawer-w);
+  padding-left: var(--nav-w);
+  transition: padding 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
 }
 
 *, *::before, *::after { box-sizing: border-box; border-radius: 0; }
@@ -76,7 +97,7 @@ nav {
 nav::before {
   content: '';
   position: absolute;
-  inset: 0 calc(50% - 50vw);
+  inset: 0 calc(50% - var(--vw-avail) / 2);
   background: var(--paper);
   border-bottom: 1px solid var(--line);
   z-index: -1;
@@ -272,9 +293,10 @@ main, [id] { scroll-margin-top: 100px; }
 .rail::before {
   content: '';
   position: absolute;
-  inset: 0 calc(50% - 50vw);
+  inset: 0 calc(50% - var(--vw-avail) / 2);
   background: #0b2545;
   z-index: -1;
+  transition: inset 0.42s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* --- Architecture rail: vertical scroll drives horizontal travel --------- */
@@ -385,8 +407,8 @@ main, [id] { scroll-margin-top: 100px; }
 .marquee {
   position: relative;
   z-index: 1;
-  width: 100vw;
-  margin: 56px 0 0 calc(50% - 50vw);
+  width: var(--vw-avail);
+  margin: 56px 0 0 calc(50% - var(--vw-avail) / 2);
   overflow: hidden;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -838,4 +860,123 @@ footer svg { width: 18px; height: 18px; stroke-width: 1.5; color: var(--muted); 
   .handshake-actions {
     flex-wrap: wrap;
   }
+}
+
+/* ===========================================================================
+   WORKSPACE SIDE NAV — a left drawer, mirroring the transcript on the right
+   =========================================================================== */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: var(--nav-h);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--paper);
+}
+.topbar::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(50% - var(--vw-avail) / 2);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  z-index: -1;
+  transition: inset 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.topbar__toggle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.topbar__toggle:hover {
+  border-color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.sidenav {
+  position: fixed;
+  left: 0;
+  top: var(--nav-h);
+  bottom: 0;
+  z-index: 60;
+  width: var(--nav-w);
+  display: flex;
+  flex-direction: column;
+  padding: 26px 18px 22px;
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  animation: sidenav-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* `hidden` sets display:none only at the browser-default level, so the
+   display:flex above beat it and the drawer stayed on screen, clipped to zero
+   width by --nav-w with its text still poking out. Anything that sets an
+   explicit display must opt back out. */
+.sidenav[hidden] { display: none; }
+
+@keyframes sidenav-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.sidenav__label {
+  margin: 0 0 14px;
+  padding: 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sidenav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+
+.sidenav a {
+  display: block;
+  padding: 11px 10px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 17px;
+  border-left: 2px solid transparent;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.sidenav a:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+/* The current page is marked by weight of colour and a rule, not by colour
+   alone — aria-current already says it, this just makes it visible. */
+.sidenav a[aria-current='page'] {
+  color: var(--ink);
+  border-left-color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.sidenav__foot {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.sidenav__foot button { width: 100%; text-align: left; padding: 11px 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sidenav { animation: none; }
+  .topbar::before { transition: none; }
+}
+
+/* Narrow windows cannot afford to give up 248px, so the nav overlays instead
+   of pushing — the page keeps its full width and the drawer sits on top. */
+@media (max-width: 900px) {
+  html[data-sidenav='open'] { --nav-w: 0px; }
+  .sidenav { width: 248px; box-shadow: 18px 0 40px color-mix(in srgb, var(--ink) 10%, transparent); }
 }

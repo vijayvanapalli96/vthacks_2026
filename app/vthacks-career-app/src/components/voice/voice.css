@@ -39,6 +39,11 @@
   pointer-events: none;
 }
 
+/* The dock must NOT be display:none when closed — the toggle button is still a
+   child of it, and position:fixed does not escape a hidden ancestor. The dock
+   already has pointer-events:none and the panel is unmounted, so a closed dock
+   costs nothing on screen. */
+
 .vt-dock > * {
   pointer-events: auto;
 }
@@ -46,21 +51,27 @@
 /* The tab itself: always visible, always the same control, so the collapsed and
    expanded states are one button rather than two that can disagree. */
 /* A square icon button, always the same control in the same place, so the open
-   and closed states cannot disagree. */
+   and closed states cannot disagree.
+   It is lifted OUT of the dock and parked in the header band, level with the
+   side-nav toggle on the opposite side — the two panel controls then read as a
+   pair rather than one in the chrome and one floating in the page. The offset
+   follows the drawer, so an open panel is never covered by its own button. */
 .vt-tab {
-  order: 1;
-  align-self: flex-start;
+  position: fixed;
+  top: calc((var(--nav-h, 84px) - 44px) / 2);
+  right: calc(var(--drawer-w, 0px) + var(--gutter, 34px));
+  z-index: 70;
   display: grid;
   place-items: center;
-  position: relative;
   width: 44px;
   height: 44px;
-  margin: 14px;
+  margin: 0;
   padding: 0;
+  transition: right 0.42s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease,
+    background 0.2s ease;
   border: 1px solid var(--line-strong);
   background: var(--paper);
   color: var(--ink);
-  transition: border-color 0.2s ease, background 0.2s ease;
 }
 .vt-tab:hover { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 4%, var(--paper)); }
 
@@ -85,6 +96,7 @@
 
 .vt-panel {
   order: 2;
+  animation: vt-slide-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
   width: min(420px, calc(100vw - 72px));
   height: 100%;
   display: flex;
@@ -406,10 +418,23 @@
   }
 
   .vt-tab {
-    margin: 10px;
+    right: calc(var(--drawer-w, 0px) + 16px);
   }
 
   .vw {
     width: 150px;
   }
+}
+
+
+/* The drawer arrives on the same curve and duration the page uses to make room
+   for it, so the two read as one movement rather than two. */
+@keyframes vt-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-panel { animation: none; }
+  .vt-tab { transition: border-color 0.2s ease, background 0.2s ease; }
 }

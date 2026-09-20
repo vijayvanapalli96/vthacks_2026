@@ -28,7 +28,6 @@ export default async function ApplyPage({
   return (
     <main>
       <nav>
-        <strong>Application Workspace</strong>
         <Link href="/applicant">
           <ArrowLeft size={16} aria-hidden="true" /> Overview
         </Link>
