@@ -421,6 +421,9 @@ function VoiceAgentShell() {
             mood={visualState}
             size={120}
             muted={conversation.isMuted}
+            // Always drawn, only clickable while there is something to mute. A
+            // control that appears only after you connect is one nobody finds.
+            nose
             onNose={status === 'connected' ? toggleMute : undefined}
           />
         }

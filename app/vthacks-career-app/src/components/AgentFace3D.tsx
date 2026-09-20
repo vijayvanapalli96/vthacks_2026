@@ -90,11 +90,13 @@ function Head({
   mood,
   reduced,
   muted,
+  nose: hasNose,
   onNose,
 }: {
   mood: FaceMood;
   reduced: boolean;
   muted: boolean;
+  nose: boolean;
   onNose?: () => void;
 }) {
   const root = useRef<THREE.Group>(null);
@@ -251,7 +253,7 @@ function Head({
 
       <mesh geometry={mouths[mood]} material={inkMaterial} />
 
-      {onNose ? (
+      {hasNose ? (
         <group
           ref={nose}
           position={noseAt}
@@ -259,27 +261,39 @@ function Head({
           // never reaches the root container, which is where React 17+ listens —
           // otherwise a press here would also start a drag and a click here would
           // also hang up the call.
-          onPointerDown={(event) => {
-            event.nativeEvent.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.stopPropagation();
-            event.nativeEvent.stopPropagation();
-            onNose();
-          }}
-          onPointerOver={(event) => {
-            event.stopPropagation();
-            hovered.current = 1;
-            document.body.style.cursor = 'pointer';
-          }}
-          onPointerOut={() => {
-            hovered.current = 0;
-            document.body.style.cursor = '';
-          }}
+          onPointerDown={onNose ? (event) => event.nativeEvent.stopPropagation() : undefined}
+          onClick={
+            onNose
+              ? (event) => {
+                  event.stopPropagation();
+                  event.nativeEvent.stopPropagation();
+                  onNose();
+                }
+              : undefined
+          }
+          onPointerOver={
+            onNose
+              ? (event) => {
+                  event.stopPropagation();
+                  hovered.current = 1;
+                  document.body.style.cursor = 'pointer';
+                }
+              : undefined
+          }
+          onPointerOut={
+            onNose
+              ? () => {
+                  hovered.current = 0;
+                  document.body.style.cursor = '';
+                }
+              : undefined
+          }
         >
-          <mesh geometry={noseHitGeometry} position={[0, 0, 0.06]}>
-            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-          </mesh>
+          {onNose ? (
+            <mesh geometry={noseHitGeometry} position={[0, 0, 0.06]}>
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+            </mesh>
+          ) : null}
           <mesh geometry={noseGeometry} material={noseMaterial} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0.07]} />
           <mesh geometry={noseRingGeometry} material={noseMaterial} position={[0, 0, 0.01]} />
           {muted ? (
@@ -295,13 +309,19 @@ export default function AgentFace3D({
   mood = 'idle',
   size = 260,
   muted = false,
+  nose = false,
   onNose,
 }: {
   mood?: FaceMood;
   size?: number;
   /** Draws the bar across the speaker cone. */
   muted?: boolean;
-  /** Passing this is what gives the face a nose at all. */
+  /** Draw the speaker-cone nose. Separate from onNose on purpose: the nose is
+   *  part of this face's character whether or not there is a live session to
+   *  mute, and a control that only appears once you are connected is a control
+   *  nobody discovers. */
+  nose?: boolean;
+  /** Makes the nose clickable. Without it the nose is drawn but inert. */
   onNose?: () => void;
 }) {
   const reduced =
@@ -325,7 +345,7 @@ export default function AgentFace3D({
         <ambientLight intensity={2.4} />
         <directionalLight position={[2.5, 3.5, 4]} intensity={1.2} />
         <directionalLight position={[-3, -1, 2]} intensity={0.45} />
-        <Head mood={mood} reduced={reduced} muted={muted} onNose={onNose} />
+        <Head mood={mood} reduced={reduced} muted={muted} nose={nose || Boolean(onNose)} onNose={onNose} />
       </Canvas>
     </div>
   );

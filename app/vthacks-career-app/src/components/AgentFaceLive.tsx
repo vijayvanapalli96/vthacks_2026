@@ -29,14 +29,17 @@ export function AgentFaceLive({
   mood = 'idle',
   size = 260,
   muted = false,
+  nose = false,
   onNose,
 }: {
   mood?: FaceMood;
   size?: number;
   muted?: boolean;
+  /** Draw the speaker-cone nose, live session or not. */
+  nose?: boolean;
   /** Passing this gives the face a nose that mutes the speaker when clicked.
    *  Only the voice widget does; the greeter and the rail stay noseless. */
   onNose?: () => void;
 }) {
-  return <AgentFace3D mood={mood} size={size} muted={muted} onNose={onNose} />;
+  return <AgentFace3D mood={mood} size={size} muted={muted} nose={nose} onNose={onNose} />;
 }
