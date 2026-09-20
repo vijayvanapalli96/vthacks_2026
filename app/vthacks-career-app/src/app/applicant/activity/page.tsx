@@ -1,6 +1,8 @@
-import { ShieldAlert, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
+import { MessagesSquare, ShieldAlert, ShieldCheck } from 'lucide-react';
 
 import { ApplicantNav } from '@/components/ApplicantNav';
+import { recentTranscripts } from '@/lib/a2a/transcript';
 import { recentAudits } from '@/lib/audit';
 import { requireRole } from '@/lib/session';
 
@@ -18,7 +20,12 @@ const kindLabel: Record<string, string> = {
 
 export default async function ActivityPage() {
   const user = await requireRole('applicant');
-  const events = await recentAudits({ userId: user.id, limit: 50 });
+  // The audit log answers "what was decided". The transcripts answer "what was
+  // said", which is a different question and a different collection.
+  const [events, transcripts] = await Promise.all([
+    recentAudits({ userId: user.id, limit: 50 }),
+    recentTranscripts(user.id, 10),
+  ]);
 
   return (
     <main>
@@ -31,6 +38,42 @@ export default async function ActivityPage() {
           the names of the fields, never their contents, so the log itself cannot leak your data.
         </p>
       </section>
+
+      {transcripts?.length ? (
+        <section className="panel" aria-labelledby="transcripts-h">
+          <header>
+            <div>
+              <small>AGENT TO AGENT</small>
+              <h2 id="transcripts-h">Saved exchanges</h2>
+            </div>
+            <MessagesSquare aria-hidden="true" />
+          </header>
+          <p>
+            The message-by-message record of each handshake — the registry lookup, the published card, the trust
+            gate, the signed envelope, and the employer&rsquo;s verdict on your agent coming back.
+          </p>
+          <ul className="job-list">
+            {transcripts.map((transcript) => (
+              <li key={transcript.transcript_id}>
+                <Link
+                  className="job-row job-row-link"
+                  href={`/applicant/transcript/${encodeURIComponent(transcript.transcript_id)}`}
+                >
+                  <span>
+                    <strong>{transcript.employer}</strong>
+                    <small>
+                      {transcript.turns.length} messages · {new Date(transcript.finished_at).toLocaleString()}
+                    </small>
+                  </span>
+                  <span className={`pill ${transcript.outcome === 'submitted' ? 'pill-pass' : 'pill-refuse'}`}>
+                    {transcript.outcome.replace(/_/g, ' ')}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {events === null ? (
         <p className="auth-error" role="status">
