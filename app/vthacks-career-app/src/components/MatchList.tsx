@@ -36,8 +36,9 @@
  * jobs", because they are fresh US roles from the boards the scanner reads.
  */
 import Link from 'next/link';
-import { ExternalLink } from 'lucide-react';
+import { BadgeCheck, Check, ChevronRight, ExternalLink, ShieldAlert } from 'lucide-react';
 
+import type { ApplicantJobVerificationMemory } from '@/lib/audit';
 import type { CachedMatches, MatchRow, MatchRunFacts, RemovedRole } from '@/lib/match-read';
 
 import './match.css';
@@ -66,29 +67,71 @@ function dateOnly(value: string | null): string | null {
   return match ? match[1] : value;
 }
 
-function MatchRowView({ row, rank }: { row: MatchRow; rank: number }) {
+/**
+ * Memory of a check already made, not a control — same rule as the openings list
+ * this replaced. Absent memory says "not checked yet" rather than implying a
+ * verdict nobody has reached.
+ */
+function VerificationTag({ state }: { state?: ApplicantJobVerificationMemory }) {
+  if (state?.status === 'verified') {
+    return (
+      <span className="job-tag verified-tag">
+        <BadgeCheck size={13} aria-hidden="true" /> Verified agent
+      </span>
+    );
+  }
+  if (state?.status === 'known_employer') {
+    return (
+      <span className="job-tag known-tag">
+        <Check size={13} aria-hidden="true" /> Real company
+      </span>
+    );
+  }
+  if (state?.status === 'refused') {
+    return (
+      <span className="job-tag refused-tag">
+        <ShieldAlert size={13} aria-hidden="true" /> Not verified
+      </span>
+    );
+  }
+  return <span className="job-tag muted-tag">Not checked yet</span>;
+}
+
+function MatchRowView({
+  row,
+  rank,
+  verification,
+}: {
+  row: MatchRow;
+  rank: number;
+  verification?: ApplicantJobVerificationMemory;
+}) {
   const score = Math.round(row.score);
   const word = band(row);
   const posted = dateOnly(row.posted_at);
 
   return (
     <li className="match-row">
-      {/* The whole card opens the job. A stretched overlay rather than wrapping
-          the card in an anchor: the card already contains a link to the
-          original posting, and anchors cannot nest. Everything interactive
-          inside sits above this one. */}
+      {/* Makes the whole card a mouse target. Hidden from assistive tech and
+          skipped by the keyboard on purpose: the title link and the "open" link
+          below already reach this job, and a third route to the same place
+          would just be announced twice more. */}
       <Link
         className="match-row-open"
         href={`/applicant/jobs/${encodeURIComponent(row.job_id)}`}
-        aria-label={`Open ${row.title ?? 'this role'}${row.company ? ` at ${row.company}` : ''}`}
+        aria-hidden="true"
+        tabIndex={-1}
       />
       <div className="match-head">
         <span className="match-rank" aria-hidden="true">
           {rank}
         </span>
         <span className="match-who">
-          <strong>{row.title ?? 'Untitled role'}</strong>
+          <Link className="match-title-link" href={`/applicant/jobs/${encodeURIComponent(row.job_id)}`}>
+            <strong>{row.title ?? 'Untitled role'}</strong>
+          </Link>
           <small>{row.company ?? 'Unnamed employer'}</small>
+          <VerificationTag state={verification} />
         </span>
 
         {/* The percentage, three ways: digits, word, meter. None of them is a colour. */}
@@ -173,6 +216,11 @@ function MatchRowView({ row, rank }: { row: MatchRow; rank: number }) {
             <ExternalLink size={13} aria-hidden="true" />
           </a>
         ) : null}
+        <Link className="match-open" href={`/applicant/jobs/${encodeURIComponent(row.job_id)}`}>
+          Check this employer and apply
+          <span className="sr-only"> — {row.title ?? 'this role'} at {row.company ?? 'this employer'}</span>
+          <ChevronRight size={15} aria-hidden="true" />
+        </Link>
       </p>
     </li>
   );
@@ -245,12 +293,15 @@ export function MatchList({
   removed,
   emptyNote,
   limit,
+  verificationMemory,
 }: {
   result: CachedMatches;
   removed?: RemovedRole[];
   emptyNote?: string;
   /** Show only the first N rows. The count of the rest is stated, never hidden. */
   limit?: number;
+  /** Checks already made, keyed by job_id. Absent is "not checked yet". */
+  verificationMemory?: Record<string, ApplicantJobVerificationMemory>;
 }) {
   if (result.state === 'error') {
     // NEVER "no matches". The truth is that the read failed, and saying anything
@@ -287,7 +338,12 @@ export function MatchList({
     <div className="match-wrap">
       <ol className="match-list">
         {shown.map((row, index) => (
-          <MatchRowView key={row.job_id} row={row} rank={index + 1} />
+          <MatchRowView
+            key={row.job_id}
+            row={row}
+            rank={index + 1}
+            verification={verificationMemory?.[row.job_id]}
+          />
         ))}
       </ol>
 
