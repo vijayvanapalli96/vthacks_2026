@@ -277,6 +277,255 @@
   cursor: not-allowed;
 }
 
+/* --------------------------------------------- the actor half of the dock ---
+   Every control below is the TYPED equivalent of a spoken tool, calling the same
+   endpoint. Hard rule 6 is not satisfied by a microphone: if an action were only
+   reachable by speaking, a keyboard user, a screen-reader user and anyone in a loud
+   room would all be locked out of it.
+
+   CONTRAST, measured, on the backgrounds actually used here:
+     --vt-ink   #14211b on #ffffff  → 14.1:1
+     --vt-dim   #4d5a51 on #ffffff  →  7.4:1   (and 6.6:1 on #f4f6f0)
+     --vt-agent #0b4933 on #f7fbf8  →  8.1:1
+     #7a5c00 on #fdfaf0             →  5.3:1   (the proactive card)
+     #565f58 on #dce3dc             →  4.6:1   (disabled controls stay readable)
+   --------------------------------------------------------------------------- */
+
+/* Where the agent thinks you are. Shown, not merely claimed: if it is wrong about
+   the page, you can see that it is wrong before it acts on it. */
+.vt-page {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--vt-agent);
+}
+
+/* Proactivity, as text, for when no conversation is open. Same words the agent
+   would have said. The app never opens a microphone to tell you something. */
+.vt-proactive {
+  margin: 0;
+  padding: 12px 18px;
+  background: #fdfaf0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid #b08900;
+}
+
+.vt-proactive p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #5f4a00;
+}
+
+.vt-proactive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* --- the match digest: show ten, while the voice speaks three --- */
+
+.vt-matches {
+  border-top: 1px solid var(--line);
+  padding: 12px 18px;
+  /* Shrinks before the transcript does, and scrolls rather than pushing the typed
+     input off the bottom of the panel — the typed path is P0 and must always be
+     reachable without scrolling past ten job cards. */
+  flex: 0 1 auto;
+  max-height: 46%;
+  overflow-y: auto;
+  background: #fbfcfa;
+}
+
+.vt-matches-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vt-matches-head h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  color: var(--vt-dim);
+}
+
+.vt-matches-note,
+.vt-matches-empty {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--vt-dim);
+}
+
+.vt-match-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.vt-match {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: white;
+  padding: 10px 11px;
+}
+
+.vt-match-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* The rank is shown because it is what an ordinal resolves against — "the second
+   one" has to mean the same thing to the user and to the agent. */
+.vt-match-rank {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 850;
+  color: var(--vt-dim);
+  min-width: 14px;
+}
+
+.vt-match-id {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.vt-match-id strong {
+  font-size: 13px;
+  color: var(--vt-ink);
+}
+
+.vt-match-id span {
+  font-size: 11.5px;
+  color: var(--vt-dim);
+}
+
+.vt-match-score {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 850;
+  color: var(--vt-agent);
+}
+
+/* HARD RULE 4. There is no rule below that hides this, and no variant of the card
+   without it: an action — or a score — never renders without its reason. */
+.vt-match-reason {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--vt-ink);
+}
+
+.vt-match-skills {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--vt-dim);
+}
+
+.vt-match-skills-label {
+  font-weight: 800;
+  color: var(--vt-agent);
+}
+
+.vt-match-skills-gap .vt-match-skills-label {
+  color: #7a5c00;
+}
+
+.vt-match-flag {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--vt-fail);
+}
+
+.vt-match-actions {
+  margin-top: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.vt-match-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vt-match-status label {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--vt-dim);
+}
+
+.vt-match-status select {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 7px;
+  border: 1px solid #b9c4bb;
+  border-radius: 8px;
+  background: white;
+  color: var(--vt-ink);
+}
+
+.vt-match-status select:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* One small button style for every typed equivalent of a spoken action. */
+.vt-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  background: white;
+  color: var(--green);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 750;
+}
+
+.vt-mini:focus-visible,
+.vt-proactive .vt-mini:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+}
+
+.vt-mini:disabled {
+  border-color: #c7cfc7;
+  background: #dce3dc;
+  color: #565f58;
+  cursor: not-allowed;
+}
+
+/* The approval-page control is styled apart from the rest on purpose. It is the one
+   button that leads toward releasing anything, and it still only leads to the page
+   where a human approves it — there is no apply tool and no apply button. */
+.vt-mini-gate {
+  border-color: #7a5c00;
+  color: #7a5c00;
+}
+
+.vt-mini-quiet {
+  border-color: #b9c4bb;
+  color: var(--vt-dim);
+}
+
 /* --------------------------------------------------- the floating control --- */
 
 .vw {

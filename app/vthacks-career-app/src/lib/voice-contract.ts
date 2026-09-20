@@ -7,22 +7,37 @@
  * two that drift.
  *
  * Nothing in this file may import anything that touches a credential.
+ *
+ * The one import below is type-only and points at `voice-brief.ts`, which has no
+ * imports of its own — not even type imports — so this stays bundleable into a
+ * client component.
  */
+import type { MatchBrief, PageBrief } from '@/lib/voice-brief';
 
 /**
  * Every kind of thing the agent can report having DONE.
  *
- * Only `profile_updated` is reachable today — that is the honest state of the
- * product and the transcript should not imply otherwise. The list is a union
- * rather than a string so `job_matched`, `refused` and `interview_feedback`
- * become new cases in the renderer's switch (which TypeScript will then demand
- * you handle) instead of a rewrite.
+ * `profile_updated` was the only reachable one when the agent could only ask
+ * questions. Making it an ACTOR reached three more: `job_matched` (a match run, a
+ * read-out, or an explanation), `refused` (the agent declining — a job id that does
+ * not resolve, or being asked to apply) and `navigated` / `job_status_set` for the
+ * two things it now does on the user's behalf.
+ *
+ * `interview_feedback` is still unreached and is left in deliberately: the interviewer
+ * persona is a separate feature and the honest state of this list is that it has a
+ * case nothing produces yet.
+ *
+ * The union is the mechanism, not decoration — adding a kind is a compile error in
+ * TranscriptAction's exhaustive switch until it is handled, rather than a silent
+ * unlabelled row.
  */
 export const VOICE_ACTION_KINDS = [
   'profile_updated',
   'job_matched',
   'refused',
   'interview_feedback',
+  'navigated',
+  'job_status_set',
 ] as const;
 
 export type VoiceActionKind = (typeof VOICE_ACTION_KINDS)[number];
@@ -93,5 +108,161 @@ export type TranscriptEntry =
       state: 'pending' | 'done' | 'failed';
       text: string;
       fieldKey?: string;
+      /** The job the action was about, when it was about one. */
+      jobId?: string;
       at: number;
     };
+
+/* ==========================================================================
+ * THE ACTOR HALF. Everything below exists because the agent stopped being a
+ * question-asker. Each type belongs to exactly one route, named above it.
+ * ========================================================================== */
+
+/**
+ * GET /api/voice/context?path=…&job=…
+ *
+ * The page brief. Everything in `PageBrief` has been through the allow-list in
+ * `voice-brief.ts`; nothing in it came from `contact.*`. See that file before
+ * widening this.
+ */
+export type VoicePageContextResponse = {
+  ok: true;
+  context: PageBrief;
+  /**
+   * Which match run produced `context.matches`.
+   *
+   * Carried so the browser can tell a run it has ALREADY told the user about from a
+   * new one that just landed. That is the whole of proactivity: a changed `run_id`
+   * means "these are new, volunteer them", and an unchanged one means stay quiet. The
+   * alternative — announcing on every page load — is an agent that repeats itself
+   * until you close the tab.
+   */
+  run: { run_id: string | null; started_at: string | null } | null;
+  /** Only present when the PII assertion tripped, which should never happen. */
+  redacted?: string;
+};
+
+/**
+ * The statuses `POST /api/pipeline/status` accepts. Validated here so a
+ * transcribed word cannot become an arbitrary stage string.
+ *
+ * `applied` records WHAT THE USER SAYS HAPPENED. It is never the agent claiming it
+ * applied — the agent cannot apply (hard rule 3) and has no tool that could.
+ */
+export const VOICE_JOB_STATUSES = ['saved', 'applied', 'interviewing', 'rejected', 'dismissed'] as const;
+
+export type VoiceJobStatus = (typeof VOICE_JOB_STATUSES)[number];
+
+export function isVoiceJobStatus(value: unknown): value is VoiceJobStatus {
+  return typeof value === 'string' && (VOICE_JOB_STATUSES as readonly string[]).includes(value);
+}
+
+/** Where `open_page` is allowed to send the browser. A closed set, not a URL. */
+export const VOICE_NAV_TARGETS = [
+  'dashboard',
+  'matches',
+  'job',
+  'apply',
+  'profile',
+  'activity',
+  'pipeline',
+] as const;
+
+export type VoiceNavTarget = (typeof VOICE_NAV_TARGETS)[number];
+
+export function isVoiceNavTarget(value: unknown): value is VoiceNavTarget {
+  return typeof value === 'string' && (VOICE_NAV_TARGETS as readonly string[]).includes(value);
+}
+
+/**
+ * POST /api/voice/resolve — turn whatever the model said into a real job, or refuse.
+ *
+ * The model WILL produce a job id that does not exist: invented outright, or
+ * mis-transcribed from "the second one". So resolution happens server-side against
+ * the signed-in user's OWN cached match run and nothing else. No free-text search
+ * over 16k postings, no fuzzy guess at a plausible neighbour.
+ */
+export type VoiceResolveRequest = {
+  /** Whatever the model produced: a job id, an ordinal, or a company name. */
+  jobRef?: string;
+  target?: VoiceNavTarget;
+  conversationId?: string;
+  source?: 'voice' | 'form';
+};
+
+export type VoiceResolveResponse =
+  | {
+      ok: true;
+      kind: 'navigated';
+      match: MatchBrief | null;
+      /** The in-app path the browser should push. Always app-relative. */
+      href: string;
+      /** Hard rule 4: never an action without a reason string. */
+      reason: string;
+    }
+  | {
+      ok: false;
+      kind: 'refused';
+      reason: string;
+      /**
+       * Hard rule 3. A refusal releases NOTHING. This array is empty on every
+       * refusal this codebase can produce, and a test asserts it.
+       */
+      fields_released: [];
+    };
+
+/**
+ * POST /api/voice/status — the voice/typed shim in FRONT of the pipeline lane's
+ * route. It validates, forwards to POST /api/pipeline/status, and logs. It does not
+ * own a table and must never write one; if the pipeline route is missing this
+ * returns `blocked` and says so out loud rather than inventing a second store for
+ * the same fact.
+ */
+export type VoiceStatusRequest = {
+  jobRef?: string;
+  status?: string;
+  note?: string;
+  conversationId?: string;
+  source?: 'voice' | 'form';
+};
+
+export type VoiceStatusResponse =
+  | {
+      ok: true;
+      kind: 'job_status_set';
+      jobId: string;
+      status: VoiceJobStatus;
+      previousStatus: string | null;
+      at: string;
+      reason: string;
+    }
+  | {
+      ok: false;
+      kind: 'refused' | 'blocked';
+      reason: string;
+      fields_released: [];
+    };
+
+/**
+ * POST /api/voice/event — the producer `voice_events` never had.
+ *
+ * Every action the agent takes writes one row: who, which conversation, what kind,
+ * which job, the outcome, and the spoken reason. That is the answer to "what did the
+ * agent do on my behalf", which is the whole claim the product makes.
+ */
+export type VoiceEventRequest = {
+  kind: VoiceActionKind;
+  /** The spoken reason. Required — hard rule 4. */
+  text: string;
+  outcome?: 'ok' | 'refused' | 'failed';
+  jobId?: string;
+  conversationId?: string;
+  detail?: Record<string, unknown>;
+};
+
+export type VoiceEventResponse = { ok: boolean; error?: string };
+
+// Re-exported so a consumer can name these shapes from one module. voice-brief.ts
+// has no imports of its own, so this costs nothing and keeps one definition rather
+// than two that drift.
+export type { MatchBrief, PageBrief };
