@@ -89,6 +89,12 @@ if (-not $AppOnly) {
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/remote-agent.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/trust-policy.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/mutual-match.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
+  # THIS LIST IS THE DEPLOY. A shared module that is not named here is simply
+  # absent from the image, and the agent crash-loops on an ERR_MODULE_NOT_FOUND
+  # the moment it is imported — which is exactly what screening.mjs did, taking
+  # both live agents down until it was added. Add the file here in the same
+  # commit that adds the import.
+  Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/screening.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
   Copy-Item -LiteralPath (Join-Path $repoRoot "agents/shared/signed-envelope.mjs") -Destination (Join-Path $stagingRoot "agents/shared")
   Copy-Item -LiteralPath $requiredFiles[0] -Destination (Join-Path $stagingRoot "certs/employer.leaf.pem")
   Copy-Item -LiteralPath $requiredFiles[1] -Destination (Join-Path $stagingRoot "certs/employer.key")
