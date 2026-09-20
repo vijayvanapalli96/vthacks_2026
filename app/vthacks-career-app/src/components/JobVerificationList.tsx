@@ -25,6 +25,39 @@ function hostFromAnsName(ansName: string) {
   return /^ans:\/\/v\d+\.\d+\.\d+\.(.+)$/i.exec(ansName)?.[1]?.toLowerCase() ?? '';
 }
 
+type DiscoveryPayload = {
+  error?: string;
+  agent?: { ans_name?: string };
+  verification?: { verdict?: 'pass' | 'refuse'; spoken_reason?: string };
+};
+
+/** What went wrong, in words an applicant can act on. */
+function failureReason(response: Response) {
+  if (response.status === 401 || response.status === 403) {
+    return 'Your session has expired. Sign in again to check this employer.';
+  }
+  if (response.status >= 500) {
+    return 'The employer lookup failed on our side. Nothing was sent.';
+  }
+  return 'No verified agent was found for this employer. Nothing was sent.';
+}
+
+/**
+ * A proxy timeout or an error page answers with HTML, not JSON. Parsing that
+ * blind puts "Unexpected token '<'" in front of the applicant, which says
+ * nothing about their application — so read the body once and fall back to a
+ * reason drawn from the status code.
+ */
+async function readJson(response: Response): Promise<DiscoveryPayload> {
+  const body = await response.text().catch(() => '');
+  try {
+    return JSON.parse(body) as DiscoveryPayload;
+  } catch {
+    if (body) console.error('Employer discovery returned a non-JSON response', response.status, body.slice(0, 200));
+    return { error: failureReason(response) };
+  }
+}
+
 export function JobVerificationList({
   jobs,
   initialMemory,
@@ -44,14 +77,13 @@ export function JobVerificationList({
       const response = await fetch('/api/jobs/discover-agent', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ job_id: job.job_id }),
+        body: JSON.stringify({
+          job_id: job.job_id,
+          job_url: job.source_url ?? undefined,
+        }),
       });
-      const payload = await response.json() as {
-        error?: string;
-        agent?: { ans_name?: string };
-        verification?: { verdict?: 'pass' | 'refuse'; spoken_reason?: string };
-      };
-      if (!response.ok || !payload.verification) throw new Error(payload.error ?? 'Verification failed.');
+      const payload = await readJson(response);
+      if (!response.ok || !payload.verification) throw new Error(payload.error ?? failureReason(response));
       setMemory((current) => ({
         ...current,
         [job.job_id]: {

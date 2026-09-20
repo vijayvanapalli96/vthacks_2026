@@ -10,18 +10,45 @@ import { getJob, guessEmployerDomain } from '../../../../lib/jobs';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Always answers with JSON. Anything that escapes this handler is served as an
+ * HTML error page by the platform, and the caller's `response.json()` turns it
+ * into "Unexpected token '<'" in front of the applicant — a parser message in
+ * place of a verification result.
+ */
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
-  if (session.user.role !== 'applicant') return NextResponse.json({ error: 'Applicant role required.' }, { status: 403 });
+  try {
+    const session = await auth();
+    if (!session?.user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    if (session.user.role !== 'applicant') return NextResponse.json({ error: 'Applicant role required.' }, { status: 403 });
 
-  const body = await request.json().catch(() => ({})) as { job_id?: string };
-  if (!body.job_id) return NextResponse.json({ error: 'job_id is required' }, { status: 400 });
-  const job = await getJob(body.job_id);
-  if (!job) return NextResponse.json({ error: 'The selected job could not be found.' }, { status: 404 });
-  const employerDomain = guessEmployerDomain(job);
-  if (!employerDomain) return NextResponse.json({ error: 'The employer domain could not be determined.' }, { status: 422 });
+    const body = await request.json().catch(() => ({})) as { job_id?: string };
+    if (!body.job_id) return NextResponse.json({ error: 'job_id is required' }, { status: 400 });
+    // The warehouse can be cold or asleep, and getJob throws when it is.
+    const job = await getJob(body.job_id);
+    if (!job) return NextResponse.json({ error: 'The selected job could not be found.' }, { status: 404 });
+    const employerDomain = guessEmployerDomain(job);
+    if (!employerDomain) return NextResponse.json({ error: 'The employer domain could not be determined.' }, { status: 422 });
 
+    return await discover({ userId: session.user.id ?? null, job, employerDomain });
+  } catch (error) {
+    // Nothing reached the employer, so say that rather than let the platform
+    // answer with an HTML error page the caller cannot parse.
+    console.error('Could not start employer agent discovery', error);
+    return NextResponse.json({
+      error: 'This employer could not be checked right now. Nothing was sent.',
+    }, { status: 503 });
+  }
+}
+
+type DiscoveryInput = {
+  userId: string | null;
+  job: NonNullable<Awaited<ReturnType<typeof getJob>>>;
+  employerDomain: string;
+};
+
+/** The ANS lookup itself: a miss is a recorded refusal, not an error. */
+async function discover({ userId, job, employerDomain }: DiscoveryInput) {
   try {
     const result = await discoverEmployerAgent({ employerDomain });
     const [linkPersisted, auditId] = await Promise.all([
@@ -46,7 +73,7 @@ export async function POST(request: Request) {
         spoken_reason: result.spoken_reason,
         dimensions: result.dimensions,
         fields_released: [],
-        user_id: session.user.id,
+        user_id: userId,
         job_id: job.job_id,
       }),
     ]);
@@ -79,7 +106,7 @@ export async function POST(request: Request) {
       spoken_reason: spokenReason,
       dimensions,
       fields_released: [],
-      user_id: session.user.id,
+      user_id: userId,
       job_id: job.job_id,
     });
     return NextResponse.json({
