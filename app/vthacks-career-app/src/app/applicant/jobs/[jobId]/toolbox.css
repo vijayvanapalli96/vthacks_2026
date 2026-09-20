@@ -1,0 +1,387 @@
+/* The job detail page and its document toolbox.
+
+   COLOURS COME FROM TOKENS, NEVER LITERALS — same rule apply.css states. The
+   locked palette lives in globals.css (--paper #eef4ed / --ink #0b2545) and
+   flips wholesale in the dark block there, so every colour below is a token or
+   a color-mix of one. A literal hex here would survive the theme flip and turn
+   into 2:1 text in dark mode.
+
+   CONTRAST, measured against the light theme:
+     --ink   #0b2545 on --paper #eef4ed   13.9:1
+     --muted (62% ink on paper)            5.6:1   <- body-adjacent, above 4.5
+     --failure #8c2f39 on --paper          6.4:1
+     --success #3b6064 on --paper          6.1:1
+   The dark block in globals.css re-mixes all four from the flipped --ink, so
+   the ratios hold there too. Nothing below drops --muted under 14px, because
+   5.6:1 at 12px is legible but unkind. */
+
+.jd-wrap {
+  display: grid;
+  gap: 0;
+}
+
+/* --- Context header ------------------------------------------------------ */
+
+.jd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.jd-meta a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --- The match read, or its honest absence ------------------------------- */
+
+.jd-match {
+  border: 1px solid var(--line-strong);
+  padding: 20px 22px;
+  margin-top: 26px;
+  display: grid;
+  gap: 10px;
+  max-width: 900px;
+}
+
+.jd-match--none {
+  border-style: dashed;
+}
+
+.jd-score {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.jd-score b {
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.jd-reason {
+  margin: 0;
+  line-height: 1.6;
+  max-width: 68ch;
+}
+
+/* --- The toolbox -------------------------------------------------------- */
+
+.jd-group {
+  margin-top: 34px;
+}
+
+.jd-group > p {
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 72ch;
+  margin: 6px 0 18px;
+}
+
+.jd-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 14px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* A tool control is a BUTTON, not a div with a click handler. That is what makes
+   it reachable by Tab, operable by Space and Enter, and announced as a button.
+   The cost line is inside the button on purpose: a screen-reader user hears
+   "Cover letter, one model call, about twenty to forty seconds" as the accessible
+   name, which is the whole point of labelling cost. */
+.jd-tool {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  padding: 16px 17px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.jd-tool:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--wash);
+}
+
+.jd-tool:disabled {
+  /* Not opacity: a 0.5-alpha token drops --muted text under 3:1. A disabled
+     control still has to be readable, because the sentence explaining WHY it is
+     disabled is the most important text on it. */
+  border-style: dashed;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.jd-tool strong {
+  font-weight: 400;
+  font-size: 19px;
+}
+
+.jd-tool .jd-cost {
+  font-size: 13.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.jd-tool--paid .jd-cost {
+  color: var(--success);
+}
+
+.jd-tool .jd-what {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.jd-tool--busy strong::after {
+  content: ' …';
+}
+
+/* --- Status + results --------------------------------------------------- */
+
+/* The live region. Kept in the DOM at all times — an aria-live region that is
+   added to the page at the moment it gets content is frequently not announced,
+   because the assistive tech never observed it becoming non-empty. */
+.jd-status {
+  margin: 22px 0 0;
+  min-height: 1.6em;
+  line-height: 1.6;
+  color: var(--ink);
+  max-width: 72ch;
+}
+
+.jd-status:empty {
+  margin-top: 0;
+}
+
+.jd-result {
+  border-top: 1px solid var(--line);
+  margin-top: 30px;
+  padding-top: 24px;
+  display: grid;
+  gap: 14px;
+}
+
+.jd-result h3 {
+  font-size: 21px;
+}
+
+.jd-result .jd-reason {
+  color: var(--muted);
+}
+
+.jd-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin: 0;
+}
+
+.jd-lists > div {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.jd-lists small {
+  letter-spacing: 0.14em;
+}
+
+.jd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.jd-chips li {
+  border: 1px solid var(--line-strong);
+  padding: 4px 10px;
+  font-size: 14.5px;
+}
+
+.jd-chips--gap li {
+  border-color: color-mix(in srgb, var(--failure) 45%, transparent);
+  color: var(--failure);
+}
+
+.jd-chips--have li {
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  color: var(--success);
+}
+
+.jd-bullets {
+  display: grid;
+  gap: 14px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  counter-reset: jd-bullet;
+}
+
+.jd-bullets li {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 14px;
+  line-height: 1.55;
+}
+
+.jd-bullets li.is-lead {
+  border-left-color: var(--success);
+}
+
+.jd-bullets .jd-why {
+  display: block;
+  color: var(--muted);
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+/* --- Generated document ------------------------------------------------- */
+
+.jd-doc {
+  border: 1px solid var(--line-strong);
+  padding: 22px;
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-size: 17px;
+  max-width: 74ch;
+  margin: 0;
+}
+
+.jd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+/* --- Verification ------------------------------------------------------- */
+
+.jd-verdict {
+  border: 2px solid var(--line-strong);
+  padding: 18px 20px;
+  display: grid;
+  gap: 10px;
+  max-width: 74ch;
+}
+
+.jd-verdict--pass {
+  border-color: color-mix(in srgb, var(--success) 60%, transparent);
+}
+
+.jd-verdict--warn {
+  border-color: var(--line-strong);
+  border-style: dashed;
+}
+
+/* A blocked document gets the loudest border on the page. It is the one state
+   where the product refuses to do what was asked, and a refusal the reader has
+   to hunt for is a refusal that reads as a bug. */
+.jd-verdict--block {
+  border-color: var(--failure);
+  background: color-mix(in srgb, var(--failure) 6%, transparent);
+}
+
+.jd-verdict h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.jd-findings {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.jd-findings li {
+  line-height: 1.55;
+  font-size: 16px;
+}
+
+.jd-findings code {
+  border: 1px solid var(--line-strong);
+  padding: 1px 6px;
+}
+
+.jd-findings .is-block code {
+  border-color: var(--failure);
+  color: var(--failure);
+}
+
+/* --- Prior artifacts ---------------------------------------------------- */
+
+.jd-history {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 14px 0 0;
+  list-style: none;
+}
+
+.jd-history li {
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+}
+
+.jd-history .jd-when {
+  color: var(--muted);
+  font-size: 14.5px;
+}
+
+.jd-empty {
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 68ch;
+}
+
+/* Inputs the optional angle / question use. */
+.jd-field {
+  display: grid;
+  gap: 6px;
+  max-width: 54ch;
+  margin-top: 18px;
+}
+
+.jd-field label {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.jd-field input,
+.jd-field textarea {
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  padding: 10px 12px;
+}
+
+.jd-field textarea {
+  min-height: 4.5em;
+  resize: vertical;
+}
