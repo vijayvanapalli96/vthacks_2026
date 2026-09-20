@@ -1,11 +1,11 @@
 import Link from 'next/link';
-import { BadgeCheck, ChevronRight, Target } from 'lucide-react';
+import { BadgeCheck, ChevronRight, Radio, Target } from 'lucide-react';
 
 import { ApplicantNav } from '@/components/ApplicantNav';
 import { MatchList } from '@/components/MatchList';
 import { MatchRunButton } from '@/components/MatchRunButton';
 import { applicantJobVerificationMemory } from '@/lib/audit';
-import { DEMO_JOB } from '@/lib/jobs';
+import { A2A_PLACEHOLDER_JOB, DEMO_JOB, employerHostForJob } from '@/lib/jobs';
 import { readMatches } from '@/lib/match-read';
 import { requireRole } from '@/lib/session';
 
@@ -28,6 +28,11 @@ export const dynamic = 'force-dynamic';
  * verified-apply path, it is not a real posting, and the match agent does not
  * rank it — so if it were folded into the list above it would either vanish or
  * have to be given a fabricated score. It is labelled as a demo on screen.
+ *
+ * A THIRD, LAST SECTION is a placeholder internship at HireWire whose row does
+ * not open a job at all: it links into /applicant/apply, the agent-to-agent
+ * screen. It is there so the A2A lane can be reached in one click without first
+ * passing the employer check on a detail page, and it is labelled a placeholder.
  *
  * Reads the CACHED run — zero model calls — so navigating here does not re-run
  * the agent.
@@ -110,6 +115,46 @@ export default async function JobsPage() {
                 </small>
               </span>
               <span className="job-tag">ANS demo employer</span>
+              <ChevronRight size={17} aria-hidden="true" />
+            </Link>
+          </li>
+        </ul>
+      </section>
+
+      {/* A PLACEHOLDER, kept deliberately separate from both the ranked list and
+          the demo employer above. It is not a posting and it is not scored; it
+          exists so the agent-to-agent lane is reachable in one click. Its row
+          skips the job detail page and opens /applicant/apply — the A2A screen
+          that already exists — with the registered employer agent host attached,
+          which is the only reason this card is worth a row at all. */}
+      <section className="panel" aria-labelledby="a2a-h">
+        <header>
+          <div>
+            <small>AGENT TO AGENT</small>
+            <h2 id="a2a-h">Open the A2A lane directly</h2>
+          </div>
+          <Radio aria-hidden="true" />
+        </header>
+        <p>
+          A placeholder internship at HireWire. Opening it goes straight to the agent-to-agent screen, where
+          your agent verifies the employer agent and you approve each field before anything is sent.
+        </p>
+        <ul className="job-list">
+          <li>
+            <Link
+              className="job-row job-row-link"
+              href={`/applicant/apply?host=${encodeURIComponent(
+                employerHostForJob(A2A_PLACEHOLDER_JOB),
+              )}&job=${encodeURIComponent(A2A_PLACEHOLDER_JOB.job_id)}`}
+            >
+              <span>
+                <strong>{A2A_PLACEHOLDER_JOB.job_title}</strong>
+                <small>
+                  {A2A_PLACEHOLDER_JOB.company_name}
+                  {A2A_PLACEHOLDER_JOB.location_text ? ` · ${A2A_PLACEHOLDER_JOB.location_text}` : ''}
+                </small>
+              </span>
+              <span className="job-tag">A2A communication</span>
               <ChevronRight size={17} aria-hidden="true" />
             </Link>
           </li>
