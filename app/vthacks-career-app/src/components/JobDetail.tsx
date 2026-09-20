@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowUpRight, BadgeCheck, Check, Loader2, PenLine, ShieldAlert } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck, Check, ClipboardCheck, Loader2, PenLine, ShieldAlert } from 'lucide-react';
 
 type Signal = { name: string; passed: boolean; reason: string };
 type Tier = 'agent_verified' | 'known_employer' | 'unverified';
@@ -58,6 +58,13 @@ export function JobDetail({
 }) {
   const [check, setCheck] = useState<Check>({ state: 'checking' });
   const [prepared, setPrepared] = useState<Prepared>({ state: 'idle' });
+  /**
+   * Set when the candidate says they finished the application themselves, on the
+   * dead-end path below. It is their statement about the world, recorded as
+   * such — this app never types on an ATS it cannot drive, and must not imply
+   * otherwise by showing a success it did not produce.
+   */
+  const [tracked, setTracked] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
 
   const run = useCallback(async () => {
     setCheck({ state: 'checking' });
@@ -121,6 +128,22 @@ export function JobDetail({
         state: 'error',
         message: error instanceof Error ? error.message : 'Nothing was prepared.',
       });
+    }
+  }
+
+  /** The one pipeline write path (hard rule 5): POST /api/pipeline/status. */
+  async function trackApplied() {
+    setTracked('saving');
+    try {
+      const response = await fetch('/api/pipeline/status', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ job_id: job.job_id, status: 'applied', source: 'ui' }),
+      });
+      if (!response.ok) throw new Error('rejected');
+      setTracked('done');
+    } catch {
+      setTracked('error');
     }
   }
 
@@ -315,6 +338,46 @@ export function JobDetail({
                         <ArrowUpRight size={13} aria-hidden="true" />
                       </a>
                     </p>
+                  ) : null}
+
+                  {/* NOTHING WAS TYPED, so the screen does not pretend otherwise.
+                      An employer whose ATS this agent cannot drive is a dead end
+                      for the agent, not for the student: they finish on the
+                      company's own site, and this records that they did. The
+                      stage is written only when THEY say so — the app has no way
+                      to observe a submission it did not make, and a button that
+                      claimed one would be the single dishonest thing in a
+                      product whose whole argument is that it refuses out loud. */}
+                  {prepared.fields.length === 0 ? (
+                    <div className="trust-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={trackApplied}
+                        disabled={tracked === 'saving' || tracked === 'done'}
+                      >
+                        {tracked === 'saving' ? (
+                          <>
+                            <Loader2 size={16} className="spin" aria-hidden="true" /> Recording…
+                          </>
+                        ) : tracked === 'done' ? (
+                          <>
+                            <Check size={16} aria-hidden="true" /> On your pipeline as applied
+                          </>
+                        ) : (
+                          <>
+                            <ClipboardCheck size={16} aria-hidden="true" /> I applied on their site — track it
+                          </>
+                        )}
+                      </button>
+                      <p className="muted" aria-live="polite">
+                        {tracked === 'done'
+                          ? 'Recorded against your account. Nothing was sent to the employer by us.'
+                          : tracked === 'error'
+                            ? 'That could not be recorded just now. Your application on their site is unaffected.'
+                            : 'Moves this posting to Applied on your pipeline board. It records what you did; it does not send anything.'}
+                      </p>
+                    </div>
                   ) : null}
                 </div>
               ) : prepared.state === 'error' ? (
