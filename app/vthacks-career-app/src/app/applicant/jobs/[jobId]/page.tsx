@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ApplicantNav } from '@/components/ApplicantNav';
+import { SavePipelineButton } from '@/components/SavePipelineButton';
 import { loadContext } from '@/lib/artifacts/context.mjs';
 import { listArtifacts } from '@/lib/artifacts/store.mjs';
 import { sql } from '@/lib/databricks';
@@ -176,6 +177,16 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
           posted_at: job.posted_at,
         }}
       />
+
+      <section className="panel" aria-labelledby="jd-save-h">
+        <header>
+          <div>
+            <small>YOUR PIPELINE</small>
+            <h2 id="jd-save-h">Keep this posting</h2>
+          </div>
+        </header>
+        <SavePipelineButton jobId={job.job_id} initialStatus={stage} />
+      </section>
 
       {/* Offered above the document toolbox, not inside it: every tool in that
           panel produces a DOCUMENT, and this produces a rehearsal. Only rendered
