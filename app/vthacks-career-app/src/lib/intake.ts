@@ -711,17 +711,113 @@ export async function skipIntake(userId: string, kind: IntakeKind): Promise<Stag
  * downstream can reference them yet, because being referenced is what 'parsed'
  * means. A parsed document is never touched.
  */
-async function clearUnread(userId: string, kind: IntakeKind): Promise<void> {
+/**
+ * Drop any earlier unread row for this kind, so a re-upload replaces rather than
+ * stacks.
+ *
+ * `exceptDocumentId` lets this run AFTER the insert instead of before it. That
+ * matters because the dashboard gate reads these rows: the insert has to be awaited
+ * so the gate can see it, but the cleanup does not, and excluding the new row is
+ * what makes the reversed order safe.
+ */
+async function clearUnread(
+  userId: string,
+  kind: IntakeKind,
+  exceptDocumentId?: string,
+): Promise<void> {
+  const params: SqlParam[] = [
+    { name: 'user', value: userId },
+    { name: 'kind', value: kind },
+  ];
+  let clause = '';
+  if (exceptDocumentId) {
+    clause = ' AND document_id <> :except';
+    params.push({ name: 'except', value: exceptDocumentId });
+  }
   await sql(
-    `DELETE FROM ${DOCS} WHERE user_id = :user AND kind = :kind AND status IN ('received', 'skipped')`,
-    [
-      { name: 'user', value: userId },
-      { name: 'kind', value: kind },
-    ],
+    `DELETE FROM ${DOCS} WHERE user_id = :user AND kind = :kind AND status IN ('received', 'skipped')${clause}`,
+    params,
   );
 }
 
 /** Store the bytes and record the source. Does NOT read the document. */
+/**
+ * Stage a document WITHOUT waiting for the warehouse.
+ *
+ * stageDocument makes three sequential Databricks round-trips after the bytes are
+ * saved, and a cold serverless warehouse takes 20-30s to answer the first one. That
+ * left the user watching a disabled "Saving…" button for the whole of it, on the
+ * second screen of their first run.
+ *
+ * Only the durable byte write is awaited here — lose that and the file is gone. The
+ * three catalogue writes are deliberately left running after we return: on a
+ * long-lived Node server the promise keeps executing, and the user is already two
+ * screens along by the time it settles.
+ *
+ * THE TRADE: intake_documents is what the dashboard gate reads. Somebody who races
+ * through LinkedIn and reaches /applicant before the insert lands would be sent back
+ * here. That window is the length of one Databricks INSERT against an already-warm
+ * warehouse, and the LinkedIn screen sits in front of it.
+ *
+ * Nothing here throws at its caller; a failed background write is a logged warning,
+ * exactly as the awaited path treats a failed parse.
+ */
+export async function stageDocumentDeferred(args: {
+  userId: string;
+  kind: Extract<IntakeKind, 'resume_pdf' | 'linkedin_export_pdf' | 'transcript_pdf'>;
+  file: File;
+}): Promise<StageResult> {
+  const { userId, kind, file } = args;
+
+  const invalid = validateUpload(file);
+  if (invalid) return { ok: false, error: invalid };
+
+  let stored: Awaited<ReturnType<typeof putUpload>>;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    stored = await putUpload({
+      userId,
+      kind,
+      bytes,
+      fileName: file.name,
+      mimeType: file.type || 'application/pdf',
+    });
+  } catch (error) {
+    // The bytes never landed, so there is nothing to catch up on later. Report it.
+    return { ok: false, error: (error as Error).message };
+  }
+
+  const documentId = randomUUID();
+
+  void (async () => {
+    try {
+      // Same idempotency guard as the awaited path: profile_memory is append-only,
+      // so re-staging identical bytes would double every fact with no undo.
+      const existing = await findParsedByHash(userId, stored.contentHash);
+      if (existing) {
+        await clearUnread(userId, kind);
+        return;
+      }
+      await clearUnread(userId, kind);
+      await insertDocument({
+        documentId,
+        userId,
+        kind,
+        status: 'received',
+        storagePath: stored.storagePath,
+        fileName: file.name,
+        mimeType: file.type || 'application/pdf',
+        byteSize: stored.byteSize,
+        contentHash: stored.contentHash,
+      });
+    } catch (error) {
+      console.warn('[intake] deferred staging failed for %s/%s: %s', userId, kind, (error as Error).message);
+    }
+  })();
+
+  return { ok: true, documentId, reused: false };
+}
+
 export async function stageDocument(args: {
   userId: string;
   kind: Extract<IntakeKind, 'resume_pdf' | 'linkedin_export_pdf' | 'transcript_pdf'>;
@@ -797,6 +893,39 @@ function guessMimeType(fileName: string): string {
  * The reliable path is the one next to it on the same page: kind
  * 'linkedin_export_pdf', the archive the user owns.
  */
+/**
+ * Stage a LinkedIn URL with one warehouse round-trip in front of the redirect
+ * instead of two.
+ *
+ * This one CANNOT be fully deferred the way stageDocumentDeferred is. The LinkedIn
+ * step redirects to /applicant, and intakeGate reads intake_documents to decide
+ * where to send people — with no linkedin_url row it would send them straight back
+ * here, every time. So the insert stays awaited.
+ *
+ * The cleanup does not need to be. It runs afterwards, excluding the row just
+ * written, which is the whole reason clearUnread takes an exception.
+ */
+export async function stageLinkedInUrlDeferred(userId: string, url: string): Promise<StageResult> {
+  const documentId = randomUUID();
+  try {
+    await insertDocument({
+      documentId,
+      userId,
+      kind: 'linkedin_url',
+      status: 'received',
+      externalUrl: url,
+    });
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+
+  void clearUnread(userId, 'linkedin_url', documentId).catch((error: Error) => {
+    console.warn('[intake] deferred cleanup failed for %s/linkedin_url: %s', userId, error.message);
+  });
+
+  return { ok: true, documentId, reused: false };
+}
+
 export async function stageLinkedInUrl(userId: string, url: string): Promise<StageResult> {
   try {
     const documentId = randomUUID();

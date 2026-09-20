@@ -3,9 +3,10 @@
 /**
  * Resume upload, or skip. Stores the file and moves on — it does NOT read it.
  *
- * The pending state is short (an upload, not a model call), which is why the button
- * says "Next" and not "Read my resume": promising a read here would be a lie, and the
- * reading step has its own page where the wait is visible and explained.
+ * The pending state is now only as long as the file takes to become durable — the
+ * catalogue writes finish in the background, so "Next" really does mean next rather
+ * than "wait for a cold warehouse". Promising a read here would still be a lie; the
+ * reading step has its own screen where the wait is visible and explained.
  *
  * Upload and skip share ONE action on purpose: giving the skip button its own
  * `formAction` would bypass the useActionState reducer, so the UI would never
@@ -33,7 +34,7 @@ export function ResumeIntakeForm() {
           aria-invalid={invalid}
           aria-describedby={invalid ? 'resume-hint resume-error' : 'resume-hint'}
         />
-        <small id="resume-hint">Up to 10 MB. Two-column layouts are fine.</small>
+        <small id="resume-hint">Up to 10 MB.</small>
       </div>
 
       <div className="actions">
@@ -47,7 +48,7 @@ export function ResumeIntakeForm() {
 
       {/* Politely announced so a screen-reader user hears progress they cannot see. */}
       <p className="status" role="status">
-        {pending ? 'Storing your file.' : ''}
+        {pending ? 'Saving your file…' : ''}
       </p>
 
       {invalid && (

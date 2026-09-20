@@ -19,7 +19,8 @@ import { z } from 'zod';
 import {
   skipIntake,
   stageDocument,
-  stageLinkedInUrl,
+  stageDocumentDeferred,
+  stageLinkedInUrlDeferred,
   validateExportUpload,
   validateUpload,
 } from '@/lib/intake';
@@ -90,7 +91,9 @@ export async function uploadResumeAction(
     return { status: 'error', message: invalid ?? 'Choose a PDF to upload.', field: 'resume' };
   }
 
-  const result = await stageDocument({ userId: user.id, kind: 'resume_pdf', file });
+  // Returns as soon as the bytes are durable; the catalogue writes finish in the
+  // background so Next is not held on a cold warehouse.
+  const result = await stageDocumentDeferred({ userId: user.id, kind: 'resume_pdf', file });
   if (!result.ok) return { status: 'error', message: result.error, field: 'resume' };
 
   redirect('/applicant/intake/linkedin');
@@ -139,10 +142,17 @@ export async function linkedInAction(_prev: IntakeState, formData: FormData): Pr
     if (invalid) return { status: 'error', message: invalid, field: 'linkedinExport' };
   }
 
-  const result = await stageLinkedInUrl(user.id, parsed.data);
+  // One round-trip, not two: the insert is awaited because the dashboard gate reads
+  // it, the cleanup finishes in the background.
+  const result = await stageLinkedInUrlDeferred(user.id, parsed.data);
   if (!result.ok) return { status: 'error', message: result.error, field: 'linkedinUrl' };
 
   if (exportFile) {
+    // NOT the deferred variant, unlike the resume above. This is the last screen:
+    // the redirect lands on /applicant, which starts the analysis immediately. The
+    // resume can afford a background insert because the LinkedIn screen sits in
+    // front of it; an export whose row has not landed yet would simply be missing
+    // from the read, and the user would never know it was ignored.
     const stored = await stageDocument({
       userId: user.id,
       kind: 'linkedin_export_pdf',

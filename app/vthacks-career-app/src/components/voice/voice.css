@@ -351,10 +351,40 @@
   background: #dcef86;
 }
 
-/* Holds whatever is passed as the `visual` prop — the seam for VoiceOrb. */
+/* Holds whatever is passed as the `visual` prop — HireWire's face. */
 .vw-visual {
   display: flex;
   justify-content: center;
+}
+/* The face is drawn in currentColor, which is --ink for the paper background it
+   was designed against and invisible on this panel. One override, not one per
+   stroke; the mood colours (speaking green, refusing red) still set stroke and
+   fill explicitly and are unaffected. */
+.vw-visual .face {
+  color: #f2f7f3;
+}
+/* Same reason for the two signal states: --success and --failure are chosen for
+   the paper background and both go muddy on this one. These are the panel's own
+   live green and a red that clears it. */
+.vw-visual .face--speaking .face__head,
+.vw-visual .face--speaking .face__brow path,
+.vw-visual .face--speaking .face__mouth,
+.vw-visual .face--happy .face__head,
+.vw-visual .face--happy .face__brow path,
+.vw-visual .face--happy .face__mouth {
+  stroke: #dcef86;
+}
+.vw-visual .face--speaking .face__eye,
+.vw-visual .face--happy .face__eye {
+  fill: #dcef86;
+}
+.vw-visual .face--refusing .face__head,
+.vw-visual .face--refusing .face__brow path,
+.vw-visual .face--refusing .face__mouth {
+  stroke: #ff9d9d;
+}
+.vw-visual .face--refusing .face__eye {
+  fill: #ff9d9d;
 }
 
 .vw-blurb {

@@ -31,6 +31,7 @@
 import { ConversationProvider, useConversation } from '@elevenlabs/react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
+import { AgentFace } from '@/components/AgentFace';
 import type {
   TranscriptEntry,
   VoiceAnswerResponse,
@@ -408,11 +409,11 @@ function VoiceAgentShell() {
         onDisconnect={disconnect}
         onToggleMute={toggleMute}
         visualState={visualState}
-        /* AFTER MERGING PR #14 this gains one line and nothing else changes:
-             visual={<VoiceOrb state={visualState} size={120} />}
-           At the same time <VoiceConsole /> must come out of applicant/page.tsx — it
-           owns its own getUserMedia, and two microphone grabs on one page is a real
-           bug, not just duplicated surface. See the report. */
+        /* The seam, closed. PR #14's VoiceOrb was replaced on that branch by
+           AgentFace — the same five states, so visualState still hands straight
+           over with no translation layer. <VoiceConsole /> is out of
+           applicant/page.tsx, so the SDK owns the only microphone on the page. */
+        visual={<AgentFace mood={visualState} size={120} />}
       />
     </>
   );

@@ -77,11 +77,7 @@ export default async function ProfilePage() {
         {nothingYet ? (
           <div className="profile-empty">
             <h2>Nothing here yet</h2>
-            <p>
-              Add a resume and I will fill this in — experience, skills, coursework — and keep a note
-              of where each line came from. If you skipped it, you can still add it here; otherwise I
-              will ask you out loud instead.
-            </p>
+            <p>Add a resume and I will fill this in — and show where each line came from.</p>
             <p className="outcome-next">
               <Link href="/applicant/intake/resume">Add your resume</Link>
               <span aria-hidden="true"> · </span>

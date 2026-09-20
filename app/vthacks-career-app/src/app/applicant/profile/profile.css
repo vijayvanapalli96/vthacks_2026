@@ -1,196 +1,149 @@
-/* Profile page. Same tokens as globals.css — the agent hands you cards. */
+/* ===========================================================================
+   PROFILE — what the system remembers, and where each line came from.
+
+   Uses the tokens in globals.css and adds nothing: no new colours, no new
+   fonts, no radius, no white, no cards. Sections are separated by hairlines
+   and space.
+
+   This file previously predated the design system — white fills, 16px and
+   999px radii, and var(--green), a token that no longer exists.
+   =========================================================================== */
 
 .profile-shell {
-  padding: 40px 0 64px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 56px 0 80px;
   display: grid;
-  gap: 20px;
+  gap: 28px;
 }
+
+/* --- Head ---------------------------------------------------------------- */
 
 .profile-head {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--line);
 }
+
+.profile-head h1 {
+  font-size: clamp(38px, 4.6vw, 58px);
+  font-weight: 700;
+  font-style: italic;
+  -webkit-text-stroke: 0.45px var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.04;
+  margin: 6px 0 0;
+}
+
+.profile-head .muted { font-size: 19px; line-height: 1.55; margin: 0; }
 
 .profile-contact {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
-  margin: 0;
-  padding: 0;
+  gap: 10px 22px;
   list-style: none;
-  font-size: 13px;
-  color: #3d4a42;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 17px;
+  color: var(--muted);
+}
+.profile-contact a { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+
+/* Provenance is the point of this page — quiet, but never illegible. */
+.provenance {
+  margin: 0;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--muted);
 }
 
-.profile-contact a {
-  color: var(--green);
+/* --- Empty state --------------------------------------------------------- */
+
+.profile-empty { display: grid; gap: 14px; padding: 12px 0 0; max-width: 56ch; }
+.profile-empty h2 {
+  font-size: clamp(26px, 3vw, 36px);
+  font-style: italic;
+  letter-spacing: -0.01em;
+  margin: 0;
 }
+.profile-empty p { margin: 0; font-size: 18px; line-height: 1.65; color: var(--muted); }
+.profile-empty .outcome-next { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.profile-empty a { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+
+/* --- Two columns --------------------------------------------------------- */
 
 .profile-grid {
   display: grid;
-  grid-template-columns: 1.6fr 0.9fr;
-  gap: 20px;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 64px;
   align-items: start;
 }
 
+/* --- Sections: a rule and a heading, not a box --------------------------- */
+
 .profile-section {
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 22px;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 26px 0 0;
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
-.profile-section > h2 {
+.profile-section h2 {
+  font-size: 24px;
+  font-style: italic;
+  letter-spacing: -0.005em;
   margin: 0;
-  font-size: 18px;
 }
 
-/* Provenance, not decoration: every section says which document it came from. */
-.provenance {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #68746c;
-}
+.entry { display: grid; gap: 7px; padding-bottom: 20px; }
+.entry + .entry { border-top: 1px solid var(--line); padding-top: 20px; }
+.entry h3 { font-size: 19px; margin: 0; }
+.entry ul { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 7px; }
+.entry li { font-size: 17px; line-height: 1.6; color: var(--muted); }
 
-.entry {
-  display: grid;
-  gap: 5px;
-  padding-top: 14px;
-  border-top: 1px solid #edf0ec;
-}
+.meta { margin: 0; font-size: 16px; line-height: 1.55; color: var(--muted); }
 
-.entry:first-of-type {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.entry h3 {
-  margin: 0;
-  font-size: 14px;
-}
-
-.entry .meta {
-  margin: 0;
-  font-size: 12px;
-  color: #69766e;
-}
-
-.entry ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
-  font-size: 13px;
-  line-height: 1.55;
-  display: grid;
-  gap: 3px;
-}
+/* --- Chips: sharp, hairline, no fill ------------------------------------- */
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
+  gap: 8px;
   list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
 }
-
 .chips li {
-  padding: 5px 11px;
-  border-radius: 999px;
-  background: #e2f2e9;
-  color: #1d4635;
-  font-size: 12px;
-  font-weight: 700;
+  border: 1px solid var(--line-strong);
+  padding: 7px 13px;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
 }
 
-.gap-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 12px;
-}
+/* --- Gaps ---------------------------------------------------------------- */
 
-.gap-list li {
-  display: grid;
-  gap: 3px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #edf0ec;
-}
-
-.gap-list li:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.gap-question {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
+.gap-list { margin: 0; padding-left: 22px; display: grid; gap: 16px; }
 .gap-field {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.05em;
-  color: #68746c;
+  margin: 0 0 4px;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gap-question { margin: 0; font-size: 17px; line-height: 1.6; }
+
+.sources { display: grid; gap: 8px; font-size: 16px; color: var(--muted); }
+
+/* The demo is driven from the keyboard. */
+.profile-shell :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
 }
 
-.sources {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 10px;
-  font-size: 12px;
-}
-
-.sources li {
-  display: grid;
-  gap: 2px;
-}
-
-.sources code {
-  font-size: 11px;
-  color: #68746c;
-  word-break: break-all;
-}
-
-.profile-empty {
-  background: white;
-  border: 1px dashed var(--line);
-  border-radius: 16px;
-  padding: 40px 26px;
-  text-align: center;
-  display: grid;
-  gap: 12px;
-  justify-items: center;
-}
-
-.profile-empty h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.profile-empty p {
-  margin: 0;
-  max-width: 44ch;
-  color: #667269;
-  line-height: 1.6;
-}
-
-.profile-shell a:focus-visible,
-.profile-shell button:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
-}
-
-@media (max-width: 860px) {
-  .profile-grid {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 900px) {
+  .profile-grid { grid-template-columns: 1fr; gap: 0; }
 }
