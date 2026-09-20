@@ -22,6 +22,11 @@ services:
   # Driving a headless browser at a caller-supplied URL is an open proxy if you
   # expose it, and it would let a stranger borrow the hirewire.biz identity.
   ats:
+    # Opt-in. `docker compose up -d` brings up employer, applicant and caddy
+    # exactly as it did before this service existed; the worker starts only
+    # under `--profile ats`. The demo path must not be able to fail because a
+    # Chromium image would not build.
+    profiles: ["ats"]
     build:
       context: ./agents
       dockerfile: ats/Dockerfile
