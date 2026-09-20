@@ -81,7 +81,6 @@ export function TrustApply({
   const [speakAloud, setSpeakAloud] = useState(false);
   const [skills, setSkills] = useState('Python, SQL, TypeScript');
   const [resumeUrl, setResumeUrl] = useState('');
-  const [approved, setApproved] = useState<Record<string, boolean>>({});
   // The chain, appended to as each turn arrives from the stream. Kept next to
   // the phase rather than inside it because it outlives the send: after the
   // result lands, the student is still reading it.
@@ -117,7 +116,6 @@ export function TrustApply({
 
   const verify = useCallback(async function verify() {
     if (!target) return;
-    setApproved({});
     setPhase({ kind: 'verifying' });
     emitAgentState({ state: 'thinking' });
     try {
@@ -233,9 +231,9 @@ export function TrustApply({
     }
   }
 
-  // Ticked by default now: these are the fields that WENT, and unticking one is
-  // how you take it out of a deliberate re-send.
-  const approvedFields = Object.keys(fieldLabels).filter((field) => values[field] && (approved[field] ?? true));
+  // Every field that has a value. There is no per-field opt-out any more, so a
+  // deliberate re-send carries the same set the automatic one did.
+  const approvedFields = Object.keys(fieldLabels).filter((field) => values[field]);
   const busy = phase.kind === 'verifying' || phase.kind === 'sending';
   /** Every field that actually has a value. Empty ones are not sent as blanks. */
   const releasable = Object.keys(fieldLabels).filter((field) => values[field]);
@@ -444,19 +442,16 @@ export function TrustApply({
             </p>
             <fieldset className="trust-fields" disabled={busy}>
               <legend>Released to {verification?.registry?.ans_name ?? target}</legend>
+              {/* A LIST, NOT CONTROLS. These fields were already released when the
+                  Trust Index passed, so a tickbox here offered to un-approve
+                  something that had gone — a control that cannot do what it
+                  appears to do. Owner decision 2026-09-20: every field with a
+                  value goes, so this states what went rather than asking. */}
               {Object.entries(fieldLabels).map(([field, label]) => (
-                <label key={field} className={values[field] ? '' : 'is-empty'}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(values[field]) && (approved[field] ?? true)}
-                    disabled={!values[field] || busy}
-                    onChange={(event) => setApproved({ ...approved, [field]: event.target.checked })}
-                  />
-                  <span>
-                    <strong>{label}</strong>
-                    <small>{values[field] || 'Not provided'}</small>
-                  </span>
-                </label>
+                <div key={field} className={values[field] ? 'trust-field-row' : 'trust-field-row is-empty'}>
+                  <strong>{label}</strong>
+                  <small>{values[field] || 'Not provided'}</small>
+                </div>
               ))}
             </fieldset>
             <div className="field">
