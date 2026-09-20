@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight, Loader2, ShieldAlert, ShieldCheck, Volume2 } from 'lucide-react';
 
+import { A2ATranscript } from '@/components/A2ATranscript';
 import { AgentBadge } from '@/components/AgentBadge';
 import { emitAgentState } from '@/lib/agent-state';
+import type { Turn } from '@/lib/a2a/transcript';
 
 // Mirrors the /api/verify and /api/apply contracts (TASK_DIVISION.md §4).
 type Dimension = { name: string; score: number; reason: string };
@@ -21,6 +23,10 @@ type ApplyResult = {
   audit_id: string | null;
   spoken_reason: string;
   match_explanation?: { score: number; verdict: string; reasons: string[] };
+  /** The exchange as recorded, saved to `hirewire.a2a_transcripts`. */
+  transcript?: Turn[];
+  transcript_id?: string | null;
+  narrator?: 'gemini' | 'none';
 };
 
 type Phase =
@@ -76,6 +82,10 @@ export function TrustApply({
   const [skills, setSkills] = useState('Python, SQL, TypeScript');
   const [resumeUrl, setResumeUrl] = useState('');
   const [approved, setApproved] = useState<Record<string, boolean>>({});
+  // The chain, appended to as each turn arrives from the stream. Kept next to
+  // the phase rather than inside it because it outlives the send: after the
+  // result lands, the student is still reading it.
+  const [turns, setTurns] = useState<Turn[]>([]);
   const resultHeading = useRef<HTMLHeadingElement>(null);
 
   const target = host;
@@ -138,9 +148,12 @@ export function TrustApply({
   async function apply(humanApproved: boolean, fields: string[]) {
     if (!verification) return;
     setPhase({ kind: 'sending', verification });
+    setTurns([]);
     emitAgentState({ state: 'thinking' });
     try {
-      const response = await fetch('/api/apply', {
+      // The STREAMING route, so the chain fills in while the handshake runs.
+      // Same body, same server-side gate as /api/apply — see the route header.
+      const response = await fetch('/api/apply/stream', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -156,9 +169,61 @@ export function TrustApply({
           job,
         }),
       });
-      const result = (await response.json()) as ApplyResult;
-      setPhase({ kind: 'done', verification, result });
-      announce(result.status === 'submitted' ? 'pass' : 'refuse', result.spoken_reason);
+
+      // A 401/403 or any other refusal to open the stream answers with plain
+      // JSON, so it is read as JSON rather than parsed as an empty chain.
+      if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+        const result = (await response.json()) as ApplyResult & { error?: string };
+        if (result.error) throw new Error(result.error);
+        setPhase({ kind: 'done', verification, result });
+        announce(result.status === 'submitted' ? 'pass' : 'refuse', result.spoken_reason);
+        return;
+      }
+
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = '';
+      let settled = false;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        // SSE frames are separated by a blank line; a partial frame stays in
+        // the buffer until the rest of it arrives.
+        const frames = buffer.split('\n\n');
+        buffer = frames.pop() ?? '';
+        for (const frame of frames) {
+          const event = /^event: (.+)$/m.exec(frame)?.[1];
+          const data = frame
+            .split('\n')
+            .filter((line) => line.startsWith('data: '))
+            .map((line) => line.slice(6))
+            .join('\n');
+          if (!event || !data) continue;
+          if (event === 'turn') {
+            const turn = JSON.parse(data) as Turn;
+            setTurns((current) => [...current, turn]);
+          } else if (event === 'result') {
+            const result = JSON.parse(data) as ApplyResult;
+            settled = true;
+            // The saved transcript, with Gemini's lines attached, replaces the
+            // turns streamed live — same turns, now narrated.
+            if (result.transcript?.length) setTurns(result.transcript);
+            setPhase({ kind: 'done', verification, result });
+            announce(result.status === 'submitted' ? 'pass' : 'refuse', result.spoken_reason);
+          } else if (event === 'error') {
+            settled = true;
+            throw new Error((JSON.parse(data) as { error?: string }).error ?? 'The application could not be completed.');
+          }
+        }
+      }
+      // The connection ended without a result: the exchange may well have
+      // happened, so this does not claim it did not.
+      if (!settled) {
+        setPhase({
+          kind: 'error',
+          message: 'The connection closed before the result arrived. Check your activity log before sending again.',
+        });
+      }
     } catch {
       setPhase({ kind: 'error', message: 'Could not reach the apply service. Nothing was confirmed as sent.' });
     }
@@ -315,6 +380,17 @@ export function TrustApply({
             </ul>
           </div>
         </section>
+      ) : null}
+
+      {/* Between the trust card and the result, because that is where it
+          happens. Live while sending, then the saved, narrated version. */}
+      {phase.kind === 'sending' || (phase.kind === 'done' && turns.length > 0) ? (
+        <A2ATranscript
+          turns={turns}
+          live={phase.kind === 'sending'}
+          narrator={phase.kind === 'done' ? (phase.result.narrator ?? 'none') : 'none'}
+          transcriptId={phase.kind === 'done' ? (phase.result.transcript_id ?? null) : null}
+        />
       ) : null}
 
       {phase.kind === 'verified' || (phase.kind === 'sending' && verification?.verdict === 'pass') ? (

@@ -30,6 +30,25 @@ export const DEMO_JOB: Job = {
   demo: true,
 };
 
+/**
+ * PLACEHOLDER, not a posting. A HireWire internship that exists only so the
+ * agent-to-agent lane has a card of its own on the jobs screen: its row links
+ * straight into /applicant/apply, the A2A menu, instead of the job detail page
+ * where an employer check has to pass first. It rides on the same registered
+ * employer agent as DEMO_JOB (demo: true -> hirewire.biz), so no new agent or
+ * warehouse row is needed, and the screen says it is a placeholder.
+ */
+export const A2A_PLACEHOLDER_JOB: Job = {
+  job_id: 'hirewire-a2a-placeholder-intern',
+  company_name: 'HireWire',
+  job_title: 'Internship (placeholder)',
+  location_text: 'Blacksburg, VA',
+  source: 'placeholder',
+  source_url: 'https://employer.hirewire.biz/',
+  posted_at: null,
+  demo: true,
+};
+
 const COLUMNS = 'job_id, company_name, job_title, location_text, source, source_url, CAST(posted_at AS STRING) AS posted_at';
 
 function rowsToJobs(result: { columns: string[]; rows: (string | null)[][] }): Job[] {
@@ -60,6 +79,7 @@ export async function listJobs(limit = 30): Promise<{ jobs: Job[]; source: 'open
 
 export async function getJob(jobId: string): Promise<Job | null> {
   if (jobId === DEMO_JOB.job_id) return DEMO_JOB;
+  if (jobId === A2A_PLACEHOLDER_JOB.job_id) return A2A_PLACEHOLDER_JOB;
   try {
     const result = await sql(
       `SELECT ${COLUMNS} FROM workspace.vthacks_2026.job_snapshots WHERE job_id = :job_id LIMIT 1`,
