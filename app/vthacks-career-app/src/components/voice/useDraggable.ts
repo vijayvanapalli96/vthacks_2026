@@ -54,8 +54,15 @@ function clamp(point: Point, size: Size): Point {
   };
 }
 
+/**
+ * The default parking spot: bottom LEFT. The transcript dock now occupies the full
+ * height of the right-hand side, and the widget renders above it (z-index 90), so a
+ * bottom-right default would drop the voice control on top of the transcript's
+ * typed-answer form the first time anyone loads the page. A stored position always
+ * wins over this, so nobody who has already moved it is moved again.
+ */
 function corner(size: Size): Point {
-  return { x: window.innerWidth - size.width - 28, y: window.innerHeight - size.height - 28 };
+  return { x: 28, y: window.innerHeight - size.height - 28 };
 }
 
 function stored(): Point | null {

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The left collapsible tab: the transcript, and the typed way in.
+ * The right-hand collapsible tab: the transcript, and the typed way in.
  *
  * TWO NON-NEGOTIABLES LIVE HERE.
  *
@@ -89,7 +89,9 @@ export function TranscriptPanel({
         aria-controls={panelId}
         onClick={onToggle}
       >
-        {open ? <ChevronLeft size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+        {/* The chevron points the way the panel will travel: right to tuck it back
+            against the window edge, left to pull it out over the page. */}
+        {open ? <ChevronRight size={16} aria-hidden="true" /> : <ChevronLeft size={16} aria-hidden="true" />}
         <span className="vt-tab-label">
           Transcript
           {entries.length ? ` (${entries.length})` : ''}

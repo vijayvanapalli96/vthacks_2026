@@ -27,15 +27,18 @@
   --vt-fail: #9b1c1c;
 
   position: fixed;
-  /* Inset from the window edge rather than welded to it: the card reads as a
-     floating panel over the page, not as a browser chrome element that got cut
-     off by the viewport. */
-  left: clamp(12px, 2vw, 24px);
+  /* DOCKED RIGHT. The transcript is a companion to the page, not a second reading
+     column, so it hangs off the edge the eye leaves rather than the one it returns
+     to — and it no longer sits under the hero's left shoulder. Inset from the
+     window edge rather than welded to it, so the card reads as floating over the
+     page instead of clipped by the viewport. */
+  right: clamp(12px, 2vw, 24px);
   top: 96px;
   bottom: 24px;
   z-index: 60;
   display: flex;
   align-items: flex-start;
+  justify-content: flex-end;
   pointer-events: none;
 }
 
@@ -51,15 +54,20 @@
   gap: 6px;
   padding: 14px 10px;
   border: 1px solid var(--line);
-  border-left: 0;
-  border-radius: 0 12px 12px 0;
+  /* The shared edge is the one facing the panel, which on a right-hand dock is the
+     tab's right. */
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
   background: white;
   color: var(--green);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.04em;
   box-shadow: 0 6px 20px rgb(20 33 27 / 10%);
-  order: 2;
+  /* Tab first in the row, panel second: the handle stays on the inboard side, so
+     opening the panel grows the card towards the window edge rather than sliding
+     the handle across the page. */
+  order: 1;
   margin-top: 10px;
 }
 
@@ -71,12 +79,12 @@
    otherwise have given it — a flat, borderless left side only makes sense when
    something is butted up against it. */
 .vt-dock.is-closed .vt-tab {
-  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
   border-radius: 12px;
 }
 
 .vt-panel {
-  order: 1;
+  order: 2;
   /* The dock inset and the tab both eat into the room available. */
   width: min(420px, calc(100vw - 96px));
   max-height: 100%;
@@ -282,10 +290,11 @@
 .vw {
   position: fixed;
   /* The default corner, for the single commit before useDraggable has measured the
-     element and set left/top inline. With a fixed width and both left and right set
-     the inline `left` wins in LTR, so these are only ever the fallback. Without them
-     the widget would render once in static-flow position and visibly jump. */
-  right: 28px;
+     element and set left/top inline — and it matches corner() in useDraggable, so
+     the pre-measurement frame and the measured one agree. Left, not right: the
+     transcript dock owns the right-hand side. Without this the widget would render
+     once in static-flow position and visibly jump. */
+  left: 28px;
   bottom: 28px;
   z-index: 90; /* Above the transcript dock on purpose: it overlaps other widgets. */
   width: 268px;
@@ -514,7 +523,8 @@
   }
 
   .vt-panel {
-    width: calc(100vw - 42px);
+    /* The dock inset plus the tab, on a phone where there is nothing to spare. */
+    width: calc(100vw - 64px);
   }
 
   .vw {
