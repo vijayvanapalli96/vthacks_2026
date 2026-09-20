@@ -21,10 +21,13 @@
  *     model's own word for it ("strong" / "possible" / "weak"), plus a
  *     role="meter" with aria-valuenow/valuemin/valuemax. Remove every colour from
  *     the page and the number is still there three times.
- *   * The bar is aria-hidden because the meter above it already announces the
- *     value; two announcements of the same number is noise, not access.
- *   * Skill chips live in real lists with visible labels, so "Matches" and
- *     "Gaps" are not conveyed by chip colour either.
+ *   * The filled part of the bar carries no role and no label: the meter element
+ *     around it already announces the value, and announcing the same number twice
+ *     is noise rather than access.
+ *   * Skill chips live in real lists under visible text labels, so "matches" and
+ *     "gaps" are not conveyed by chip colour either. The labels are paragraphs and
+ *     not headings on purpose — three headings per row would bury the page's real
+ *     heading outline under forty entries.
  *   * Every colour pair used here is ink or a signal colour on paper, which is
  *     the palette's 4.5:1 body-contrast pair.
  *
@@ -110,7 +113,7 @@ function MatchRowView({ row, rank }: { row: MatchRow; rank: number }) {
       <div className="match-skills">
         {row.matched_skills.length ? (
           <div className="match-skillset">
-            <h4>Matches your profile</h4>
+            <p className="match-skillset-label">Matches your profile</p>
             <ul>
               {row.matched_skills.map((skill) => (
                 <li key={skill} className="match-chip is-have">
@@ -123,7 +126,7 @@ function MatchRowView({ row, rank }: { row: MatchRow; rank: number }) {
 
         {row.missing_skills.length ? (
           <div className="match-skillset">
-            <h4>Not on your profile yet</h4>
+            <p className="match-skillset-label">Not on your profile yet</p>
             <ul>
               {row.missing_skills.map((skill) => (
                 <li key={skill} className="match-chip is-gap">
@@ -136,7 +139,7 @@ function MatchRowView({ row, rank }: { row: MatchRow; rank: number }) {
 
         {row.courses_matched.length ? (
           <div className="match-skillset">
-            <h4>Covered by your coursework</h4>
+            <p className="match-skillset-label">Covered by your coursework</p>
             <ul>
               {row.courses_matched.map((course) => (
                 <li key={course} className="match-chip is-course">
@@ -168,11 +171,20 @@ function MatchRowView({ row, rank }: { row: MatchRow; rank: number }) {
 function RunFooter({ run, removed }: { run: MatchRunFacts; removed?: RemovedRole[] }) {
   return (
     <div className="match-footer">
+      {/* HARD RULE 8, and the numbers are the ones match_runs actually stores.
+          `candidates_total` is every embedded posting the scanner has captured — it
+          is NOT a count of fresh roles, and it is certainly not "all US jobs". The
+          freshness window and the cosine cut happen between it and
+          `after_filters`, which is how many of the shortlist cleared the
+          eligibility gate. Saying "scored against 16,206 fresh roles" would be an
+          overclaim by a factor of about fifty. */}
       <p className="match-provenance">
-        Scored against <strong>{run.candidates_total}</strong> embedded US postings from the boards
-        the discovery pipeline reads — fresh roles from those boards, not every job in the country.{' '}
-        <strong>{run.after_filters}</strong> passed the hard filters, <strong>{run.reranked}</strong>{' '}
-        were read by the model, <strong>{run.written}</strong> were kept.
+        Ranked out of <strong>{run.candidates_total}</strong> embedded US postings — everything the
+        discovery pipeline has scraped and embedded, which is not every job in the country. A
+        freshness window and your stated preferences narrow that down, then a cosine cut takes a
+        shortlist, of which <strong>{run.after_filters}</strong> cleared the eligibility gate. The
+        model read the top <strong>{run.reranked}</strong> of those and{' '}
+        <strong>{run.written}</strong> were stored.
         {run.started_at ? ` Run at ${run.started_at.replace('T', ' ').slice(0, 19)}.` : ''}
       </p>
 
